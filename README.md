@@ -11,6 +11,9 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - application de bureau, utilisable hors ligne ;
 - TPE comme cible prioritaire ;
 - prototype UX avant l’implémentation métier ;
+- gestion de plusieurs sociétés dans un même espace de travail, avec isolation des données ;
+- propositions d’imputations comptables avant validation ;
+- calcul et génération contrôlés des amortissements ;
 - comptabilité générale, trésorerie et facturation comme base du futur MVP ;
 - devise de travail : FCFA/XOF ;
 - paramètres comptables et fiscaux béninois configurables et validables par un professionnel.

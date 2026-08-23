@@ -1,7 +1,7 @@
 # Cahier des charges — application comptable TPE Bénin
 
-**Version :** 0.1  
-**Statut :** cadrage fonctionnel et UX  
+**Version :** 0.2
+**Statut :** cadrage fonctionnel et UX — multi-sociétés, imputations et amortissements automatiques intégrés
 **Pays pilote :** Bénin  
 **Cible initiale :** très petites entreprises et entrepreneurs  
 **Canal :** application de bureau, hors ligne par défaut
@@ -26,6 +26,8 @@ L’application doit masquer la complexité inutile sans contourner les principe
 4. **Contrôlable** : toute écriture validée est retrouvable, justifiée et non altérable silencieusement.
 5. **Configurable localement** : le pays, le régime, les taxes et les modèles de documents sont des paramètres, pas des constantes cachées dans le code.
 6. **Compatible cabinet** : les exports doivent pouvoir être transmis à un comptable sans retraitement inutile.
+7. **Multi-sociétés maîtrisé** : un même utilisateur peut gérer plusieurs sociétés, sans mélange de leurs écritures, paramètres, exercices ou pièces.
+8. **Assistance sans automatisme aveugle** : les imputations proposées et les amortissements calculés sont toujours prévisualisables, explicables et contrôlables.
 
 ## 2. Périmètre de la première version UX
 
@@ -33,8 +35,9 @@ La première livraison n’est pas encore le moteur comptable complet. Elle doit
 
 ### Parcours à prototyper
 
-- création d’une entreprise ;
-- choix de l’exercice, de la devise et du régime comptable ;
+- création d’un espace de travail et d’une première société ;
+- ajout d’une deuxième société et changement de société active ;
+- choix de l’exercice, de la devise et du régime comptable par société ;
 - tableau de bord de trésorerie ;
 - création d’un client ou d’un fournisseur ;
 - émission d’une facture simple ;
@@ -74,6 +77,25 @@ L’assistant de démarrage recueille :
 
 Les seuils, taux, mentions obligatoires et règles fiscales sont versionnés dans la configuration et doivent pouvoir être mis à jour sans modifier les écritures historiques.
 
+### 3.1.1 Gestion multi-sociétés
+
+L’application est organisée autour d’un espace de travail local pouvant contenir plusieurs sociétés juridiquement distinctes. La multi-sociétés est une capacité du socle, et non une extension ultérieure.
+
+Fonctions prévues :
+
+- créer, modifier, archiver et sélectionner une société ;
+- afficher en permanence la société active dans l’interface ;
+- passer d’une société à l’autre sans se déconnecter ;
+- attribuer à chaque utilisateur un rôle différent selon la société ;
+- isoler strictement les écritures, comptes, journaux, tiers, exercices, taxes, immobilisations, pièces et paramètres par société ;
+- définir un plan comptable propre à chaque société, à partir d’un modèle SYSCOHADA importable ;
+- gérer une numérotation indépendante des journaux et des pièces pour chaque société ;
+- afficher les tableaux de bord et états d’une seule société par défaut ;
+- exporter une société seule ou sauvegarder l’ensemble de l’espace de travail ;
+- archiver une société sans supprimer son historique.
+
+Le prototype peut limiter l’espace à deux sociétés de test, mais tous les écrans et toutes les données doivent porter explicitement un `company_id`. Aucun compte, tiers ou mouvement ne doit pouvoir être sélectionné depuis une autre société. La consolidation et les écritures inter-sociétés sont hors périmètre du premier MVP : elles seront étudiées séparément pour éviter de confondre multi-dossiers et consolidation de groupe.
+
 ### 3.2 Référentiel comptable
 
 Le produit doit fournir un référentiel initial basé sur le **SYSCOHADA révisé**, importable et versionné.
@@ -90,6 +112,36 @@ Fonctions prévues :
 - possibilité d’ajouter des sous-comptes selon les règles autorisées.
 
 Le référentiel livré ne doit pas être figé sans validation documentaire. Une table de version permettra de distinguer le plan fourni, les personnalisations de l’entreprise et la version applicable à un exercice donné.
+
+### 3.2.1 Propositions d’imputations comptables
+
+La saisie doit être guidée par des opérations compréhensibles — par exemple « achat de fournitures », « loyer », « frais bancaires », « vente de marchandises » ou « acquisition d’un équipement » — plutôt que d’exiger la connaissance immédiate de tous les numéros de comptes.
+
+Pour chaque opération, l’application propose une imputation débit/crédit à vérifier avant validation. La suggestion peut s’appuyer sur :
+
+- la catégorie choisie par l’utilisateur ;
+- le type d’opération et le journal ;
+- le client, le fournisseur ou le bénéficiaire ;
+- l’article ou le service ;
+- le code de taxe et le régime configurés ;
+- un modèle d’écriture ;
+- une imputation précédemment acceptée pour une opération similaire ;
+- les comptes favoris de la société.
+
+La première version utilisera des règles explicites et déterministes, plutôt qu’une décision opaque par intelligence artificielle. Chaque proposition doit afficher :
+
+- les comptes et libellés proposés ;
+- les montants débit et crédit ;
+- la taxe appliquée et sa base ;
+- la raison de la suggestion (« modèle fournisseur », « catégorie », « dernière imputation validée », etc.) ;
+- les éventuelles informations manquantes ;
+- un niveau de confiance indicatif, sans le présenter comme une validation comptable.
+
+L’utilisateur pourra modifier les comptes, enregistrer la correction comme préférence et valider ensuite. Par défaut, une suggestion ne génère jamais automatiquement une écriture validée. Un utilisateur habilité pourra créer des modèles réutilisables avec plusieurs lignes, des règles de taxe, un compte de tiers et un compte de règlement.
+
+Priorité de résolution recommandée : règle spécifique au fournisseur ou au client, règle liée à l’article/service, modèle de catégorie, préférence de la société, puis suggestion issue de l’historique. En cas de conflit, l’application signale le conflit et demande un choix au lieu de choisir silencieusement.
+
+Les imputations proposées et les corrections de l’utilisateur sont conservées dans l’audit, afin de distinguer la suggestion du choix finalement validé.
 
 ### 3.3 Journaux et écritures
 
@@ -164,7 +216,53 @@ Une facture validée génère une proposition d’écriture. L’utilisateur voi
 - historique des opérations ;
 - alerte de caisse négative, configurable selon le besoin.
 
-### 3.7 États et exports
+### 3.7 Immobilisations et amortissements automatiques
+
+L’utilisateur pourra enregistrer une immobilisation une seule fois, puis laisser l’application calculer et proposer les dotations périodiques. Cette fonction doit réduire les erreurs de calcul sans rendre automatique une décision comptable non contrôlée.
+
+#### Fiche d’immobilisation
+
+Chaque fiche comportera notamment :
+
+- numéro ou code interne de l’immobilisation ;
+- désignation et catégorie ;
+- société propriétaire ;
+- fournisseur et référence de la pièce ;
+- date d’acquisition ;
+- date de mise en service ;
+- valeur d’origine ;
+- valeur résiduelle, si applicable ;
+- durée d’utilisation ;
+- méthode d’amortissement ;
+- compte d’immobilisation ;
+- compte d’amortissement cumulé ;
+- compte de dotation ;
+- centre ou axe analytique, lorsque cette fonction sera activée ;
+- pièce justificative ;
+- statut : `À préparer`, `En service`, `Totalement amortie`, `Cédée` ou `Mise au rebut`.
+
+#### Calcul et génération
+
+- calcul automatique du plan d’amortissement à partir des paramètres saisis ;
+- méthode linéaire disponible en premier ;
+- méthodes supplémentaires uniquement après validation des règles applicables au régime choisi ;
+- périodicité mensuelle ou annuelle, configurable ;
+- prorata temporis configurable selon la politique comptable validée ;
+- affichage du tableau avant toute génération d’écriture ;
+- possibilité de simuler une date de mise en service ou une durée modifiée avant validation ;
+- arrondis gérés de façon déterministe, avec régularisation sur la dernière période ;
+- génération en lot des dotations des périodes ouvertes ;
+- une seule dotation générée par immobilisation, période et version de plan ;
+- rattachement de chaque dotation à l’immobilisation et à la pièce d’origine ;
+- proposition de l’écriture dans le journal des opérations diverses, avec contrôle débit/crédit avant validation ;
+- recalcul interdit sur une période clôturée ; toute modification après validation produit une régularisation ou une contrepassation documentée ;
+- aperçu de la valeur nette comptable, du cumul amorti et du reliquat à amortir.
+
+Le moteur doit séparer le **calcul du plan**, la **proposition de l’écriture** et la **validation comptable**. Une dotation ne sera jamais postée silencieusement. Les paramètres modifiés, le plan initial, les recalculs et les écritures générées seront conservés dans la piste d’audit.
+
+Les cessions, mises au rebut, dépréciations et changements de méthode devront respecter une procédure dédiée et seront soumis à validation métier avant d’être activés dans le produit.
+
+### 3.8 États et exports
 
 MVP :
 
@@ -177,6 +275,9 @@ MVP :
 - situation fournisseurs ;
 - synthèse recettes/dépenses ;
 - évolution de trésorerie ;
+- état des immobilisations ;
+- tableau des amortissements par immobilisation et par période ;
+- dotations générées, à contrôler et validées ;
 - export CSV/XLSX ;
 - export PDF imprimable.
 
@@ -191,20 +292,22 @@ Les états financiers SYSCOHADA complets seront livrés après validation du ré
 - **Contrôleur ou comptable** : contrôle, validation, extourne et exports.
 - **Lecture seule** : consultation et impression.
 
-Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le modèle de données doit prévoir les permissions dès le départ.
+Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le modèle de données doit prévoir les permissions dès le départ. Les droits sont portés par une relation utilisateur-société : un même utilisateur peut être administrateur d’une société et simple lecteur d’une autre.
 
 ## 5. Écrans du prototype UX
 
-1. **Onboarding** — créer son entreprise en moins de cinq minutes.
-2. **Accueil** — solde caisse/banque, ventes, dépenses, impayés et alertes.
-3. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
-4. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
-5. **Achat** — fournisseur, pièce, ventilation et paiement.
-6. **Trésorerie** — mouvements, solde et filtres.
-7. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
-8. **Tiers** — fiches et soldes clients/fournisseurs.
-9. **Rapports** — états, période, export et impression.
-10. **Paramètres** — entreprise, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
+1. **Onboarding** — créer un espace de travail et sa première société en moins de cinq minutes.
+2. **Sélecteur de société** — société active, ajout, archivage et changement sécurisé.
+3. **Accueil** — solde caisse/banque, ventes, dépenses, impayés et alertes de la société active.
+4. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
+5. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
+6. **Achat** — fournisseur, pièce, ventilation et paiement.
+7. **Trésorerie** — mouvements, solde et filtres.
+8. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
+9. **Tiers** — fiches et soldes clients/fournisseurs.
+10. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
+11. **Rapports** — états, période, société, export et impression.
+12. **Paramètres** — société, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
 
 ### Règles UX
 
@@ -223,16 +326,20 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 
 Entités principales :
 
-- `Organization` : entreprise utilisatrice ;
-- `FiscalYear` et `AccountingPeriod` : exercices et périodes ;
+- `Workspace` : espace de travail local ;
+- `Company` : société juridique, toujours rattachée à un espace ;
+- `CompanyMembership` : accès d’un utilisateur à une société et rôle associé ;
+- `CompanySettings` : devise, régime, taxes, paramètres de numérotation et préférences ;
+- `FiscalYear` et `AccountingPeriod` : exercices et périodes, rattachés à une société ;
 - `User`, `Role`, `Permission` ;
-- `AccountPlan`, `Account` et `AccountVersion` ;
-- `Journal` et `EntryNumberSequence` ;
+- `AccountPlan`, `Account`, `AccountVersion` et `PostingRule` ;
+- `Journal` et `EntryNumberSequence`, propres à chaque société ;
 - `JournalEntry` et `JournalEntryLine` ;
-- `Customer`, `Supplier` et `ThirdPartyLedger` ;
+- `Customer`, `Supplier` et `ThirdPartyLedger`, propres à chaque société ;
 - `Quote`, `Invoice`, `CreditNote`, `PurchaseBill` ;
 - `Payment`, `CashAccount`, `BankAccount` ;
 - `TaxCode` et `TaxRateVersion` ;
+- `FixedAsset`, `DepreciationPlan` et `DepreciationRun` ;
 - `Attachment` ;
 - `AuditEvent` ;
 - `ReportDefinition` et `ExportJob`.
@@ -240,13 +347,18 @@ Entités principales :
 ### Invariants à tester
 
 - équilibre débit/crédit ;
-- unicité de la référence d’écriture dans son journal ;
+- unicité de la référence d’écriture dans son journal et sa société ;
 - impossibilité de modifier une écriture validée ;
-- appartenance de toutes les données à une entreprise ;
+- appartenance de toutes les données à une et une seule société ;
+- impossibilité de créer une écriture avec des comptes, tiers ou journaux d’une autre société ;
+- accès d’un utilisateur limité aux sociétés qui lui sont attribuées ;
 - interdiction de poster dans une période clôturée ;
 - cohérence entre facture, règlement et solde du tiers ;
 - conservation de l’auteur et de la date de chaque événement ;
-- total des lignes d’une facture cohérent avec son total affiché.
+- total des lignes d’une facture cohérent avec son total affiché ;
+- unicité d’une dotation par immobilisation et période ;
+- total du plan d’amortissement cohérent avec la base amortissable ;
+- cumul amorti jamais supérieur à la base amortissable, sauf régularisation explicitement tracée.
 
 ## 7. Architecture recommandée
 
@@ -254,9 +366,10 @@ Pour une application de bureau hors ligne destinée aux TPE :
 
 - **shell desktop** : Tauri ;
 - **interface** : React + TypeScript ;
-- **base locale** : SQLite ;
+- **base locale** : SQLite, avec séparation logique stricte par `company_id` ;
 - **migrations** : versionnées et exécutées au démarrage ;
 - **validation métier** : moteur partagé, indépendant de l’interface ;
+- **moteur d’assistance** : règles d’imputation, modèles d’écriture et calcul d’amortissement testables indépendamment ;
 - **exports** : PDF et tableurs ;
 - **sauvegarde** : fichier chiffré ou archive chiffrée, avec sauvegarde manuelle puis automatique ;
 - **synchronisation future** : service optionnel, sans rendre la saisie locale dépendante du réseau.
@@ -271,7 +384,8 @@ Cette proposition reste révisable après les premiers tests UX. Le moteur compt
 - restauration testable et vérifiée ;
 - journal d’audit non modifiable depuis l’interface ;
 - séparation entre suppression d’un brouillon et annulation d’une écriture validée ;
-- export de toutes les données de l’entreprise ;
+- export des données d’une société, avec option de sauvegarde complète de l’espace de travail ;
+- avertissement clair lors d’un changement de société avec saisie non enregistrée ;
 - information claire sur les données collectées ;
 - aucun envoi vers un serveur distant sans consentement explicite ;
 - sauvegarde avant migration de schéma ou mise à jour majeure.
@@ -282,16 +396,20 @@ La conformité juridique, fiscale, comptable et relative aux données personnell
 
 Le prototype est validé lorsqu’un utilisateur cible peut, sans formation longue :
 
-1. créer son entreprise et ouvrir un exercice ;
-2. créer un client ;
-3. enregistrer une vente et voir son impact sur la trésorerie ou la créance ;
-4. enregistrer un achat et un paiement ;
-5. retrouver les opérations dans le journal ;
-6. comprendre la différence entre brouillon et validé ;
-7. consulter le montant restant dû par un client ;
-8. exporter une synthèse sur une période ;
-9. identifier clairement les erreurs bloquantes ;
-10. restaurer ou demander une sauvegarde de ses données.
+1. créer un espace de travail, sa première société et ouvrir un exercice ;
+2. ajouter une seconde société, passer sur celle-ci, puis revenir à la première sans mélange de données ;
+3. créer un client et un fournisseur dans la société active ;
+4. enregistrer une vente et voir son impact sur la trésorerie ou la créance ;
+5. recevoir une proposition d’imputation, comprendre son origine et la modifier avant validation ;
+6. enregistrer un achat et un paiement ;
+7. créer une immobilisation et visualiser un plan d’amortissement calculé automatiquement ;
+8. générer une dotation sur une période ouverte, contrôler l’écriture proposée et la valider ;
+9. retrouver les opérations dans le journal de la bonne société ;
+10. comprendre la différence entre brouillon, proposition, validé et clôturé ;
+11. consulter le montant restant dû par un client ;
+12. exporter une synthèse sur une période et une société données ;
+13. identifier clairement les erreurs bloquantes ;
+14. restaurer ou demander une sauvegarde de ses données.
 
 Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de saisie et au moins un professionnel de la comptabilité. Les termes incompris et les étapes abandonnées doivent être consignés avant le développement du moteur complet.
 
@@ -302,26 +420,30 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 - entretiens utilisateurs ;
 - inventaire des pièces et pratiques locales ;
 - architecture de l’information ;
+- parcours multi-sociétés et sélecteur de société ;
 - wireframes ;
-- prototype haute fidélité ;
+- prototype haute fidélité des propositions d’imputation et du registre des immobilisations ;
 - test utilisateur et corrections.
 
 ### Phase 2 — socle local
 
 - initialisation Tauri/React/TypeScript ;
 - schéma SQLite et migrations ;
-- entreprises, exercices, périodes et utilisateurs ;
+- espace de travail, sociétés, exercices, périodes et utilisateurs ;
+- droits par société et isolation `company_id` ;
 - référentiel de comptes importable ;
 - moteur débit/crédit ;
-- sauvegarde/restauration.
+- sauvegarde/restauration par société et complète.
 
 ### Phase 3 — flux métier
 
 - tiers ;
 - ventes et achats ;
 - caisse et banque ;
-- génération d’écritures ;
-- journal, grand livre et balance ;
+- règles et modèles de propositions d’imputation ;
+- immobilisations et calcul des plans d’amortissement ;
+- génération contrôlée d’écritures ;
+- journal, grand livre, balance et états d’immobilisations ;
 - exports.
 
 ### Phase 4 — validation métier et pilote
@@ -334,7 +456,6 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 
 ### Phase 5 — extensions
 
-- immobilisations ;
 - rapprochement bancaire ;
 - stocks ;
 - analytique ;
@@ -348,18 +469,21 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 - règles et taux de taxes à faire valider ;
 - format des pièces et mentions de facture ;
 - compatibilité Windows uniquement ou Windows/macOS/Linux ;
-- possibilité de travailler à plusieurs sur une même entreprise ;
-- politique de sauvegarde et de récupération ;
+- nombre maximal de sociétés et d’utilisateurs dans un espace de travail ;
+- possibilité de partager une société entre plusieurs postes ;
+- politique de sauvegarde et de récupération par société ;
 - rôle exact du cabinet comptable ;
 - nom, identité visuelle et positionnement commercial.
 
 ## 12. Première tâche recommandée
 
-Produire les maquettes de quatre flux :
+Produire les maquettes de six flux :
 
-1. onboarding de l’entreprise ;
-2. tableau de bord ;
-3. saisie d’une vente ;
-4. journal et détail d’une écriture.
+1. onboarding de l’espace de travail et création de la première société ;
+2. ajout d’une société et changement de société active ;
+3. tableau de bord isolé par société ;
+4. saisie d’une vente avec proposition d’imputation ;
+5. création d’une immobilisation et prévisualisation de son plan d’amortissement ;
+6. journal, détail d’une écriture et validation d’une dotation.
 
-Ces flux couvrent la promesse principale tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles comptables complètes.
+Ces flux couvrent les trois décisions ajoutées au périmètre — multi-sociétés, imputations assistées et amortissements automatiques — tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles comptables complètes.
