@@ -102,6 +102,33 @@ Fonctions prévues :
 
 Le prototype peut limiter l’espace à deux sociétés de test, mais tous les écrans et toutes les données doivent porter explicitement un `company_id`. Aucun compte, tiers ou mouvement ne doit pouvoir être sélectionné depuis une autre société. La consolidation et les écritures inter-sociétés sont hors périmètre du premier MVP : elles seront étudiées séparément pour éviter de confondre multi-dossiers et consolidation de groupe.
 
+### 3.1.2 Modules associés aux dossiers
+
+Le logiciel est une suite composée de modules conçus et livrés séparément :
+
+- **CSR** — Comptabilité SYSCOHADA Révisé ;
+- **GP** — Gestion de Paie ;
+- **GCSF** — Gestion Commerciale, Stocks et Facturation ;
+- **GC** — Gestion de Courrier.
+
+Une société possède un dossier de travail, mais un module n’est pas activé automatiquement par défaut. Depuis la page des dossiers, l’utilisateur pourra rattacher indépendamment un ou plusieurs modules au dossier.
+
+Règles de fonctionnement :
+
+- création du dossier sans module obligatoire ;
+- activation séparée de CSR, GP, GCSF et GC ;
+- possibilité d’avoir un seul module ou les quatre sur la même société ;
+- une association `DossierModule` possède son propre état, ses paramètres, ses autorisations et, si nécessaire, sa période métier ;
+- la page « Dossiers en cours » affiche une ligne par association dossier-module ;
+- un dossier sans module reste visible sur une ligne « Aucun module activé » afin de permettre sa configuration ;
+- l’ouverture d’un dossier affiche d’abord une page de choix des modules activés ;
+- les modules non activés sont visibles comme options activables, sans exposer leur espace métier ;
+- aucun module ne peut créer d’écriture, de bulletin, de mouvement de stock ou de courrier dans le contexte d’un autre module.
+
+Le partage de données sera sélectif et paramétrable. L’identité de la société, ses utilisateurs et les règles d’accès constituent le socle commun. Les données sensibles ou métier — écritures CSR, bulletins GP, mouvements GCSF et courriers GC — restent séparées, sauf partage explicitement autorisé et tracé.
+
+Les périodes sont propres aux usages : exercice comptable pour CSR, périodes de paie pour GP, périodes commerciales pour GCSF et dates de suivi pour GC. La période affichée dans la liste sera celle du dossier ou du module sélectionné.
+
 ### 3.2 Référentiel comptable
 
 Le produit doit fournir un référentiel initial basé sur le **SYSCOHADA révisé**, importable et versionné.
@@ -391,17 +418,19 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 
 1. **Onboarding** — créer un espace de travail et sa première société en moins de cinq minutes.
 2. **Sélecteur de société** — société active, ajout, archivage et changement sécurisé.
-3. **Accueil** — solde caisse/banque, ventes, dépenses, impayés et alertes de la société active.
-4. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
-5. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
-6. **Achat** — fournisseur, pièce, ventilation et paiement.
-7. **Trésorerie** — mouvements, solde et filtres.
-8. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
-9. **Tiers** — fiches et soldes clients/fournisseurs.
-10. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
-11. **Rapports** — états, période, société, export et impression.
-12. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
-13. **Paramètres** — société, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
+3. **Dossiers en cours** — identifier les dossiers et leurs associations aux modules.
+4. **Choix du module** — CSR, GP, GCSF ou GC activé pour le dossier sélectionné.
+5. **Accueil CSR** — solde caisse/banque, ventes, dépenses, impayés et alertes comptables.
+6. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
+7. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
+8. **Achat** — fournisseur, pièce, ventilation et paiement.
+9. **Trésorerie** — mouvements, solde et filtres.
+10. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
+11. **Tiers** — fiches et soldes clients/fournisseurs.
+12. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
+13. **Rapports** — états, période, société, export et impression.
+14. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
+15. **Paramètres** — société, modules, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
 
 ### Règles UX
 
@@ -422,9 +451,14 @@ Entités principales :
 
 - `Workspace` : espace de travail local ;
 - `Company` : société juridique, toujours rattachée à un espace ;
+- `Dossier` : contexte de travail identifiable d’une société et d’un exercice ;
+- `ModuleDefinition` : catalogue des modules CSR, GP, GCSF et GC ;
+- `DossierModule` : association d’un module à un dossier, avec état, session et paramètres propres ;
+- `ModuleSettings` : configuration métier propre à une association dossier-module ;
+- `DataSharingPolicy` : règles de partage explicite entre modules ;
 - `CompanyMembership` : accès d’un utilisateur à une société et rôle associé ;
 - `CompanySettings` : devise, régime, taxes, paramètres de numérotation et préférences ;
-- `FiscalYear` et `AccountingPeriod` : exercices et périodes, rattachés à une société ;
+- `FiscalYear` et `AccountingPeriod` : exercices et périodes, rattachés à une société ou à un module ;
 - `User`, `Role`, `Permission` ;
 - `AccountPlan`, `Account`, `AccountVersion` et `PostingRule` ;
 - `Journal` et `EntryNumberSequence`, propres à chaque société ;
@@ -446,8 +480,10 @@ Entités principales :
 - unicité de la référence d’écriture dans son journal et sa société ;
 - impossibilité de modifier une écriture validée ;
 - appartenance de toutes les données à une et une seule société ;
+- appartenance de chaque donnée métier au bon module quand elle n’est pas explicitement partagée ;
 - impossibilité de créer une écriture avec des comptes, tiers ou journaux d’une autre société ;
-- accès d’un utilisateur limité aux sociétés qui lui sont attribuées ;
+- impossibilité d’utiliser un module non activé pour le dossier ;
+- accès d’un utilisateur limité aux sociétés et modules qui lui sont attribués ;
 - interdiction de poster dans une période clôturée ;
 - cohérence entre facture, règlement et solde du tiers ;
 - conservation de l’auteur et de la date de chaque événement ;
@@ -469,7 +505,9 @@ Pour une application de bureau hors ligne destinée aux TPE :
 - **base locale** : SQLite, avec séparation logique stricte par `company_id` ;
 - **migrations** : versionnées et exécutées au démarrage ;
 - **validation métier** : moteur partagé, indépendant de l’interface ;
-- **moteur d’assistance** : règles d’imputation, modèles d’écriture et calcul d’amortissement testables indépendamment ;
+- **noyau commun** : sociétés, dossiers, utilisateurs, permissions, sessions et politiques de partage ;
+- **modules isolés** : CSR, GP, GCSF et GC, chacun avec ses écrans, règles métier et migrations ;
+- **moteur d’assistance** : règles d’imputation, modèles d’écriture et calcul d’amortissement testables indépendamment dans CSR ;
 - **moteur d’échange** : lecteurs/écrivains TXT, CSV, XLSX et adaptateurs de compatibilité pour les formats Excel historiques ;
 - **exports** : PDF et tableurs ;
 - **sauvegarde** : fichier chiffré ou archive chiffrée, avec sauvegarde manuelle puis automatique ;
@@ -537,8 +575,9 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 
 - initialisation Tauri/React/TypeScript ;
 - schéma SQLite et migrations ;
-- espace de travail, sociétés, exercices, périodes et utilisateurs ;
-- droits par société et isolation `company_id` ;
+- espace de travail, sociétés, dossiers, exercices, périodes et utilisateurs ;
+- catalogue des modules et associations `DossierModule` ;
+- droits par société, module et isolation `company_id` ;
 - référentiel de comptes importable ;
 - moteur débit/crédit ;
 - sauvegarde/restauration par société et complète.
@@ -548,8 +587,10 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 - tiers ;
 - ventes et achats ;
 - caisse et banque ;
-- règles et modèles de propositions d’imputation ;
-- immobilisations et calcul des plans d’amortissement ;
+- page de choix des modules par dossier ;
+- règles et modèles de propositions d’imputation dans CSR ;
+- immobilisations et calcul des plans d’amortissement dans CSR ;
+- contrats d’accès séparés pour GP, GCSF et GC ;
 - génération contrôlée d’écritures ;
 - journal, grand livre, balance et états d’immobilisations ;
 - import/export TXT, CSV et Excel avec profils de mapping, prévisualisation et contrôles ;
@@ -586,14 +627,16 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 
 ## 12. Première tâche recommandée
 
-Produire les maquettes de sept flux :
+Produire les maquettes de neuf flux :
 
-1. onboarding de l’espace de travail et création de la première société ;
-2. ajout d’une société et changement de société active ;
-3. tableau de bord isolé par société ;
-4. saisie d’une vente avec proposition d’imputation ;
-5. création d’une immobilisation et prévisualisation de son plan d’amortissement ;
-6. import d’une balance ou d’un livre TXT/Excel avec aperçu et mapping ;
-7. journal, détail d’une écriture, validation d’une dotation et export.
+1. authentification ;
+2. liste des dossiers avec une ligne par module associé ;
+3. création d’un dossier sans module obligatoire ;
+4. rattachement séparé de CSR, GP, GCSF ou GC ;
+5. page de choix des modules après ouverture d’un dossier ;
+6. tableau de bord CSR isolé par société ;
+7. saisie d’une vente avec proposition d’imputation ;
+8. création d’une immobilisation et prévisualisation de son plan d’amortissement ;
+9. import/export TXT/Excel avec aperçu et mapping.
 
-Ces flux couvrent les quatre décisions intégrées au périmètre — multi-sociétés, imputations assistées, amortissements automatiques et échanges TXT/Excel — tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles comptables complètes.
+Ces flux couvrent la nouvelle architecture modulaire tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles métier spécifiques de chaque module.

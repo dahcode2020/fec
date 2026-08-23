@@ -1,8 +1,8 @@
 # FEC
 
-Prototype d’une application de gestion comptable destinée en priorité aux TPE béninoises.
+Prototype d’un logiciel de gestion modulaire destiné en priorité aux TPE béninoises.
 
-Le produit est conçu autour du **SYSCOHADA révisé** — et non comme une copie technique ou visuelle de Sage — avec une expérience plus simple, locale et adaptée aux petites entreprises.
+Le produit est conçu autour de quatre modules séparés : **CSR** (Comptabilité SYSCOHADA Révisé), **GP** (Gestion de Paie), **GCSF** (Gestion Commerciale, Stocks et Facturation) et **GC** (Gestion de Courrier). Il ne s’agit pas d’une copie technique ou visuelle de Sage, mais d’une expérience plus simple, locale et adaptée aux petites entreprises.
 
 ## Première étape
 
@@ -12,6 +12,8 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - TPE comme cible prioritaire ;
 - prototype UX avant l’implémentation métier ;
 - gestion de plusieurs sociétés dans un même espace de travail, avec isolation des données ;
+- association indépendante de chaque dossier aux modules CSR, GP, GCSF et GC ;
+- accueil de sélection des modules après ouverture d’un dossier ;
 - propositions d’imputations comptables avant validation ;
 - calcul et génération contrôlés des amortissements ;
 - import et export des balances et livres comptables en TXT et formats tableur Excel ;
@@ -24,6 +26,8 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 Le prototype interactif est disponible dans [`prototype/index.html`](prototype/index.html). Les parcours et conventions de la maquette sont décrits dans [`docs/02-maquettes-ux.md`](docs/02-maquettes-ux.md).
 
 Le parcours d’accès initial — authentification puis sélection d’un dossier — est décrit dans [`docs/04-authentification-et-dossiers.md`](docs/04-authentification-et-dossiers.md).
+
+L’architecture multi-modules et l’association indépendante des modules aux dossiers sont décrites dans [`docs/05-modules-et-dossiers.md`](docs/05-modules-et-dossiers.md).
 
 Pour l’ouvrir localement :
 

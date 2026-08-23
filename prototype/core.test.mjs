@@ -5,6 +5,10 @@ import {
   addCompany,
   calculateStraightLinePlan,
   companiesFor,
+  activeModules,
+  assertModuleAccess,
+  attachModule,
+  createDossier,
   createCompany,
   createJournalEntry,
   createLocalWorkspaceStore,
@@ -31,6 +35,17 @@ test('génère le suffixe du dossier à partir de l’année d’exercice', () =
   assert.equal(makeDossierCode('acacia', '2025-01-01'), 'ACACIA-25');
   assert.equal(makeDossierCode('ACACIA', '2026-04-01'), 'ACACIA-26');
   assert.equal(makeDossierCode('sigle local', '2025-01-01'), 'SIGLELOCAL-25');
+});
+
+test('associe les modules séparément à un dossier', () => {
+  let dossier = createDossier({ id: 'dossier-1', companyId: 'co-a', code: 'ACACIA-25', exerciseStart: '2025-01-01', exerciseEnd: '2025-12-31' });
+  assert.equal(activeModules(dossier).length, 0);
+  dossier = attachModule(dossier, 'CSR');
+  dossier = attachModule(dossier, 'GCSF');
+  assert.deepEqual(activeModules(dossier).map((module) => module.moduleId), ['CSR', 'GCSF']);
+  assert.equal(assertModuleAccess(dossier, 'CSR'), true);
+  assert.throws(() => assertModuleAccess(dossier, 'GP'), (error) => error.code === 'MODULE_NOT_ACTIVE');
+  assert.throws(() => attachModule(dossier, 'CSR'), (error) => error.code === 'DUPLICATE_MODULE');
 });
 
 test('persiste l’espace de travail localement', () => {

@@ -9,9 +9,10 @@
 Cette première maquette permet de valider les parcours des fonctionnalités retenues avant de construire le moteur comptable :
 
 1. gestion multi-sociétés ;
-2. propositions d’imputations comptables ;
-3. calcul contrôlé des amortissements ;
-4. import et export TXT/Excel, ajouté au périmètre lors de l’itération suivante.
+2. association indépendante des modules CSR, GP, GCSF et GC aux dossiers ;
+3. propositions d’imputations comptables ;
+4. calcul contrôlé des amortissements ;
+5. import et export TXT/Excel, ajouté au périmètre lors de l’itération suivante.
 
 Il s’agit d’une maquette fonctionnelle : les données affichées sont simulées, mais les principaux clics et états d’interface sont représentés.
 
@@ -25,7 +26,16 @@ Il s’agit d’une maquette fonctionnelle : les données affichées sont simul�
 - la page **Sociétés & accès** permet d’ajouter une société ;
 - les rôles d’une même personne peuvent différer d’une société à l’autre.
 
-### 2. Saisir une vente et contrôler l’imputation
+### 2. Ouvrir un dossier et choisir un module
+
+- la page « Dossiers en cours » affiche une ligne par module rattaché ;
+- un dossier sans module reste visible comme « Aucun module activé » ;
+- ouvrir une ligne affiche d’abord l’accueil des modules du dossier ;
+- CSR, GP, GCSF et GC sont activables séparément ;
+- CSR mène vers l’espace comptable déjà prototypé ;
+- GP, GCSF et GC affichent pour l’instant leur espace d’attente dédié.
+
+### 3. Saisir une vente et contrôler l’imputation
 
 - ouvrir **Ventes** ;
 - renseigner le client, la date et la prestation ;
@@ -34,7 +44,7 @@ Il s’agit d’une maquette fonctionnelle : les données affichées sont simul�
 - accepter la proposition ou demander la modification des comptes ;
 - conserver l’opération au stade brouillon avant validation.
 
-### 3. Gérer les immobilisations
+### 4. Gérer les immobilisations
 
 - ouvrir **Immobilisations** ;
 - consulter la valeur brute, l’amorti cumulé et la valeur nette ;
@@ -43,7 +53,7 @@ Il s’agit d’une maquette fonctionnelle : les données affichées sont simul�
 - préparer la dotation de juin ;
 - retrouver la dotation proposée dans le journal des opérations diverses.
 
-### 4. Importer une balance ou un livre
+### 5. Importer une balance ou un livre
 
 - ouvrir **Import / export** ;
 - sélectionner le type de document ;
@@ -53,7 +63,7 @@ Il s’agit d’une maquette fonctionnelle : les données affichées sont simul�
 
 La sélection d’un fichier réel ouvre une simulation de l’étape de mapping. Aucun fichier n’est envoyé ni intégré : le prototype fonctionne entièrement dans le navigateur.
 
-### 5. Exporter un état
+### 6. Exporter un état
 
 - ouvrir **Import / export** ;
 - choisir **Exporter des états** ;

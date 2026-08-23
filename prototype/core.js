@@ -43,6 +43,35 @@ export function makeDossierCode(code, exerciseStart) {
   const normalizedCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 18);
   return `${normalizedCode || 'SIGLE'}-${exerciseYear(exerciseStart).slice(-2)}`;
 }
+
+export const MODULE_DEFINITIONS = Object.freeze({
+  CSR: Object.freeze({ label: 'Comptabilité SYSCOHADA Révisé', shortLabel: 'Comptabilité', description: 'Journaux, écritures, imputations, amortissements et états comptables.' }),
+  GP: Object.freeze({ label: 'Gestion de Paie', shortLabel: 'Paie', description: 'Collaborateurs, variables, bulletins et déclarations sociales.' }),
+  GCSF: Object.freeze({ label: 'Gestion commerciale', shortLabel: 'Commerciale & stock', description: 'Ventes, achats, stocks, facturation et suivi des règlements.' }),
+  GC: Object.freeze({ label: 'Gestion de Courrier', shortLabel: 'Courrier', description: 'Courriers entrants, sortants, suivi, classement et recherche.' })
+});
+
+export function createDossier({ id, companyId, code, exerciseStart, exerciseEnd, archived = false } = {}) {
+  if (!companyId || !code) throw new DomainError('Un dossier doit avoir une société et un code.', 'INVALID_DOSSIER');
+  if (exerciseStart && exerciseEnd && new Date(`${exerciseEnd}T00:00:00Z`) <= new Date(`${exerciseStart}T00:00:00Z`)) throw new DomainError('La fin de l’exercice doit être postérieure au début.', 'INVALID_EXERCISE');
+  return { id: id || `dossier_${Date.now()}`, companyId, code, exerciseStart: exerciseStart || null, exerciseEnd: exerciseEnd || null, archived, modules: [] };
+}
+
+export function attachModule(dossier, moduleId, { id, settings = {}, permissions = [] } = {}) {
+  if (!MODULE_DEFINITIONS[moduleId]) throw new DomainError(`Module inconnu : ${moduleId}`, 'UNKNOWN_MODULE');
+  if (dossier.modules?.some((module) => module.moduleId === moduleId && module.status !== 'ARCHIVED')) throw new DomainError('Ce module est déjà rattaché au dossier.', 'DUPLICATE_MODULE');
+  const association = { id: id || `${dossier.id}_${moduleId.toLowerCase()}`, dossierId: dossier.id, companyId: dossier.companyId, moduleId, status: 'ACTIVE', settings, permissions, createdAt: new Date().toISOString() };
+  return { ...dossier, modules: [...(dossier.modules || []), association] };
+}
+
+export function activeModules(dossier) {
+  return (dossier.modules || []).filter((module) => module.status === 'ACTIVE');
+}
+
+export function assertModuleAccess(dossier, moduleId) {
+  if (!activeModules(dossier).some((module) => module.moduleId === moduleId)) throw new DomainError('Ce module n’est pas activé pour ce dossier.', 'MODULE_NOT_ACTIVE');
+  return true;
+}
 const startOfMonth = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 const endOfMonth = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 const addMonths = (date, months) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));

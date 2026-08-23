@@ -1,9 +1,9 @@
-import { calculateStraightLinePlan, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode } from './core.js';
+import { calculateStraightLinePlan, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode, MODULE_DEFINITIONS } from './core.js';
 
 const appState = {
   authenticated: false,
   activeCompany: 'acacia',
-  selectedDossier: 'acacia-25',
+  selectedDossier: 'acacia-25-csr',
   companies: {
     acacia: {
       id: 'acacia',
@@ -45,9 +45,17 @@ const appState = {
     }
   },
   dossiers: [
-    { id: 'acacia-25', companyId: 'acacia', dossier: 'ACACIA-25', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
-    { id: 'noria-25', companyId: 'noria', dossier: 'NORIA-25', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
+    { id: 'acacia-25-csr', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'CSR', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
+    { id: 'acacia-25-gcsf', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' },
+    { id: 'noria-25-gcsf', companyId: 'noria', dossier: 'NORIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
   ]
+};
+
+const MODULES = {
+  CSR: { ...MODULE_DEFINITIONS.CSR, color: 'green' },
+  GP: { ...MODULE_DEFINITIONS.GP, color: 'purple' },
+  GCSF: { ...MODULE_DEFINITIONS.GCSF, color: 'blue' },
+  GC: { ...MODULE_DEFINITIONS.GC, color: 'amber' }
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -139,17 +147,56 @@ function renderDossiers(query = $('#dossierSearch')?.value || '') {
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDossiers = appState.dossiers.filter((dossier) => {
     const company = appState.companies[dossier.companyId];
-    return !normalizedQuery || [dossier.dossier, dossier.period, company?.name].join(' ').toLowerCase().includes(normalizedQuery);
+    const module = dossier.moduleId ? MODULES[dossier.moduleId] : { label: 'Aucun module activé', shortLabel: 'À configurer' };
+    return !normalizedQuery || [dossier.dossier, dossier.period, company?.name, module.label, dossier.moduleId].join(' ').toLowerCase().includes(normalizedQuery);
   });
   rows.innerHTML = visibleDossiers.map((dossier) => {
-    const company = appState.companies[dossier.companyId] || { name: 'Société inconnue', shortName: '??', color: 'teal' };
+    const company = appState.companies[dossier.companyId] || { name: 'Société inconnue', shortName: '??', color: 'teal', type: 'Dossier comptable' };
+    const module = dossier.moduleId ? MODULES[dossier.moduleId] : { label: 'Aucun module activé', shortLabel: 'À configurer', color: 'muted' };
     const isSelected = dossier.id === appState.selectedDossier;
-    return `<tr class="${isSelected ? 'is-selected' : ''}" data-dossier-id="${escapeHtml(dossier.id)}" tabindex="0" role="button" aria-label="Sélectionner ${escapeHtml(dossier.dossier)}"><td><span class="dossier-code-icon ${company.color === 'orange' ? 'dossier-code-orange' : 'dossier-code-teal'}">${escapeHtml(company.shortName)}</span><span class="dossier-code"><b>${escapeHtml(dossier.dossier)}</b><small>SYSCOHADA révisé</small></span></td><td><span class="software-name">FEC Comptabilité</span><small class="cell-subtitle">Version locale</small></td><td><span class="company-name-cell">${escapeHtml(company.name)}</span><small class="cell-subtitle">${escapeHtml(company.type || 'Dossier comptable')}</small></td><td>${escapeHtml(dossier.period)}</td><td><span class="session-count">${dossier.sessions ? dossier.sessions : '—'}</span></td><td><span class="status ${dossier.statusClass || 'status-green'}">${escapeHtml(dossier.status)}</span></td></tr>`;
+    const moduleClass = dossier.moduleId ? `module-table-${module.color}` : 'module-table-muted';
+    return `<tr class="${isSelected ? 'is-selected' : ''}" data-dossier-id="${escapeHtml(dossier.id)}" tabindex="0" role="button" aria-label="Sélectionner ${escapeHtml(dossier.dossier)} ${escapeHtml(module.shortLabel)}"><td><span class="dossier-code-icon ${company.color === 'orange' ? 'dossier-code-orange' : 'dossier-code-teal'}">${escapeHtml(company.shortName)}</span><span class="dossier-code"><b>${escapeHtml(dossier.dossier)}</b><small>${dossier.moduleId ? 'Dossier · module rattaché' : 'Dossier · à configurer'}</small></span></td><td><span class="module-table-cell"><i class="module-table-mark ${moduleClass}">${escapeHtml(dossier.moduleId || '—')}</i><span><b>${escapeHtml(module.shortLabel)}</b><small>${escapeHtml(module.label)}</small></span></span></td><td><span class="company-name-cell">${escapeHtml(company.name)}</span><small class="cell-subtitle">${escapeHtml(company.activity || company.type || 'Dossier comptable')}</small></td><td>${escapeHtml(dossier.period)}</td><td><span class="session-count">${dossier.sessions ? dossier.sessions : '—'}</span></td><td><span class="status ${dossier.statusClass || 'status-green'}">${escapeHtml(dossier.status)}</span></td></tr>`;
   }).join('');
-  const activeCount = appState.dossiers.filter((dossier) => dossier.status !== 'Archivé').length;
+  const activeRecords = appState.dossiers.filter((dossier) => dossier.status !== 'Archivé');
+  const uniqueDossiers = new Set(activeRecords.map((dossier) => `${dossier.companyId}:${dossier.dossier}`));
+  const activeModules = activeRecords.filter((dossier) => dossier.moduleId).length;
   const countNode = $('#dossierCount');
-  if (countNode) countNode.textContent = String(activeCount);
+  const moduleCountNode = $('#moduleCount');
+  if (countNode) countNode.textContent = String(uniqueDossiers.size);
+  if (moduleCountNode) moduleCountNode.textContent = String(activeModules);
   if (!visibleDossiers.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun dossier ne correspond à votre recherche.</td></tr>';
+}
+
+function activeModulesFor(companyId, dossierCode) {
+  return appState.dossiers.filter((dossier) => dossier.companyId === companyId && dossier.dossier === dossierCode && dossier.moduleId && dossier.status !== 'Archivé');
+}
+
+function renderModuleHome(companyId, dossierCode) {
+  const company = appState.companies[companyId];
+  if (!company) return;
+  const activeEntries = activeModulesFor(companyId, dossierCode);
+  const activeIds = new Set(activeEntries.map((entry) => entry.moduleId));
+  const year = activeEntries[0]?.exerciseYear || dossierCode?.slice(-2) || 'YY';
+  const displayCode = dossierCode || `${company.code || company.shortName}-20${year}`;
+  ['moduleCompanyName', 'moduleHeadingCompany', 'moduleBannerCompany'].forEach((id) => { const node = $(`#${id}`); if (node) node.textContent = company.name; });
+  ['moduleDossierCode', 'moduleHeadingCode'].forEach((id) => { const node = $(`#${id}`); if (node) node.textContent = displayCode; });
+  const meta = $('#moduleBannerMeta');
+  if (meta) meta.textContent = `${activeEntries.length} module${activeEntries.length > 1 ? 's' : ''} activé${activeEntries.length > 1 ? 's' : ''} · Exercice ${activeEntries[0]?.exerciseYear || 'à configurer'}`;
+  const avatar = $('#moduleCompanyAvatar');
+  if (avatar) { avatar.textContent = company.shortName; avatar.className = `avatar avatar-small ${companyAvatarClass(company)}`; }
+  const bannerIcon = $('.module-banner-icon');
+  if (bannerIcon) bannerIcon.textContent = company.shortName;
+  $$('.module-card').forEach((card) => {
+    const moduleId = card.dataset.moduleCard;
+    const definition = MODULES[moduleId];
+    const active = activeIds.has(moduleId);
+    card.classList.toggle('is-inactive', !active);
+    const state = $(`[data-module-state="${moduleId}"]`);
+    if (state) { state.textContent = active ? 'ACTIVÉ' : 'NON ACTIVÉ'; state.classList.toggle('is-inactive', !active); }
+    const button = $(`[data-module-open="${moduleId}"]`);
+    if (button) { button.textContent = active ? 'Ouvrir' : 'Activer'; button.className = `button button-small ${active ? 'button-primary' : 'button-secondary'}`; button.dataset.moduleOpen = moduleId; }
+    if (definition) card.setAttribute('aria-label', `${definition.label} — ${active ? 'activé' : 'non activé'}`);
+  });
 }
 
 function selectDossier(dossierId) {
@@ -160,10 +207,13 @@ function selectDossier(dossierId) {
   renderDossiers();
   const title = $('#selectedDossierTitle');
   const meta = $('#selectedDossierMeta');
+  const moduleNode = $('#selectedDossierModule');
   const hint = $('#dossierSelectionHint');
+  const module = dossier.moduleId ? MODULES[dossier.moduleId] : null;
   if (title) title.textContent = company.name;
-  if (meta) meta.textContent = `${dossier.dossier} · Exercice ${dossier.period.slice(-4)}`;
-  if (hint) hint.textContent = `${dossier.dossier} sélectionné · choisissez une action à droite.`;
+  if (meta) meta.textContent = `${dossier.dossier} · ${module ? module.shortLabel : 'Aucun module'} · Exercice ${dossier.exerciseYear || dossier.period.slice(-4)}`;
+  if (moduleNode) { moduleNode.textContent = module ? `${dossier.moduleId} · ${module.shortLabel}` : 'Aucun module activé'; moduleNode.className = `selected-module-pill ${module ? `selected-module-${module.color}` : 'selected-module-muted'}`; }
+  if (hint) hint.textContent = `${dossier.dossier} · ${module ? module.shortLabel : 'aucun module'} sélectionné · choisissez une action à droite.`;
 }
 
 function showDossiers() {
@@ -193,11 +243,78 @@ function openSelectedDossier() {
     return;
   }
   dossier.sessions = Math.max(1, dossier.sessions || 0);
+  appState.moduleCompanyId = dossier.companyId;
+  appState.moduleDossierCode = dossier.dossier;
   setActiveCompany(dossier.companyId, false);
   $('#dossiersScreen')?.setAttribute('hidden', '');
-  $('#appShell')?.removeAttribute('hidden');
-  openView('dashboard');
-  showToast(`${appState.companies[dossier.companyId].name} est ouvert.`);
+  $('#appShell')?.setAttribute('hidden', '');
+  $('#moduleStubScreen')?.setAttribute('hidden', '');
+  $('#moduleHomeScreen')?.removeAttribute('hidden');
+  renderModuleHome(dossier.companyId, dossier.dossier);
+  showToast(`${appState.companies[dossier.companyId].name} est ouvert. Choisissez un module.`);
+}
+
+function activateModule(moduleId) {
+  const selected = appState.dossiers.find((item) => item.id === appState.selectedDossier);
+  if (!selected || !MODULES[moduleId]) return;
+  const companyEntries = activeModulesFor(selected.companyId, selected.dossier);
+  if (companyEntries.some((entry) => entry.moduleId === moduleId)) return openModule(moduleId);
+  const base = appState.dossiers.find((item) => item.companyId === selected.companyId && item.dossier === selected.dossier && !item.moduleId);
+  if (base) appState.dossiers = appState.dossiers.filter((item) => item.id !== base.id);
+  const entry = { ...selected, id: `${selected.companyId}-${selected.dossier.toLowerCase()}-${moduleId.toLowerCase()}`, moduleId, sessions: 0, status: 'Disponible', statusClass: 'status-blue' };
+  appState.dossiers.push(entry);
+  appState.selectedDossier = entry.id;
+  renderDossiers();
+  renderModuleHome(selected.companyId, selected.dossier);
+  showToast(`${MODULES[moduleId].label} a été rattaché à ${selected.dossier}.`);
+}
+
+function openModule(moduleId) {
+  const companyId = appState.moduleCompanyId;
+  const dossierCode = appState.moduleDossierCode;
+  const entry = activeModulesFor(companyId, dossierCode).find((item) => item.moduleId === moduleId);
+  if (!entry) return activateModule(moduleId);
+  setActiveCompany(companyId, false);
+  if (moduleId === 'CSR') {
+    $('#moduleHomeScreen')?.setAttribute('hidden', '');
+    $('#moduleStubScreen')?.setAttribute('hidden', '');
+    $('#appShell')?.removeAttribute('hidden');
+    openView('dashboard');
+    showToast('Module CSR ouvert.');
+    return;
+  }
+  const definition = MODULES[moduleId];
+  $('#moduleHomeScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.setAttribute('hidden', '');
+  $('#moduleStubScreen')?.removeAttribute('hidden');
+  const company = appState.companies[companyId];
+  const stubName = $('#stubCompanyName');
+  const stubCode = $('#stubDossierCode');
+  const stubTitle = $('#stubModuleTitle');
+  const stubDescription = $('#stubModuleDescription');
+  const stubMark = $('#stubModuleMark');
+  const stubAvatar = $('#stubCompanyAvatar');
+  if (stubName) stubName.textContent = company.name;
+  if (stubCode) stubCode.textContent = dossierCode;
+  if (stubTitle) stubTitle.textContent = definition.label;
+  if (stubDescription) stubDescription.textContent = definition.description;
+  if (stubMark) { stubMark.textContent = moduleId; stubMark.className = `module-mark module-mark-${definition.color}`; }
+  if (stubAvatar) { stubAvatar.textContent = company.shortName; stubAvatar.className = `avatar avatar-small ${companyAvatarClass(company)}`; }
+}
+
+function backToDossiers() {
+  $('#moduleHomeScreen')?.setAttribute('hidden', '');
+  $('#moduleStubScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.setAttribute('hidden', '');
+  $('#dossiersScreen')?.removeAttribute('hidden');
+  renderDossiers();
+  selectDossier(appState.selectedDossier);
+}
+
+function backToModules() {
+  $('#moduleStubScreen')?.setAttribute('hidden', '');
+  $('#moduleHomeScreen')?.removeAttribute('hidden');
+  renderModuleHome(appState.moduleCompanyId, appState.moduleDossierCode);
 }
 
 function duplicateSelectedDossier() {
@@ -489,6 +606,9 @@ function bindEvents() {
     const companySwitch = event.target.closest('[data-company-switch]');
     if (companySwitch) { setActiveCompany(companySwitch.dataset.companySwitch); openView('dashboard'); return; }
 
+    const moduleOpen = event.target.closest('[data-module-open]');
+    if (moduleOpen) { openModule(moduleOpen.dataset.moduleOpen); return; }
+
     const importTab = event.target.closest('[data-import-tab]');
     if (importTab) { setImportMode(importTab.dataset.importTab); return; }
 
@@ -503,6 +623,8 @@ function bindEvents() {
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
     if (action === 'authenticate') showDossiers();
+    if (action === 'back-to-dossiers') backToDossiers();
+    if (action === 'back-to-modules') backToModules();
     if (action === 'dossier-select') selectDossier(actionTarget.dataset.dossierId);
     if (action === 'dossier-open') openSelectedDossier();
     if (action === 'dossier-refresh') { renderDossiers(); selectDossier(appState.selectedDossier); showToast('La liste des dossiers est à jour.'); }

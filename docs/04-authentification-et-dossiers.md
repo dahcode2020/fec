@@ -18,9 +18,21 @@ Un dossier correspond à une société et à son contexte comptable : exercice, 
 4. l’utilisateur recherche ou sélectionne une entreprise ;
 5. il consulte les informations du dossier ;
 6. il clique sur **Ouvrir** ;
-7. l’application ouvre le tableau de bord de cette société comme société active.
+7. l’application affiche la page de choix des modules ;
+8. l’utilisateur ouvre un module déjà activé ou active un nouveau module ;
+9. le logiciel ouvre l’espace métier du module dans le contexte de cette société.
 
 La sélection du dossier est obligatoire pour éviter qu’une écriture soit saisie dans la mauvaise société.
+
+## Dossier et modules
+
+Un dossier peut exister sans module activé. Les modules sont ensuite rattachés séparément : **CSR**, **GP**, **GCSF** et **GC**.
+
+La liste affiche une ligne par association dossier-module. Ainsi, si le dossier `ACACIA-25` utilise CSR et GCSF, il apparaît deux fois : une ligne pour CSR et une ligne pour GCSF. Une entreprise sans module conserve une ligne « Aucun module activé » pour permettre sa configuration.
+
+L’ouverture d’une ligne ne lance pas immédiatement un module métier. Elle ouvre d’abord une page de choix présentant les modules activés pour ce dossier. Les modules non activés y sont visibles comme options d’activation. Chaque module possède ensuite son espace séparé.
+
+Le partage des données entre modules est sélectif et sera configurable : les données d’identité, les utilisateurs et les droits peuvent constituer le socle commun, tandis que les données comptables, de paie, commerciales et de courrier restent séparées par défaut.
 
 ## Formulaire « Nouveau dossier »
 
@@ -47,7 +59,7 @@ Le formulaire affiche le résultat en temps réel avant création. La fin de l�
 Colonnes prévues :
 
 - **Dossier** : identifiant lisible du dossier ;
-- **Logiciel** : version ou produit de comptabilité utilisé ;
+- **Module** : CSR, GP, GCSF ou GC associé au dossier ;
 - **Société** : raison sociale et activité ;
 - **Période** : exercice couvert ;
 - **Sessions** : sessions ouvertes ou disponibles ;

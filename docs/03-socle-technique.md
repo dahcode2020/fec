@@ -8,10 +8,14 @@
 
 Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototype/core.js). Il est chargé par l’interface, mais reste indépendant du DOM afin d’être testé et réutilisé dans l’application de bureau.
 
-### Espaces et sociétés
+### Espaces, sociétés et modules
 
 - création d’un espace de travail ;
 - ajout de sociétés sans doublon ;
+- création d’un dossier sans module obligatoire ;
+- catalogue CSR, GP, GCSF et GC ;
+- association indépendante de plusieurs modules à un même dossier ;
+- contrôle d’accès à un module uniquement s’il est activé ;
 - filtrage des sociétés archivées ;
 - contrôle d’appartenance à la société active ;
 - persistance locale derrière un petit adaptateur remplaçable par SQLite ;
@@ -73,11 +77,13 @@ npm test
 La suite vérifie :
 
 1. l’isolation et la persistance des sociétés ;
-2. le refus des écritures déséquilibrées ou hors société ;
-3. les propositions d’imputation ;
-4. le calcul linéaire et les arrondis ;
-5. le prorata temporis ;
-6. l’import et l’export d’une balance TXT.
+2. la génération du code `SIGLE-YY` ;
+3. l’association indépendante des modules à un dossier ;
+4. le refus des écritures déséquilibrées ou hors société ;
+5. les propositions d’imputation ;
+6. le calcul linéaire et les arrondis ;
+7. le prorata temporis ;
+8. l’import et l’export d’une balance TXT.
 
 ## Limites assumées de cette tranche
 
