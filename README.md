@@ -18,3 +18,15 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - comptabilité générale, trésorerie et facturation comme base du futur MVP ;
 - devise de travail : FCFA/XOF ;
 - paramètres comptables et fiscaux béninois configurables et validables par un professionnel.
+
+## Maquettes UX
+
+Le prototype interactif est disponible dans [`prototype/index.html`](prototype/index.html). Les parcours et conventions de la maquette sont décrits dans [`docs/02-maquettes-ux.md`](docs/02-maquettes-ux.md).
+
+Pour l’ouvrir localement :
+
+```bash
+python3 -m http.server 4173 --directory prototype
+```
+
+Puis ouvrir `http://localhost:4173` dans un navigateur.
