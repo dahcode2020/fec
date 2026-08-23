@@ -8,7 +8,11 @@ import {
   activeModules,
   assertModuleAccess,
   attachModule,
+  classifyIntegratedEntry,
   createDossier,
+  createIntegratedJournal,
+  syncIntegratedJournal,
+  summarizeIntegratedJournal,
   createCompany,
   createJournalEntry,
   createLocalWorkspaceStore,
@@ -48,6 +52,19 @@ test('associe les modules séparément à un dossier', () => {
   assert.throws(() => attachModule(dossier, 'CSR'), (error) => error.code === 'DUPLICATE_MODULE');
 });
 
+test('catégorise et synchronise le livre journal intégré', () => {
+  assert.equal(classifyIntegratedEntry({ label: 'Dotation amortissement juin' }), 'AMORTISSEMENTS');
+  assert.equal(classifyIntegratedEntry({ integrationCategory: 'centralisation', label: 'OD' }), 'CENTRALISATION');
+  assert.equal(classifyIntegratedEntry({ integrationCategory: 'subscription', label: 'OD' }), 'ABONNEMENTS');
+  let journal = createIntegratedJournal({ id: 'lj-1', companyId: 'co-a', fiscalYear: '2025' });
+  journal = syncIntegratedJournal(journal, { id: 'entry-1', companyId: 'co-a', label: 'Abonnement internet', amount: 12000 });
+  journal = syncIntegratedJournal(journal, { id: 'entry-2', companyId: 'co-a', label: 'Dotation amortissement', amount: 5000 });
+  assert.equal(journal.entries.length, 2);
+  assert.equal(summarizeIntegratedJournal(journal).ABONNEMENTS.count, 1);
+  assert.equal(summarizeIntegratedJournal(journal).AMORTISSEMENTS.amount, 5000);
+  assert.throws(() => syncIntegratedJournal(journal, { id: 'entry-3', companyId: 'co-b', label: 'Autre', amount: 1 }), (error) => error.code === 'COMPANY_SCOPE_VIOLATION');
+});
+
 test('persiste l’espace de travail localement', () => {
   const values = new Map();
   const storage = {
@@ -77,6 +94,13 @@ test('refuse une écriture déséquilibrée ou hors société', () => {
       { accountId: '706000', debit: 0, credit: 250000 }
     ]
   }, { activeCompanyId: 'co-a' }), (error) => error.code === 'COMPANY_SCOPE_VIOLATION');
+});
+
+test('propose une imputation d’abonnement équilibrée', () => {
+  const suggestion = suggestPosting({ category: 'subscription', total: 12000, thirdPartyName: 'Fournisseur internet' });
+  assert.equal(suggestion.status, 'SUGGESTED');
+  assert.equal(suggestion.lines[0].accountId, '628000');
+  assert.equal(suggestion.lines[1].accountId, '401000');
 });
 
 test('propose une imputation de vente équilibrée', () => {

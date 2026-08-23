@@ -426,7 +426,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 8. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
 9. **Achat** — fournisseur, pièce, ventilation et paiement.
 10. **Trésorerie** — mouvements, solde et filtres.
-11. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
+11. **Livre journal intégré** — écritures, catégories automatiques, synchronisation et détail de la piste d’audit.
 12. **Tiers** — fiches et soldes clients/fournisseurs.
 13. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
 14. **Rapports** — états, période, société, export et impression.

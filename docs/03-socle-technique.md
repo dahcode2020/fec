@@ -53,6 +53,10 @@ Le noyau calcule un plan linéaire avec :
 
 Le calcul du plan, la proposition d’écriture et sa validation restent trois étapes séparées.
 
+### Livre journal intégré
+
+Le noyau sait créer et synchroniser une vue intégrée du livre journal par société. Il catégorise les écritures en opérations générales, amortissements automatiques, centralisations, abonnements et résultat de la période. Une synchronisation remplace une ligne portant le même identifiant au lieu de la dupliquer.
+
 ### Échanges TXT
 
 Le noyau sait déjà :
@@ -81,9 +85,10 @@ La suite vérifie :
 3. l’association indépendante des modules à un dossier ;
 4. le refus des écritures déséquilibrées ou hors société ;
 5. les propositions d’imputation ;
-6. le calcul linéaire et les arrondis ;
-7. le prorata temporis ;
-8. l’import et l’export d’une balance TXT.
+6. la catégorisation et la synchronisation du livre journal intégré ;
+7. le calcul linéaire et les arrondis ;
+8. le prorata temporis ;
+9. l’import et l’export d’une balance TXT.
 
 ## Limites assumées de cette tranche
 

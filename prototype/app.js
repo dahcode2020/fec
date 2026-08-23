@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, createJournalEntry, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode, MODULE_DEFINITIONS, suggestPosting } from './core.js';
+import { calculateStraightLinePlan, classifyIntegratedEntry, createIntegratedJournal, createJournalEntry, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -48,6 +48,15 @@ const appState = {
     { id: 'acacia-25-csr', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'CSR', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
     { id: 'acacia-25-gcsf', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' },
     { id: 'noria-25-gcsf', companyId: 'noria', dossier: 'NORIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
+  ],
+  integratedJournal: createIntegratedJournal({ id: 'lj-acacia-2025', companyId: 'acacia', fiscalYear: '2025' }),
+  integratedEntries: [
+    { id: 'sale-1', companyId: 'acacia', reference: 'VE-0008', date: '2025-06-16', journalId: 'VE', label: 'Awa Concept — FAC-2025-018', debit: 250000, credit: 250000, amount: 250000, integrationCategory: 'GENERAL', status: 'TO_REVIEW', source: 'Saisie et insertion' },
+    { id: 'purchase-1', companyId: 'acacia', reference: 'AC-0007', date: '2025-06-15', journalId: 'AC', label: 'Cotonou Bureau — FA-0154', debit: 38500, credit: 38500, amount: 38500, integrationCategory: 'GENERAL', status: 'VALIDATED', source: 'Saisie et insertion' },
+    { id: 'amort-1', companyId: 'acacia', reference: 'OD-0003', date: '2025-06-30', journalId: 'OD', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
+    { id: 'central-1', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
+    { id: 'subscription-1', companyId: 'acacia', reference: 'OD-0004', date: '2025-06-01', journalId: 'OD', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
+    { id: 'result-1', companyId: 'acacia', reference: 'OD-0005', date: '2025-06-30', journalId: 'OD', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
   ]
 };
 
@@ -285,6 +294,7 @@ function setActiveCompany(companyId, notify = true) {
     if (button) button.textContent = card.dataset.companyCard === companyId ? 'Ouverte' : 'Ouvrir';
   });
   renderCompanyMenu();
+  renderIntegratedJournal();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -707,8 +717,20 @@ function generateDepreciation() {
   $$('#assetRows .status-amber').forEach((status) => {
     status.textContent = 'À contrôler';
   });
+  const amount = entry.lines[0].debit;
+  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: 'amort-1', companyId: appState.activeCompany, reference: 'OD-0003', date: '2025-06-30', journalId: 'OD', label: 'Dotation amortissement — juin', debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
+  const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
+  if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
+  else appState.integratedEntries.unshift(syncedEntry);
+  renderIntegratedJournal();
   $$('.summary-card-action .button').forEach((button) => { button.textContent = 'Préparée'; });
-  showToast(`Dotation de juin préparée : ${new Intl.NumberFormat('fr-FR').format(entry.lines[0].debit)} FCFA à contrôler.`);
+  showToast(`Dotation de juin préparée : ${new Intl.NumberFormat('fr-FR').format(amount)} FCFA à contrôler.`);
+}
+
+function synchronizeIntegratedJournal() {
+  renderIntegratedJournal();
+  const company = appState.companies[appState.activeCompany];
+  showToast(`Livre journal synchronisé pour ${company.name}.`);
 }
 
 function acceptSuggestion() {
@@ -739,6 +761,55 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+function integratedJournalForCompany(companyId) {
+  let journal = createIntegratedJournal({ id: `lj-${companyId}-2025`, companyId, fiscalYear: '2025' });
+  appState.integratedEntries.filter((entry) => entry.companyId === companyId).forEach((entry) => {
+    journal = syncIntegratedJournal(journal, entry);
+  });
+  return journal;
+}
+
+function categoryClass(categoryId) {
+  return ({ AMORTISSEMENTS: 'category-amort', CENTRALISATION: 'category-central', ABONNEMENTS: 'category-subscription', RESULTAT: 'category-result', GENERAL: 'category-general' })[categoryId] || 'category-general';
+}
+
+function statusLabel(status) {
+  return ({ TO_REVIEW: ['À contrôler', 'status-purple'], VALIDATED: ['Validée', 'status-green'], CALCULATED: ['Calculé', 'status-amber'] })[status] || ['Brouillon', 'status-amber'];
+}
+
+function renderIntegratedJournal() {
+  const rows = $('#integratedJournalRows');
+  if (!rows) return;
+  const journal = integratedJournalForCompany(appState.activeCompany);
+  const summary = summarizeIntegratedJournal(journal);
+  Object.keys(INTEGRATED_JOURNAL_CATEGORIES).forEach((categoryId) => {
+    const count = $(`[data-integrated-summary-count="${categoryId}"]`);
+    const total = $(`[data-integrated-summary-amount="${categoryId}"]`);
+    if (count) count.textContent = String(summary[categoryId].count);
+    if (total) total.innerHTML = `${numberLabel(summary[categoryId].amount)} <em>FCFA</em>`;
+  });
+  const search = ($('#integratedSearch')?.value || '').trim().toLowerCase();
+  const selectedCategory = $('#integratedCategoryFilter')?.value || 'ALL';
+  const entries = journal.entries.filter((entry) => {
+    const categoryId = entry.integratedCategory || classifyIntegratedEntry(entry);
+    const matchesCategory = selectedCategory === 'ALL' || categoryId === selectedCategory;
+    const matchesSearch = !search || `${entry.reference} ${entry.label} ${categoryId} ${entry.journalId}`.toLowerCase().includes(search);
+    return matchesCategory && matchesSearch;
+  });
+  rows.innerHTML = entries.map((entry) => {
+    const categoryId = entry.integratedCategory || classifyIntegratedEntry(entry);
+    const category = INTEGRATED_JOURNAL_CATEGORIES[categoryId];
+    const [label, statusClass] = statusLabel(entry.status);
+    const journalClass = entry.journalId === 'AC' ? 'journal-badge-blue' : entry.journalId === 'BQ' ? 'journal-badge-teal' : entry.journalId === 'OD' ? 'journal-badge-amber' : '';
+    return `<tr><td><b>${escapeHtml(entry.reference || '—')}</b></td><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span></td><td><span class="integrated-category ${categoryClass(categoryId)}">${escapeHtml(category.shortLabel)}</span></td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${escapeHtml(entry.source || 'Imputation synchronisée')}</small></td><td class="align-right">${numberLabel(entry.debit || entry.amount || 0)}</td><td class="align-right">${numberLabel(entry.credit || entry.amount || 0)}</td><td><span class="status ${statusClass}">${label}</span></td></tr>`;
+  }).join('');
+  if (!entries.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucune écriture dans cette catégorie.</td></tr>';
+  const subtitle = $('#integratedJournalSubtitle');
+  if (subtitle) subtitle.textContent = `${journal.entries.length} écritures · ${Object.values(summary).filter((item) => item.count > 0).length - (summary.GENERAL.count ? 1 : 0)} catégories automatiques · Débit et crédit équilibrés`;
+  const footer = $('#integratedJournalFooter');
+  if (footer) footer.textContent = `${entries.length} écriture${entries.length > 1 ? 's' : ''} affichée${entries.length > 1 ? 's' : ''} · mise à jour après chaque imputation.`;
+}
+
 function numberLabel(value) {
   const number = Number(value);
   return Number.isFinite(number) ? new Intl.NumberFormat('fr-FR').format(number) : '—';
@@ -748,6 +819,7 @@ const ENTRY_TAB_CONFIG = {
   free: { title: 'Écriture libre', category: 'service-sale', journal: 'OD' },
   sale: { title: 'Vente', category: 'service-sale', journal: 'VE' },
   purchase: { title: 'Achat', category: 'goods-purchase', journal: 'AC' },
+  subscription: { title: 'Abonnement', category: 'subscription', journal: 'OD' },
   receipt: { title: 'Encaissement', category: 'other', journal: 'BQ' },
   payment: { title: 'Décaissement', category: 'other', journal: 'BQ' },
   transfer: { title: 'Transfert', category: 'other', journal: 'BQ' },
@@ -828,7 +900,11 @@ function insertEntry() {
   if (!suggestion.lines?.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
   try {
     const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany });
-    const row = `<tr><td>${escapeHtml(entry.date.split('-').reverse().join('/'))}</td><td><span class="journal-badge">${escapeHtml(entry.journalId)}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">Insertion en attente de validation</small></td><td class="align-right">${numberLabel(suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0))}</td><td>${escapeHtml(suggestion.lines.map((line) => line.accountId).join(' / '))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
+    const total = suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+    const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...entry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
+    appState.integratedEntries.unshift(syncedEntry);
+    renderIntegratedJournal();
+    const row = `<tr><td>${escapeHtml(entry.date.split('-').reverse().join('/'))}</td><td><span class="journal-badge">${escapeHtml(entry.journalId)}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">Insertion en attente de validation</small></td><td class="align-right">${numberLabel(total)}</td><td>${escapeHtml(suggestion.lines.map((line) => line.accountId).join(' / '))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
     $('#entryRows')?.insertAdjacentHTML('afterbegin', row);
     const count = $('#entryQueueCount');
     if (count) count.textContent = String(Number(count.textContent || 0) + 1);
@@ -908,6 +984,8 @@ function bindEvents() {
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#entryForm')?.addEventListener('change', renderLivePosting);
   $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
+  $('#integratedSearch')?.addEventListener('input', renderIntegratedJournal);
+  $('#integratedCategoryFilter')?.addEventListener('change', renderIntegratedJournal);
   $('#dossiersScreen')?.addEventListener('keydown', (event) => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-dossier-id]')) {
       event.preventDefault();
@@ -962,6 +1040,7 @@ function bindEvents() {
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
+    if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'authenticate') showDossiers();
     if (action === 'back-to-dossiers') backToDossiers();
     if (action === 'back-to-modules') backToModules();

@@ -44,6 +44,46 @@ export function makeDossierCode(code, exerciseStart) {
   return `${normalizedCode || 'SIGLE'}-${exerciseYear(exerciseStart).slice(-2)}`;
 }
 
+export const INTEGRATED_JOURNAL_CATEGORIES = Object.freeze({
+  GENERAL: Object.freeze({ label: 'Opérations générales', shortLabel: 'Général' }),
+  AMORTISSEMENTS: Object.freeze({ label: 'Amortissements automatiques', shortLabel: 'Amortissements' }),
+  CENTRALISATION: Object.freeze({ label: 'Centralisations', shortLabel: 'Centralisation' }),
+  ABONNEMENTS: Object.freeze({ label: 'Abonnements', shortLabel: 'Abonnements' }),
+  RESULTAT: Object.freeze({ label: 'Résultat de la période', shortLabel: 'Résultat' })
+});
+
+export function classifyIntegratedEntry(entry = {}) {
+  const explicit = String(entry.integrationCategory || entry.categoryId || '').toUpperCase();
+  const aliases = { AMORT: 'AMORTISSEMENTS', DEPRECIATION: 'AMORTISSEMENTS', AUTOMATIC_DEPRECIATION: 'AMORTISSEMENTS', CENTRALIZATION: 'CENTRALISATION', SUBSCRIPTION: 'ABONNEMENTS', ABONNEMENT: 'ABONNEMENTS', PERIOD_RESULT: 'RESULTAT', RESULT: 'RESULTAT' };
+  if (INTEGRATED_JOURNAL_CATEGORIES[explicit]) return explicit;
+  if (aliases[explicit]) return aliases[explicit];
+  const source = `${entry.source || ''} ${entry.label || ''}`.toLowerCase();
+  if (source.includes('amort')) return 'AMORTISSEMENTS';
+  if (source.includes('central')) return 'CENTRALISATION';
+  if (source.includes('abonnement')) return 'ABONNEMENTS';
+  if (source.includes('résultat') || source.includes('resultat')) return 'RESULTAT';
+  return 'GENERAL';
+}
+
+export function createIntegratedJournal({ id, companyId, fiscalYear } = {}) {
+  if (!companyId) throw new DomainError('Le livre journal doit appartenir à une société.', 'INVALID_INTEGRATED_JOURNAL');
+  return { id: id || `integrated_${companyId}_${fiscalYear || 'current'}`, companyId, fiscalYear: fiscalYear || null, entries: [], updatedAt: new Date().toISOString() };
+}
+
+export function syncIntegratedJournal(journal, entry) {
+  if (!journal?.companyId || entry?.companyId !== journal.companyId) throw new DomainError('L’écriture ne peut pas être synchronisée dans ce livre journal.', 'COMPANY_SCOPE_VIOLATION');
+  const syncedEntry = { ...entry, integratedCategory: classifyIntegratedEntry(entry), syncedAt: new Date().toISOString() };
+  const withoutEntry = journal.entries.filter((item) => item.id !== syncedEntry.id);
+  return { ...journal, entries: [syncedEntry, ...withoutEntry], updatedAt: new Date().toISOString() };
+}
+
+export function summarizeIntegratedJournal(journal) {
+  return Object.fromEntries(Object.keys(INTEGRATED_JOURNAL_CATEGORIES).map((categoryId) => {
+    const entries = (journal?.entries || []).filter((entry) => (entry.integratedCategory || classifyIntegratedEntry(entry)) === categoryId);
+    return [categoryId, { count: entries.length, amount: entries.reduce((total, entry) => total + Number(entry.amount || entry.debit || 0), 0) }];
+  }));
+}
+
 export const MODULE_DEFINITIONS = Object.freeze({
   CSR: Object.freeze({ label: 'Comptabilité SYSCOHADA Révisé', shortLabel: 'Comptabilité', description: 'Journaux, écritures, imputations, amortissements et états comptables.' }),
   GP: Object.freeze({ label: 'Gestion de Paie', shortLabel: 'Paie', description: 'Collaborateurs, variables, bulletins et déclarations sociales.' }),
@@ -202,6 +242,16 @@ const defaultPostingRules = [
     build: (operation) => [
       { accountId: operation.expenseAccount || '627000', label: 'Services bancaires', debit: operation.total, credit: 0 },
       { accountId: operation.bankAccount || '512000', label: 'Banque', debit: 0, credit: operation.total }
+    ]
+  },
+  {
+    id: 'subscription',
+    matches: (operation) => ['subscription', 'abonnement', 'abonnements'].includes(operation.category),
+    confidence: 0.94,
+    reason: 'Catégorie « Abonnement » · modèle d’écriture récurrente',
+    build: (operation) => [
+      { accountId: operation.expenseAccount || '628000', label: 'Abonnements', debit: operation.total, credit: 0 },
+      { accountId: operation.supplierAccount || '401000', label: `Fournisseur — ${operation.thirdPartyName || 'à préciser'}`, debit: 0, credit: operation.total }
     ]
   }
 ];
