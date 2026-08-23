@@ -22,7 +22,25 @@ Un dossier correspond à une société et à son contexte comptable : exercice, 
 
 La sélection du dossier est obligatoire pour éviter qu’une écriture soit saisie dans la mauvaise société.
 
-## Contenu de la page Dossiers en cours
+## Formulaire « Nouveau dossier »
+
+Depuis la page **Dossiers en cours**, le bouton **Nouveau dossier** ouvre un formulaire composé des éléments suivants :
+
+- nom de la société ;
+- forme juridique : SARL, SA, SAS, ETS ou Autres ;
+- adresse ;
+- IFU ;
+- activité principale ;
+- code ou sigle à afficher dans la liste des dossiers ;
+- date de début de l’exercice ;
+- date de fin de l’exercice.
+
+Le code visible dans la liste est généré automatiquement sous la forme `SIGLE-YY`, où `YY` correspond aux deux derniers chiffres de l’année de début de l’exercice. Ainsi :
+
+- `ACACIA` + exercice commençant en 2025 → `ACACIA-25` ;
+- `ACACIA` + exercice commençant en 2026 → `ACACIA-26`.
+
+Le formulaire affiche le résultat en temps réel avant création. La fin de l’exercice doit être postérieure au début et le code généré doit être unique dans l’espace de travail.
 
 ### Tableau principal
 

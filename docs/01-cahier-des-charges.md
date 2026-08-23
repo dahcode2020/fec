@@ -65,15 +65,21 @@ La première livraison n’est pas encore le moteur comptable complet. Elle doit
 
 L’assistant de démarrage recueille :
 
-- raison sociale ou nom commercial ;
-- IFU et autres identifiants, facultatifs selon le profil ;
-- adresse, téléphone, e-mail et logo ;
-- secteur d’activité ;
+- nom de la société ;
+- forme juridique : SARL, SA, SAS, ETS ou Autres ;
+- adresse ;
+- IFU et autres identifiants ;
+- activité principale ;
+- code ou sigle du dossier ;
+- période d’exercice, avec date de début et date de fin ;
+- téléphone, e-mail et logo, dans une étape complémentaire ;
 - exercice comptable ;
 - devise principale : XOF/FCFA ;
 - régime comptable applicable ;
 - paramètres de taxes ;
 - comptes de caisse, banque, ventes, achats et taxes par défaut.
+
+Le code affiché dans la liste des dossiers est généré à partir du code ou sigle saisi et de l’année de début de l’exercice : `SIGLE-YY`. Par exemple, un sigle `ACACIA` avec un exercice commençant en 2025 devient `ACACIA-25`. Si l’utilisateur ouvre un exercice commençant en 2026, le suffixe devient automatiquement `-26`. Le code généré est prévisualisé avant la création et doit rester unique dans l’espace de travail.
 
 Les seuils, taux, mentions obligatoires et règles fiscales sont versionnés dans la configuration et doivent pouvoir être mis à jour sans modifier les écritures historiques.
 

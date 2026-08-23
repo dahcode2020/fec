@@ -14,7 +14,8 @@ Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototyp
 - ajout de sociétés sans doublon ;
 - filtrage des sociétés archivées ;
 - contrôle d’appartenance à la société active ;
-- persistance locale derrière un petit adaptateur remplaçable par SQLite.
+- persistance locale derrière un petit adaptateur remplaçable par SQLite ;
+- génération du code de dossier sous la forme `SIGLE-YY`, à partir de l’année de début de l’exercice.
 
 ### Écritures
 

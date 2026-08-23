@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, depreciationEntry, exportBalanceTxt } from './core.js';
+import { calculateStraightLinePlan, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -9,8 +9,14 @@ const appState = {
       id: 'acacia',
       name: 'Acacia Conseil',
       shortName: 'AC',
-      type: 'Entreprise individuelle',
-      meta: 'Entreprise individuelle · XOF',
+      type: 'ETS',
+      legalForm: 'ETS',
+      address: 'Cotonou, Littoral',
+      activity: 'Conseil et services',
+      code: 'ACACIA',
+      exerciseStart: '2025-01-01',
+      exerciseEnd: '2025-12-31',
+      meta: 'ETS · XOF',
       ifu: '3201900045612',
       color: 'orange',
       treasury: '2 840 500',
@@ -22,8 +28,14 @@ const appState = {
       id: 'noria',
       name: 'Noria Épicerie',
       shortName: 'NE',
-      type: 'Commerce de détail',
-      meta: 'Commerce de détail · XOF',
+      type: 'ETS',
+      legalForm: 'ETS',
+      address: 'Cotonou, Littoral',
+      activity: 'Commerce de détail',
+      code: 'NORIA',
+      exerciseStart: '2025-01-01',
+      exerciseEnd: '2025-12-31',
+      meta: 'ETS · XOF',
       ifu: '3202300087129',
       color: 'teal',
       treasury: '1 486 200',
@@ -33,8 +45,8 @@ const appState = {
     }
   },
   dossiers: [
-    { id: 'acacia-25', companyId: 'acacia', dossier: 'ACACIA-25', period: '01/01/2025 - 31/12/2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
-    { id: 'noria-25', companyId: 'noria', dossier: 'NORIA-25', period: '01/01/2025 - 31/12/2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
+    { id: 'acacia-25', companyId: 'acacia', dossier: 'ACACIA-25', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
+    { id: 'noria-25', companyId: 'noria', dossier: 'NORIA-25', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
   ]
 };
 
@@ -53,6 +65,32 @@ function initials(name) {
 
 function companyAvatarClass(company) {
   return company.color === 'teal' ? 'avatar-teal' : company.color === 'purple' ? 'avatar-purple' : 'avatar-orange';
+}
+
+function displayDate(value) {
+  if (!value) return '—';
+  const [year, month, day] = String(value).split('-');
+  return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function updateDossierPreview() {
+  const code = $('#companyCode')?.value;
+  const start = $('#exerciseStart')?.value;
+  const end = $('#exerciseEnd')?.value;
+  const preview = $('#dossierCodePreview');
+  const period = $('#exercisePreview');
+  if (preview) preview.textContent = makeDossierCode(code, start);
+  if (period) period.textContent = `${displayDate(start)} — ${displayDate(end)}`;
+}
+
+function toggleOtherLegalForm() {
+  const otherField = $('#legalFormOtherField');
+  const legalForm = $('#legalForm');
+  if (!otherField || !legalForm) return;
+  const isOther = legalForm.value === 'AUTRES';
+  otherField.toggleAttribute('hidden', !isOther);
+  const input = otherField.querySelector('input');
+  if (input) input.required = isOther;
 }
 
 function setActiveCompany(companyId, notify = true) {
@@ -238,39 +276,55 @@ function toggleQuickMenu() {
 
 function makeCompanyCard(company) {
   const safeName = escapeHtml(company.name);
-  const safeType = escapeHtml(company.type || 'Société');
+  const safeActivity = escapeHtml(company.activity || company.type || 'Société');
+  const safeLegalForm = escapeHtml(company.legalForm || company.type || '—');
   const safeIfu = escapeHtml(company.ifu || 'À compléter');
-  return `<article class="company-card" data-company-card="${escapeHtml(company.id)}"><div class="company-card-top"><span class="company-logo logo-teal">${escapeHtml(company.shortName)}</span><span class="company-state">Configurée</span><button class="icon-button small" type="button" aria-label="Options de la société"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div><h3>${safeName}</h3><p>${safeType}</p><div class="company-stats"><span><small>IFU</small><strong>${safeIfu}</strong></span><span><small>EXERCICE</small><strong>À configurer</strong></span></div><div class="company-card-footer"><span class="member-stack"><i class="avatar avatar-purple">CD</i><small>1 membre</small></span><button class="button button-secondary button-small" type="button" data-company-switch="${escapeHtml(company.id)}">Ouvrir</button></div></article>`;
+  const exercise = company.exerciseStart && company.exerciseEnd ? `${displayDate(company.exerciseStart)} — ${displayDate(company.exerciseEnd)}` : 'À configurer';
+  return `<article class="company-card" data-company-card="${escapeHtml(company.id)}"><div class="company-card-top"><span class="company-logo logo-teal">${escapeHtml(company.shortName)}</span><span class="company-state">${safeLegalForm}</span><button class="icon-button small" type="button" aria-label="Options de la société"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div><h3>${safeName}</h3><p>${safeActivity}</p><div class="company-stats"><span><small>IFU</small><strong>${safeIfu}</strong></span><span><small>EXERCICE</small><strong>${exercise}</strong></span></div><div class="company-card-footer"><span class="member-stack"><i class="avatar avatar-purple">CD</i><small>1 membre</small></span><button class="button button-secondary button-small" type="button" data-company-switch="${escapeHtml(company.id)}">Ouvrir</button></div></article>`;
 }
 
 function addCompany(event) {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const name = String(formData.get('companyName') || '').trim();
-  if (!name) return;
+  const code = String(formData.get('companyCode') || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 18);
+  const exerciseStart = String(formData.get('exerciseStart') || '').trim();
+  const exerciseEnd = String(formData.get('exerciseEnd') || '').trim();
+  if (!name || !code || !exerciseStart || !exerciseEnd) return;
+  if (new Date(`${exerciseEnd}T00:00:00Z`) <= new Date(`${exerciseStart}T00:00:00Z`)) {
+    showToast('La fin de l’exercice doit être postérieure à son début.');
+    return;
+  }
   const idBase = name.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'societe';
   let id = idBase;
   let index = 2;
   while (appState.companies[id]) id = `${idBase}-${index++}`;
-  const type = String(formData.get('companyType') || '').trim() || 'Nouvelle société';
-  const company = { id, name, shortName: initials(name), type, meta: `${type} · XOF`, ifu: String(formData.get('companyIfu') || '').trim() || 'À compléter', color: 'teal', treasury: '0', sales: '0', receivables: '0', expenses: '0' };
+  const selectedLegalForm = String(formData.get('legalForm') || '').trim();
+  const legalForm = selectedLegalForm === 'AUTRES' ? String(formData.get('legalFormOther') || '').trim() : selectedLegalForm;
+  const activity = String(formData.get('companyActivity') || '').trim();
+  const address = String(formData.get('companyAddress') || '').trim();
+  const year = exerciseYear(exerciseStart);
+  const dossierId = `${id}-${year}`;
+  const company = { id, name, shortName: code, code, legalForm: legalForm || 'Autres', type: legalForm || 'Autres', address, activity, exerciseStart, exerciseEnd, meta: `${legalForm || 'Autres'} · XOF`, ifu: String(formData.get('companyIfu') || '').trim(), color: 'teal', treasury: '0', sales: '0', receivables: '0', expenses: '0' };
   appState.companies[id] = company;
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
-  appState.dossiers.push({ id: `${id}-25`, companyId: id, dossier: `${company.shortName}-25`, period: '01/01/2025 - 31/12/2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
+  appState.dossiers.push({ id: dossierId, companyId: id, dossier: makeDossierCode(code, exerciseStart), period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
   setActiveCompany(id, false);
   if (dossiersAreVisible) {
-    appState.selectedDossier = `${id}-25`;
+    appState.selectedDossier = dossierId;
     renderDossiers();
-    selectDossier(`${id}-25`);
+    selectDossier(dossierId);
     showDossiers();
   } else {
     openView('companies');
   }
   showToast(`${name} a été ajoutée à votre espace.`);
   event.currentTarget.reset();
+  $('#legalFormOtherField')?.setAttribute('hidden', '');
+  updateDossierPreview();
 }
 
 function addAsset(event) {
@@ -492,6 +546,11 @@ function bindEvents() {
 
   $('#modalBackdrop')?.addEventListener('click', closeModal);
   $('#companyForm')?.addEventListener('submit', addCompany);
+  $('#companyForm')?.addEventListener('input', updateDossierPreview);
+  $('#companyForm')?.addEventListener('change', (event) => {
+    if (event.target.id === 'legalForm') toggleOtherLegalForm();
+    updateDossierPreview();
+  });
   $('#assetForm')?.addEventListener('submit', addAsset);
   $('#fileInput')?.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
 
@@ -510,4 +569,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setActiveCompany(appState.activeCompany, false);
   buildExportPane();
   bindEvents();
+  toggleOtherLegalForm();
+  updateDossierPreview();
 });

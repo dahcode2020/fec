@@ -33,6 +33,16 @@ const dateFrom = (value) => {
 
 const isoDate = (date) => date.toISOString().slice(0, 10);
 const isoMonth = (date) => date.toISOString().slice(0, 7);
+
+export function exerciseYear(value) {
+  const year = String(value || '').slice(0, 4);
+  return /^\d{4}$/.test(year) ? year : '20YY';
+}
+
+export function makeDossierCode(code, exerciseStart) {
+  const normalizedCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 18);
+  return `${normalizedCode || 'SIGLE'}-${exerciseYear(exerciseStart).slice(-2)}`;
+}
 const startOfMonth = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 const endOfMonth = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 const addMonths = (date, months) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));

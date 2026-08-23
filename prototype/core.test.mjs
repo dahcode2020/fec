@@ -11,6 +11,7 @@ import {
   createWorkspace,
   depreciationEntry,
   exportBalanceTxt,
+  makeDossierCode,
   mapImportedRows,
   parseDelimited,
   suggestPosting,
@@ -24,6 +25,12 @@ test('isole les sociétés d’un même espace de travail', () => {
   assert.equal(companiesFor(workspace).length, 2);
   assert.equal(workspace.companies.find((company) => company.id === 'co-b').currency, 'XOF');
   assert.throws(() => addCompany(workspace, createCompany({ id: 'co-a', name: 'Copie' })), (error) => error.code === 'DUPLICATE_COMPANY');
+});
+
+test('génère le suffixe du dossier à partir de l’année d’exercice', () => {
+  assert.equal(makeDossierCode('acacia', '2025-01-01'), 'ACACIA-25');
+  assert.equal(makeDossierCode('ACACIA', '2026-04-01'), 'ACACIA-26');
+  assert.equal(makeDossierCode('sigle local', '2025-01-01'), 'SIGLELOCAL-25');
 });
 
 test('persiste l’espace de travail localement', () => {
