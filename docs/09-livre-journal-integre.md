@@ -29,7 +29,7 @@ Lorsqu’une opération est imputée ou qu’un traitement automatique produit u
 4. le compteur et le total de sa catégorie sont recalculés ;
 5. la mise à jour est visible dans le registre et dans les synthèses.
 
-Une même écriture identifiée ne doit pas être dupliquée lors d’une nouvelle synchronisation. Une correction remplace la version précédente en conservant la trace de l’opération.
+Une même écriture identifiée ne doit pas être dupliquée lors d’une nouvelle synchronisation. Une correction remplace la version précédente en conservant la trace de l’opération. Si une écriture est annulée dans la fenêtre des trois imputations récentes, elle est retirée de la vue active et conserve un événement d’audit.
 
 ## Catégorisation initiale
 

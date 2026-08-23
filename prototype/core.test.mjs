@@ -13,9 +13,13 @@ import {
   createIntegratedJournal,
   syncIntegratedJournal,
   summarizeIntegratedJournal,
+  canDeleteCorrectionCandidate,
   createCompany,
+  createCorrectionWindow,
   createJournalEntry,
   createLocalWorkspaceStore,
+  deleteCorrectionCandidate,
+  registerCorrectionCandidate,
   createWorkspace,
   depreciationEntry,
   exportBalanceTxt,
@@ -63,6 +67,23 @@ test('catégorise et synchronise le livre journal intégré', () => {
   assert.equal(summarizeIntegratedJournal(journal).ABONNEMENTS.count, 1);
   assert.equal(summarizeIntegratedJournal(journal).AMORTISSEMENTS.amount, 5000);
   assert.throws(() => syncIntegratedJournal(journal, { id: 'entry-3', companyId: 'co-b', label: 'Autre', amount: 1 }), (error) => error.code === 'COMPANY_SCOPE_VIOLATION');
+});
+
+test('limite la correction aux trois imputations fixes et dans l’ordre inverse', () => {
+  let window = createCorrectionWindow({ id: 'window-1', dossierId: 'ACACIA-25', companyId: 'co-a' });
+  const makeEntry = (id, status = 'TO_REVIEW') => ({ id, dossierId: 'ACACIA-25', companyId: 'co-a', status });
+  window = registerCorrectionCandidate(window, makeEntry('entry-1'));
+  window = registerCorrectionCandidate(window, makeEntry('entry-2'));
+  window = registerCorrectionCandidate(window, makeEntry('entry-3'));
+  assert.equal(canDeleteCorrectionCandidate(window, makeEntry('entry-3')), true);
+  assert.equal(canDeleteCorrectionCandidate(window, makeEntry('entry-2')), false);
+  assert.throws(() => registerCorrectionCandidate(window, makeEntry('entry-4')), (error) => error.code === 'CORRECTION_WINDOW_FULL');
+  const result = deleteCorrectionCandidate(window, makeEntry('entry-3'), 'Erreur de saisie');
+  window = result.window;
+  assert.equal(result.entry.status, 'CANCELLED');
+  assert.equal(canDeleteCorrectionCandidate(window, makeEntry('entry-2')), true);
+  assert.equal(canDeleteCorrectionCandidate(window, makeEntry('entry-1')), false);
+  assert.throws(() => deleteCorrectionCandidate(window, makeEntry('entry-1')), (error) => error.code === 'CORRECTION_NOT_ALLOWED');
 });
 
 test('persiste l’espace de travail localement', () => {

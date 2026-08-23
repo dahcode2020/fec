@@ -211,7 +211,9 @@ Contraintes du moteur :
 - les dates hors exercice actif sont bloquées ou explicitement confirmées ;
 - les montants sont stockés avec une précision déterminée par la devise, sans erreur d’arrondi flottant.
 
-Statuts : `Brouillon`, `À contrôler`, `Validée`, `Clôturée`, `Extournée`.
+Statuts : `Brouillon`, `Imputée`, `À contrôler`, `Validée`, `Annulée`, `Clôturée`, `Extournée`.
+
+Pour chaque dossier, une fenêtre fixe de correction peut contenir au maximum les trois imputations récentes de la séquence en cours, tous journaux confondus. La suppression se fait dans l’ordre inverse de création ; une imputation plus ancienne ne devient pas éligible après suppression. Au-delà, une procédure d’administration ou de régularisation est obligatoire.
 
 ### 3.4 Ventes et encaissements
 

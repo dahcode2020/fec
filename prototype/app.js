@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, classifyIntegratedEntry, createIntegratedJournal, createJournalEntry, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal } from './core.js';
+import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createIntegratedJournal, createJournalEntry, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -57,7 +57,16 @@ const appState = {
     { id: 'central-1', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
     { id: 'subscription-1', companyId: 'acacia', reference: 'OD-0004', date: '2025-06-01', journalId: 'OD', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
     { id: 'result-1', companyId: 'acacia', reference: 'OD-0005', date: '2025-06-30', journalId: 'OD', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
-  ]
+  ],
+  correctionWindows: {
+    acacia: createCorrectionWindow({ id: 'correction-acacia-25', dossierId: 'ACACIA-25', companyId: 'acacia', userId: 'claire-dossou', periodId: '2025-06' })
+  },
+  recentEntries: [
+    { id: 'queue-1', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0003', date: '2025-06-16', journalId: 'OD', label: 'Accompagnement administratif', amount: 250000, accountIds: ['411000', '706000'], status: OPERATION_STATES.TO_REVIEW },
+    { id: 'queue-2', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0002', date: '2025-06-15', journalId: 'AC', label: 'Fournitures de bureau', amount: 38500, accountIds: ['605000', '401000'], status: OPERATION_STATES.VALIDATED },
+    { id: 'queue-3', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0001', date: '2025-06-12', journalId: 'BQ', label: 'Frais de tenue de compte', amount: 4800, accountIds: ['627000', '512000'], status: OPERATION_STATES.VALIDATED }
+  ],
+  auditEvents: []
 };
 
 const MODULES = {
@@ -295,6 +304,8 @@ function setActiveCompany(companyId, notify = true) {
   });
   renderCompanyMenu();
   renderIntegratedJournal();
+  renderEntryQueue();
+  renderCorrectionWindow();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -761,6 +772,72 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+function currentDossierCode(companyId = appState.activeCompany) {
+  const dossier = appState.dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.status !== 'Archivé') || appState.dossiers.find((item) => item.companyId === companyId && item.status !== 'Archivé');
+  return dossier?.dossier || `${appState.companies[companyId]?.code || 'DOSSIER'}-25`;
+}
+
+function activeCorrectionWindow() {
+  const companyId = appState.activeCompany;
+  if (!appState.correctionWindows[companyId]) {
+    appState.correctionWindows[companyId] = createCorrectionWindow({ dossierId: currentDossierCode(companyId), companyId, userId: 'claire-dossou', periodId: '2025-06' });
+  }
+  return appState.correctionWindows[companyId];
+}
+
+function renderCorrectionWindow() {
+  const panel = $('#correctionWindowPanel');
+  const usedNode = $('#correctionWindowUsed');
+  const remainingNode = $('#correctionWindowRemaining');
+  if (!panel || !usedNode || !remainingNode) return;
+  const window = activeCorrectionWindow();
+  const remaining = Math.max(0, 3 - window.candidateIds.length);
+  usedNode.textContent = String(window.candidateIds.length);
+  remainingNode.textContent = remaining ? `${remaining} disponible${remaining > 1 ? 's' : ''}` : 'Fenêtre verrouillée';
+  panel.classList.toggle('is-full', remaining === 0);
+}
+
+function queueStatus(status) {
+  return ({ TO_REVIEW: ['À contrôler', 'status-purple'], VALIDATED: ['Validée', 'status-green'], CANCELLED: ['Annulée', 'status-red'] })[status] || ['Brouillon', 'status-amber'];
+}
+
+function renderEntryQueue() {
+  const rows = $('#entryRows');
+  if (!rows) return;
+  const window = activeCorrectionWindow();
+  const entries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED);
+  const pending = entries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length;
+  const count = $('#entryQueueCount');
+  if (count) count.textContent = String(pending);
+  rows.innerHTML = entries.map((entry) => {
+    const [label, statusClass] = queueStatus(entry.status);
+    const deletable = canDeleteCorrectionCandidate(window, entry);
+    const action = deletable ? `<button class="icon-button small delete-entry-button" type="button" data-action="delete-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Supprimer cette imputation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : '<span class="entry-locked" title="Correction verrouillée">⌁</span>';
+    const journalClass = entry.journalId === 'AC' ? 'journal-badge-blue' : entry.journalId === 'BQ' ? 'journal-badge-teal' : '';
+    return `<tr><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${deletable ? 'Dans la fenêtre de correction' : 'Correction verrouillée'}</small></td><td class="align-right">${numberLabel(entry.amount)}</td><td>${escapeHtml(entry.accountIds?.join(' / ') || 'À compléter')}</td><td><span class="status ${statusClass}">${label}</span></td><td>${action}</td></tr>`;
+  }).join('');
+  if (!entries.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucune saisie active dans ce dossier.</td></tr>';
+}
+
+function deleteRecentEntry(entryId) {
+  const entry = appState.recentEntries.find((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (!entry) return;
+  const window = activeCorrectionWindow();
+  if (!canDeleteCorrectionCandidate(window, entry)) {
+    showToast('Cette imputation est verrouillée. Une correction contrôlée est nécessaire.');
+    return;
+  }
+  const result = deleteCorrectionCandidate(window, entry, 'Correction depuis la fenêtre des trois imputations récentes');
+  appState.correctionWindows[appState.activeCompany] = result.window;
+  appState.recentEntries = appState.recentEntries.filter((item) => item.id !== entryId);
+  appState.auditEvents.push({ type: 'CORRECTION_DELETE', companyId: entry.companyId, entryId, reason: result.entry.cancellationReason, at: result.entry.cancelledAt });
+  appState.integratedEntries = appState.integratedEntries.filter((item) => item.id !== entryId);
+  renderEntryQueue();
+  renderCorrectionWindow();
+  renderIntegratedJournal();
+  showToast('Imputation supprimée. La trace reste conservée dans l’audit.');
+}
+
 function integratedJournalForCompany(companyId) {
   let journal = createIntegratedJournal({ id: `lj-${companyId}-2025`, companyId, fiscalYear: '2025' });
   appState.integratedEntries.filter((entry) => entry.companyId === companyId).forEach((entry) => {
@@ -899,15 +976,23 @@ function insertEntry() {
   try { suggestion = suggestPosting(operation); } catch (error) { showToast(error.message); return; }
   if (!suggestion.lines?.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
   try {
-    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany });
+    const dossierId = currentDossierCode(appState.activeCompany);
+    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany, dossierId });
+    const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
     const total = suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
-    const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...entry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
+    const queueEntry = { ...workflowEntry, amount: total, accountIds: suggestion.lines.map((line) => line.accountId) };
+    const correctionWindow = activeCorrectionWindow();
+    try {
+      appState.correctionWindows[appState.activeCompany] = registerCorrectionCandidate(correctionWindow, queueEntry);
+    } catch (windowError) {
+      if (windowError.code !== 'CORRECTION_WINDOW_FULL') throw windowError;
+    }
+    appState.recentEntries.unshift(queueEntry);
+    const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
     appState.integratedEntries.unshift(syncedEntry);
     renderIntegratedJournal();
-    const row = `<tr><td>${escapeHtml(entry.date.split('-').reverse().join('/'))}</td><td><span class="journal-badge">${escapeHtml(entry.journalId)}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">Insertion en attente de validation</small></td><td class="align-right">${numberLabel(total)}</td><td>${escapeHtml(suggestion.lines.map((line) => line.accountId).join(' / '))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
-    $('#entryRows')?.insertAdjacentHTML('afterbegin', row);
-    const count = $('#entryQueueCount');
-    if (count) count.textContent = String(Number(count.textContent || 0) + 1);
+    renderEntryQueue();
+    renderCorrectionWindow();
     showToast('Écriture insérée dans le brouillard. Contrôle requis avant validation.');
     clearEntry(false);
   } catch (error) { showToast(error.message); }
@@ -1040,6 +1125,7 @@ function bindEvents() {
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
+    if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'authenticate') showDossiers();
     if (action === 'back-to-dossiers') backToDossiers();

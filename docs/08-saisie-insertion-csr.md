@@ -48,6 +48,17 @@ Le panneau de contrôle à droite affiche :
 
 Une modification de la catégorie, du tiers ou du montant relance la suggestion. La proposition ne devient jamais une écriture validée sans action explicite.
 
+## Fenêtre fixe de correction
+
+Une fenêtre de correction est ouverte pour le dossier actif. Elle enregistre au maximum les trois premières imputations récentes de la séquence de saisie, tous journaux confondus.
+
+- la suppression se fait dans l’ordre inverse de création ;
+- après suppression d’une imputation, aucune imputation plus ancienne ne remonte dans la fenêtre ;
+- une quatrième imputation est insérée normalement, mais elle est verrouillée pour la suppression directe ;
+- toute suppression est une annulation tracée, pas un effacement physique silencieux ;
+- une imputation validée ou clôturée ne peut pas être supprimée par ce mécanisme ;
+- après la fenêtre, seul l’administrateur peut ouvrir une procédure de correction contrôlée.
+
 ## États de l’opération
 
 - **Brouillon** : saisie en cours, non insérée ;

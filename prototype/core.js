@@ -198,15 +198,62 @@ export function validateJournalEntry(entry, { companyId, periodOpen = true, acco
   return { valid: true, debit, credit };
 }
 
+export const OPERATION_STATES = Object.freeze({ DRAFT: 'DRAFT', IMPUTED: 'IMPUTED', TO_REVIEW: 'TO_REVIEW', VALIDATED: 'VALIDATED', CLOSED: 'CLOSED', CANCELLED: 'CANCELLED' });
+
+const allowedTransitions = Object.freeze({
+  DRAFT: ['IMPUTED', 'CANCELLED'],
+  IMPUTED: ['TO_REVIEW', 'CANCELLED'],
+  TO_REVIEW: ['VALIDATED', 'CANCELLED'],
+  VALIDATED: ['CLOSED'],
+  CLOSED: [],
+  CANCELLED: []
+});
+
+export function transitionOperation(operation, nextState) {
+  const current = operation?.status || OPERATION_STATES.DRAFT;
+  if (!Object.values(OPERATION_STATES).includes(nextState)) throw new DomainError(`État inconnu : ${nextState}`, 'UNKNOWN_OPERATION_STATE');
+  if (!allowedTransitions[current]?.includes(nextState)) throw new DomainError(`Transition impossible : ${current} → ${nextState}.`, 'INVALID_OPERATION_TRANSITION');
+  return { ...operation, status: nextState, statusChangedAt: new Date().toISOString() };
+}
+
+export const CORRECTION_WINDOW_LIMIT = 3;
+
+export function createCorrectionWindow({ id, dossierId, companyId, userId, periodId } = {}) {
+  if (!dossierId || !companyId) throw new DomainError('La fenêtre de correction doit être rattachée à un dossier.', 'INVALID_CORRECTION_WINDOW');
+  return { id: id || `correction_${dossierId}_${Date.now()}`, dossierId, companyId, userId: userId || null, periodId: periodId || null, status: 'OPEN', candidateIds: [], deletedIds: [], createdAt: new Date().toISOString() };
+}
+
+export function registerCorrectionCandidate(window, entry) {
+  if (!window || entry?.companyId !== window.companyId || entry?.dossierId !== window.dossierId) throw new DomainError('Cette imputation ne correspond pas à la fenêtre de correction.', 'CORRECTION_SCOPE_VIOLATION');
+  if (window.status !== 'OPEN') throw new DomainError('La fenêtre de correction est fermée.', 'CORRECTION_WINDOW_CLOSED');
+  if (window.candidateIds.includes(entry.id)) return window;
+  if (window.candidateIds.length >= CORRECTION_WINDOW_LIMIT) throw new DomainError('La limite de trois imputations récentes est atteinte.', 'CORRECTION_WINDOW_FULL');
+  return { ...window, candidateIds: [...window.candidateIds, entry.id] };
+}
+
+export function canDeleteCorrectionCandidate(window, entry) {
+  const lastCandidateId = [...(window?.candidateIds || [])].reverse().find((id) => !(window.deletedIds || []).includes(id));
+  return Boolean(window && entry && entry.companyId === window.companyId && entry.dossierId === window.dossierId && window.status === 'OPEN' && entry.id === lastCandidateId && entry.status !== OPERATION_STATES.VALIDATED && entry.status !== OPERATION_STATES.CLOSED);
+}
+
+export function deleteCorrectionCandidate(window, entry, reason = '') {
+  if (!canDeleteCorrectionCandidate(window, entry)) throw new DomainError('Cette imputation est verrouillée ou ne fait pas partie des trois imputations supprimables.', 'CORRECTION_NOT_ALLOWED');
+  return {
+    window: { ...window, deletedIds: [...window.deletedIds, entry.id] },
+    entry: { ...entry, status: OPERATION_STATES.CANCELLED, cancellationReason: reason, cancelledAt: new Date().toISOString() }
+  };
+}
+
 export function createJournalEntry({ companyId, journalId, date, reference = '', label, lines }, options = {}) {
   const entry = {
     id: options.id || `entry_${Date.now()}`,
     companyId,
+    dossierId: options.dossierId || null,
     journalId,
     date,
     reference,
     label: label || '',
-    status: 'DRAFT',
+    status: OPERATION_STATES.DRAFT,
     lines: lines.map((line) => ({ ...line, debit: amount(line.debit || 0), credit: amount(line.credit || 0) }))
   };
   validateJournalEntry(entry, { companyId: options.activeCompanyId || companyId, periodOpen: options.periodOpen !== false, accountIds: options.accountIds || [] });

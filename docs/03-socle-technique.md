@@ -28,7 +28,8 @@ Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototyp
 - contrôle du journal, de la date et du nombre minimal de lignes ;
 - contrôle des comptes connus, quand le référentiel est fourni ;
 - refus d’une période clôturée ;
-- refus d’une écriture créée dans une autre société.
+- refus d’une écriture créée dans une autre société ;
+- fenêtre fixe de trois corrections récentes par dossier, avec suppression dans l’ordre inverse et verrouillage des anciennes.
 
 ### Imputations proposées
 
