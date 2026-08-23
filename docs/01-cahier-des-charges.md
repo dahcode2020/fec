@@ -421,17 +421,18 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 3. **Dossiers en cours** — identifier les dossiers et leurs associations aux modules.
 4. **Choix du module** — CSR, GP, GCSF ou GC activé pour le dossier sélectionné.
 5. **Accueil CSR** — solde caisse/banque, ventes, dépenses, impayés et alertes comptables.
-6. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
-7. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
-8. **Achat** — fournisseur, pièce, ventilation et paiement.
-9. **Trésorerie** — mouvements, solde et filtres.
-10. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
-11. **Tiers** — fiches et soldes clients/fournisseurs.
-12. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
-13. **Rapports** — états, période, société, export et impression.
-14. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
-15. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
-16. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
+6. **Saisie et insertion** — enregistrer une opération, suivre l’imputation en temps réel et l’insérer dans le brouillard.
+7. **Action rapide** — vendre, acheter, encaisser, payer, saisir une opération.
+8. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
+9. **Achat** — fournisseur, pièce, ventilation et paiement.
+10. **Trésorerie** — mouvements, solde et filtres.
+11. **Journal** — écritures, statuts, recherche et détail de la piste d’audit.
+12. **Tiers** — fiches et soldes clients/fournisseurs.
+13. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
+14. **Rapports** — états, période, société, export et impression.
+15. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
+16. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
+17. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
 
 ### Règles UX
 

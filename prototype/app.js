@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode, MODULE_DEFINITIONS } from './core.js';
+import { calculateStraightLinePlan, createJournalEntry, depreciationEntry, exerciseYear, exportBalanceTxt, makeDossierCode, MODULE_DEFINITIONS, suggestPosting } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -739,6 +739,104 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+function numberLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? new Intl.NumberFormat('fr-FR').format(number) : '—';
+}
+
+const ENTRY_TAB_CONFIG = {
+  free: { title: 'Écriture libre', category: 'service-sale', journal: 'OD' },
+  sale: { title: 'Vente', category: 'service-sale', journal: 'VE' },
+  purchase: { title: 'Achat', category: 'goods-purchase', journal: 'AC' },
+  receipt: { title: 'Encaissement', category: 'other', journal: 'BQ' },
+  payment: { title: 'Décaissement', category: 'other', journal: 'BQ' },
+  transfer: { title: 'Transfert', category: 'other', journal: 'BQ' },
+  asset: { title: 'Immobilisation', category: 'other', journal: 'OD' }
+};
+
+function entryOperation() {
+  return {
+    category: $('#entryCategory')?.value || 'other',
+    total: $('#entryAmount')?.value || '',
+    thirdPartyName: $('#entryThirdParty')?.value || '',
+    label: $('#entryLabel')?.value || ''
+  };
+}
+
+function renderLivePosting() {
+  const rows = $('#livePostingRows');
+  const status = $('#entryBalanceStatus');
+  const statusMessage = $('#entryBalanceMessage');
+  const totalNode = $('#entryLiveTotal');
+  const reasonNode = $('#entrySuggestionReason');
+  const titleNode = $('#entrySuggestionTitle');
+  if (!rows || !status || !statusMessage || !totalNode) return;
+  const operation = entryOperation();
+  let suggestion;
+  try { suggestion = suggestPosting(operation); } catch {
+    suggestion = { lines: [], reason: 'Saisissez un montant valide pour obtenir une proposition.' };
+  }
+  const parsedTotal = Number(String(operation.total).replace(/\s/g, '').replace(',', '.'));
+  const hasTotal = Number.isFinite(parsedTotal) && parsedTotal > 0;
+  totalNode.innerHTML = `${hasTotal ? numberLabel(parsedTotal) : '—'} <small>FCFA</small>`;
+  if (!suggestion.lines?.length) {
+    rows.innerHTML = '<div class="posting-empty"><span>?</span><p>Complétez le montant et choisissez une catégorie pour obtenir une proposition d’imputation.</p></div>';
+    status.className = 'entry-balance entry-balance-warning';
+    status.querySelector('.balance-symbol').textContent = '!';
+    status.querySelector('strong').textContent = 'Imputation à compléter';
+    statusMessage.textContent = hasTotal ? 'Aucune règle automatique pour cette opération.' : 'Le montant est nécessaire pour contrôler l’écriture.';
+    if (titleNode) titleNode.textContent = 'En attente de catégorie';
+    if (reasonNode) reasonNode.textContent = suggestion.reason || 'Choisissez une catégorie d’opération.';
+    return;
+  }
+  rows.innerHTML = suggestion.lines.map((line) => `<div class="live-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${line.debit > 0 ? numberLabel(line.debit) : numberLabel(line.credit)}</strong><em class="${line.debit > 0 ? '' : 'credit'}">${line.debit > 0 ? 'D' : 'C'}</em></div>`).join('');
+  status.className = 'entry-balance';
+  status.querySelector('.balance-symbol').textContent = '✓';
+  status.querySelector('strong').textContent = 'Écriture équilibrée';
+  statusMessage.textContent = 'Débit et crédit correspondent au montant saisi.';
+  if (titleNode) titleNode.textContent = `Suggestion · ${Math.round(suggestion.confidence * 100)} %`;
+  if (reasonNode) reasonNode.textContent = suggestion.reason;
+}
+
+function selectEntryTab(tab) {
+  const config = ENTRY_TAB_CONFIG[tab.dataset.entryTab] || ENTRY_TAB_CONFIG.free;
+  $$('.entry-tab').forEach((item) => item.classList.toggle('is-active', item === tab));
+  const title = $('#entryTypeTitle');
+  if (title) title.textContent = config.title;
+  const category = $('#entryCategory');
+  if (category) category.value = config.category;
+  const journal = $('#entryJournal');
+  if (journal) journal.value = config.journal;
+  renderLivePosting();
+}
+
+function clearEntry(notify = true) {
+  const form = $('#entryForm');
+  if (!form) return;
+  form.reset();
+  $('#entryLabel').value = '';
+  $('#entryReference').value = '';
+  $('#entryAmount').value = '';
+  renderLivePosting();
+  if (notify) showToast('La saisie a été effacée.');
+}
+
+function insertEntry() {
+  const operation = entryOperation();
+  let suggestion;
+  try { suggestion = suggestPosting(operation); } catch (error) { showToast(error.message); return; }
+  if (!suggestion.lines?.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
+  try {
+    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany });
+    const row = `<tr><td>${escapeHtml(entry.date.split('-').reverse().join('/'))}</td><td><span class="journal-badge">${escapeHtml(entry.journalId)}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">Insertion en attente de validation</small></td><td class="align-right">${numberLabel(suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0))}</td><td>${escapeHtml(suggestion.lines.map((line) => line.accountId).join(' / '))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
+    $('#entryRows')?.insertAdjacentHTML('afterbegin', row);
+    const count = $('#entryQueueCount');
+    if (count) count.textContent = String(Number(count.textContent || 0) + 1);
+    showToast('Écriture insérée dans le brouillard. Contrôle requis avant validation.');
+    clearEntry(false);
+  } catch (error) { showToast(error.message); }
+}
+
 function renderFichierGroup(groupId = 'dossiers') {
   const group = FICHIER_GROUPS[groupId] || FICHIER_GROUPS.dossiers;
   const label = $('#fichierSelectedLabel');
@@ -807,6 +905,8 @@ function selectMenuTab(tab) {
 
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
+  $('#entryForm')?.addEventListener('input', renderLivePosting);
+  $('#entryForm')?.addEventListener('change', renderLivePosting);
   $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
   $('#dossiersScreen')?.addEventListener('keydown', (event) => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-dossier-id]')) {
@@ -824,6 +924,9 @@ function bindEvents() {
 
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
+
+    const entryTab = event.target.closest('.entry-tab[data-entry-tab]');
+    if (entryTab) { selectEntryTab(entryTab); return; }
 
     const menuTab = event.target.closest('.menu-tab');
     if (menuTab) { selectMenuTab(menuTab); return; }
@@ -856,6 +959,9 @@ function bindEvents() {
     if (!actionTarget) return;
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
+    if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
+    if (action === 'clear-entry') clearEntry();
+    if (action === 'insert-entry') insertEntry();
     if (action === 'authenticate') showDossiers();
     if (action === 'back-to-dossiers') backToDossiers();
     if (action === 'back-to-modules') backToModules();
@@ -935,4 +1041,5 @@ document.addEventListener('DOMContentLoaded', () => {
   updateDossierPreview();
   renderFichierGroup('dossiers');
   renderConfigurationGroup('societe');
+  renderLivePosting();
 });

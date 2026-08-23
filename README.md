@@ -14,6 +14,7 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - gestion de plusieurs sociétés dans un même espace de travail, avec isolation des données ;
 - association indépendante de chaque dossier aux modules CSR, GP, GCSF et GC ;
 - accueil de sélection des modules après ouverture d’un dossier ;
+- menu opérationnel « Saisie et insertion » avec recalcul en temps réel ;
 - propositions d’imputations comptables avant validation ;
 - calcul et génération contrôlés des amortissements ;
 - import et export des balances et livres comptables en TXT et formats tableur Excel ;
@@ -30,6 +31,8 @@ Le parcours d’accès initial — authentification puis sélection d’un dossi
 L’architecture multi-modules et l’association indépendante des modules aux dossiers sont décrites dans [`docs/05-modules-et-dossiers.md`](docs/05-modules-et-dossiers.md).
 
 La structure des menus **Fichier** et **Configuration** du module CSR est décrite dans [`docs/06-menus-pilotage.md`](docs/06-menus-pilotage.md). Les fonctions de configuration sont détaillées dans [`docs/07-configuration-csr.md`](docs/07-configuration-csr.md).
+
+Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-insertion-csr.md`](docs/08-saisie-insertion-csr.md).
 
 Pour l’ouvrir localement :
 
