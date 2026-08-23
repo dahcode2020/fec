@@ -1,0 +1,11 @@
+{
+  "name": "fec-comptabilite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Socle de prototype pour une gestion comptable SYSCOHADA adaptée au Bénin",
+  "scripts": {
+    "test": "node --test prototype/core.test.mjs",
+    "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype"
+  }
+}

@@ -1,3 +1,5 @@
+import { calculateStraightLinePlan, depreciationEntry, exportBalanceTxt } from './core.js';
+
 const appState = {
   activeCompany: 'acacia',
   companies: {
@@ -210,7 +212,15 @@ function downloadReport() {
   const company = appState.companies[appState.activeCompany];
   const reportType = $('#exportReportType')?.value || 'Balance générale';
   const filename = `${company.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-balance-juin.txt`;
-  const content = `SOCIETE\t${company.name}\nETAT\t${reportType}\nPERIODE\tJuin 2025\n\nCOMPTE\tLIBELLE\tDEBIT\tCREDIT\n411000\tClients\t486000\t0\n512100\tBanque\t2340500\t0\n706000\tServices vendus\t0\t1265000\nTOTAL\t\t2826500\t2826500\n`;
+  const content = exportBalanceTxt({
+    companyName: company.name,
+    period: 'Juin 2025',
+    rows: [
+      { accountId: '411000', label: 'Clients', debit: 486000, credit: 0 },
+      { accountId: '512100', label: 'Banque', debit: 2340500, credit: 0 },
+      { accountId: '706000', label: 'Services vendus', debit: 0, credit: 1265000 }
+    ]
+  });
   downloadText(filename, content);
   showToast(`${reportType} exportée pour ${company.name}.`);
 }
@@ -236,11 +246,22 @@ function setImportMode(mode) {
 }
 
 function generateDepreciation() {
+  const plan = calculateStraightLinePlan({
+    assetId: 'IMM-2025-001',
+    companyId: appState.activeCompany,
+    cost: 850000,
+    serviceDate: '2025-01-01',
+    usefulLifeMonths: 36,
+    prorata: false,
+    expenseAccount: '681000',
+    accumulatedAccount: '284500'
+  });
+  const entry = depreciationEntry(plan, { date: '2025-06-30' });
   $$('#assetRows .status-amber').forEach((status) => {
     status.textContent = 'À contrôler';
   });
   $$('.summary-card-action .button').forEach((button) => { button.textContent = 'Préparée'; });
-  showToast('La dotation de juin est prête à être contrôlée dans le journal.');
+  showToast(`Dotation de juin préparée : ${new Intl.NumberFormat('fr-FR').format(entry.lines[0].debit)} FCFA à contrôler.`);
 }
 
 function acceptSuggestion() {

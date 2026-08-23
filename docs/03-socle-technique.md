@@ -1,0 +1,99 @@
+# Socle technique — première tranche
+
+**Statut :** en place, sans dépendance externe  
+**Version :** 0.1  
+**Objectif :** sécuriser les règles métier avant le passage à Tauri et SQLite
+
+## Ce qui est maintenant en place
+
+Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototype/core.js). Il est chargé par l’interface, mais reste indépendant du DOM afin d’être testé et réutilisé dans l’application de bureau.
+
+### Espaces et sociétés
+
+- création d’un espace de travail ;
+- ajout de sociétés sans doublon ;
+- filtrage des sociétés archivées ;
+- contrôle d’appartenance à la société active ;
+- persistance locale derrière un petit adaptateur remplaçable par SQLite.
+
+### Écritures
+
+- création d’une écriture en brouillon ;
+- contrôle de l’équilibre débit/crédit ;
+- contrôle du journal, de la date et du nombre minimal de lignes ;
+- contrôle des comptes connus, quand le référentiel est fourni ;
+- refus d’une période clôturée ;
+- refus d’une écriture créée dans une autre société.
+
+### Imputations proposées
+
+Le moteur propose actuellement des règles déterministes pour :
+
+- vente de prestation : 411000 / 706000 ;
+- achat de marchandises : 601000 / 401000 ;
+- frais bancaires : 627000 / 512000.
+
+Une suggestion renvoie les lignes, la règle utilisée, le motif et un niveau de confiance. Elle ne valide jamais l’écriture à la place de l’utilisateur.
+
+### Amortissements
+
+Le noyau calcule un plan linéaire avec :
+
+- valeur brute et valeur résiduelle ;
+- durée en mois ;
+- mise en service ;
+- prorata temporis optionnel ;
+- correction d’arrondi sur la dernière période ;
+- génération de la dotation d’une période en écriture équilibrée.
+
+Le calcul du plan, la proposition d’écriture et sa validation restent trois étapes séparées.
+
+### Échanges TXT
+
+Le noyau sait déjà :
+
+- parser des fichiers délimités ;
+- gérer les guillemets et le BOM UTF-8 ;
+- mapper les colonnes source ;
+- convertir les montants avec espaces et virgule décimale ;
+- contrôler les comptes, dates, montants et équilibre ;
+- produire une balance TXT délimitée.
+
+La lecture et l’écriture réelle des classeurs Excel nécessiteront un adaptateur dédié lors du choix de la bibliothèque de tableur. Le prototype UX en représente déjà le parcours.
+
+## Contrat de test
+
+Les règles sont couvertes dans [`prototype/core.test.mjs`](../prototype/core.test.mjs) :
+
+```bash
+npm test
+```
+
+La suite vérifie :
+
+1. l’isolation et la persistance des sociétés ;
+2. le refus des écritures déséquilibrées ou hors société ;
+3. les propositions d’imputation ;
+4. le calcul linéaire et les arrondis ;
+5. le prorata temporis ;
+6. l’import et l’export d’une balance TXT.
+
+## Limites assumées de cette tranche
+
+- aucune base SQLite n’est encore branchée ;
+- aucune authentification desktop n’est implémentée ;
+- les règles fiscales béninoises ne sont pas codées ;
+- le plan SYSCOHADA livré reste à importer depuis une source validée ;
+- les fichiers Excel `.xls`, `.xlsx`, `.xlsm` et `.xlsb` ne sont pas encore lus par le noyau ;
+- les méthodes d’amortissement autres que le linéaire ne sont pas activées ;
+- aucune écriture ne doit être considérée comme juridiquement ou réglementairement validée par ce prototype.
+
+## Prochaine tranche technique
+
+Après revue de ces invariants, l’étape suivante sera :
+
+1. choisir la bibliothèque de lecture/écriture tableur ;
+2. définir le schéma SQLite versionné ;
+3. brancher l’assistant d’import à une zone d’attente ;
+4. remplacer les données simulées de l’interface par le stockage local ;
+5. ajouter les tests de non-régression sur plusieurs sociétés et exercices.

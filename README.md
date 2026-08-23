@@ -26,7 +26,13 @@ Le prototype interactif est disponible dans [`prototype/index.html`](prototype/i
 Pour l’ouvrir localement :
 
 ```bash
-python3 -m http.server 4173 --directory prototype
+npm run preview
 ```
 
 Puis ouvrir `http://localhost:4173` dans un navigateur.
+
+Le premier noyau métier est décrit dans [`docs/03-socle-technique.md`](docs/03-socle-technique.md). Les tests se lancent avec :
+
+```bash
+npm test
+```
