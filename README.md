@@ -23,6 +23,8 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 
 Le prototype interactif est disponible dans [`prototype/index.html`](prototype/index.html). Les parcours et conventions de la maquette sont décrits dans [`docs/02-maquettes-ux.md`](docs/02-maquettes-ux.md).
 
+Le parcours d’accès initial — authentification puis sélection d’un dossier — est décrit dans [`docs/04-authentification-et-dossiers.md`](docs/04-authentification-et-dossiers.md).
+
 Pour l’ouvrir localement :
 
 ```bash

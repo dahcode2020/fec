@@ -1,7 +1,9 @@
 import { calculateStraightLinePlan, depreciationEntry, exportBalanceTxt } from './core.js';
 
 const appState = {
+  authenticated: false,
   activeCompany: 'acacia',
+  selectedDossier: 'acacia-25',
   companies: {
     acacia: {
       id: 'acacia',
@@ -29,7 +31,11 @@ const appState = {
       receivables: '125 000',
       expenses: '267 900'
     }
-  }
+  },
+  dossiers: [
+    { id: 'acacia-25', companyId: 'acacia', dossier: 'ACACIA-25', period: '01/01/2025 - 31/12/2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
+    { id: 'noria-25', companyId: 'noria', dossier: 'NORIA-25', period: '01/01/2025 - 31/12/2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' }
+  ]
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -87,6 +93,103 @@ function renderCompanyMenu() {
       ${company.id === appState.activeCompany ? '<span class="company-option-check">✓</span>' : ''}
     </button>`).join('')}
     <button class="company-option" type="button" data-action="show-company-modal"><span class="add-circle" style="width:28px;height:28px;margin:0;font-size:14px"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="company-option-copy"><strong>Ajouter une société</strong><small>Créer un nouveau dossier</small></span></button>`;
+}
+
+function renderDossiers(query = $('#dossierSearch')?.value || '') {
+  const rows = $('#dossierRows');
+  if (!rows) return;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleDossiers = appState.dossiers.filter((dossier) => {
+    const company = appState.companies[dossier.companyId];
+    return !normalizedQuery || [dossier.dossier, dossier.period, company?.name].join(' ').toLowerCase().includes(normalizedQuery);
+  });
+  rows.innerHTML = visibleDossiers.map((dossier) => {
+    const company = appState.companies[dossier.companyId] || { name: 'Société inconnue', shortName: '??', color: 'teal' };
+    const isSelected = dossier.id === appState.selectedDossier;
+    return `<tr class="${isSelected ? 'is-selected' : ''}" data-dossier-id="${escapeHtml(dossier.id)}" tabindex="0" role="button" aria-label="Sélectionner ${escapeHtml(dossier.dossier)}"><td><span class="dossier-code-icon ${company.color === 'orange' ? 'dossier-code-orange' : 'dossier-code-teal'}">${escapeHtml(company.shortName)}</span><span class="dossier-code"><b>${escapeHtml(dossier.dossier)}</b><small>SYSCOHADA révisé</small></span></td><td><span class="software-name">FEC Comptabilité</span><small class="cell-subtitle">Version locale</small></td><td><span class="company-name-cell">${escapeHtml(company.name)}</span><small class="cell-subtitle">${escapeHtml(company.type || 'Dossier comptable')}</small></td><td>${escapeHtml(dossier.period)}</td><td><span class="session-count">${dossier.sessions ? dossier.sessions : '—'}</span></td><td><span class="status ${dossier.statusClass || 'status-green'}">${escapeHtml(dossier.status)}</span></td></tr>`;
+  }).join('');
+  const activeCount = appState.dossiers.filter((dossier) => dossier.status !== 'Archivé').length;
+  const countNode = $('#dossierCount');
+  if (countNode) countNode.textContent = String(activeCount);
+  if (!visibleDossiers.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun dossier ne correspond à votre recherche.</td></tr>';
+}
+
+function selectDossier(dossierId) {
+  const dossier = appState.dossiers.find((item) => item.id === dossierId);
+  const company = dossier && appState.companies[dossier.companyId];
+  if (!dossier || !company) return;
+  appState.selectedDossier = dossierId;
+  renderDossiers();
+  const title = $('#selectedDossierTitle');
+  const meta = $('#selectedDossierMeta');
+  const hint = $('#dossierSelectionHint');
+  if (title) title.textContent = company.name;
+  if (meta) meta.textContent = `${dossier.dossier} · Exercice ${dossier.period.slice(-4)}`;
+  if (hint) hint.textContent = `${dossier.dossier} sélectionné · choisissez une action à droite.`;
+}
+
+function showDossiers() {
+  appState.authenticated = true;
+  $('#loginScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.setAttribute('hidden', '');
+  $('#dossiersScreen')?.removeAttribute('hidden');
+  document.body.style.overflow = '';
+  renderDossiers();
+  selectDossier(appState.selectedDossier);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showLogin() {
+  appState.authenticated = false;
+  $('#dossiersScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.setAttribute('hidden', '');
+  $('#loginScreen')?.removeAttribute('hidden');
+  document.body.style.overflow = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openSelectedDossier() {
+  const dossier = appState.dossiers.find((item) => item.id === appState.selectedDossier);
+  if (!dossier || dossier.status === 'Archivé') {
+    showToast('Ce dossier est archivé et ne peut pas être ouvert.');
+    return;
+  }
+  dossier.sessions = Math.max(1, dossier.sessions || 0);
+  setActiveCompany(dossier.companyId, false);
+  $('#dossiersScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.removeAttribute('hidden');
+  openView('dashboard');
+  showToast(`${appState.companies[dossier.companyId].name} est ouvert.`);
+}
+
+function duplicateSelectedDossier() {
+  const source = appState.dossiers.find((item) => item.id === appState.selectedDossier);
+  if (!source) return;
+  const copyId = `${source.companyId}-copie-${Date.now()}`;
+  appState.dossiers.push({ ...source, id: copyId, dossier: `${source.dossier}-COPIE`, sessions: 0, status: 'Copie de travail', statusClass: 'status-blue' });
+  selectDossier(copyId);
+  showToast('Une copie de travail du dossier a été créée.');
+}
+
+function archiveSelectedDossier() {
+  const dossier = appState.dossiers.find((item) => item.id === appState.selectedDossier);
+  if (!dossier) return;
+  if (appState.dossiers.filter((item) => item.status !== 'Archivé').length <= 1) {
+    showToast('Le dernier dossier actif ne peut pas être archivé ici.');
+    return;
+  }
+  dossier.status = 'Archivé';
+  dossier.statusClass = 'status-muted';
+  const next = appState.dossiers.find((item) => item.status !== 'Archivé');
+  if (next) appState.selectedDossier = next.id;
+  renderDossiers();
+  selectDossier(appState.selectedDossier);
+  showToast(`${dossier.dossier} a été archivé. Ses données sont conservées.`);
+}
+
+function authenticate(event) {
+  event.preventDefault();
+  showDossiers();
 }
 
 function openView(viewName) {
@@ -154,9 +257,18 @@ function addCompany(event) {
   appState.companies[id] = company;
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
+  appState.dossiers.push({ id: `${id}-25`, companyId: id, dossier: `${company.shortName}-25`, period: '01/01/2025 - 31/12/2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
+  const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
   setActiveCompany(id, false);
-  openView('companies');
+  if (dossiersAreVisible) {
+    appState.selectedDossier = `${id}-25`;
+    renderDossiers();
+    selectDossier(`${id}-25`);
+    showDossiers();
+  } else {
+    openView('companies');
+  }
   showToast(`${name} a été ajoutée à votre espace.`);
   event.currentTarget.reset();
 }
@@ -293,7 +405,22 @@ function validateImport() {
 }
 
 function bindEvents() {
+  $('#authForm')?.addEventListener('submit', authenticate);
+  $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
+  $('#dossiersScreen')?.addEventListener('keydown', (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-dossier-id]')) {
+      event.preventDefault();
+      selectDossier(event.target.closest('[data-dossier-id]').dataset.dossierId);
+    }
+  });
+
   document.addEventListener('click', (event) => {
+    const dossierRow = event.target.closest('[data-dossier-id]');
+    if (dossierRow && !event.target.closest('button')) {
+      selectDossier(dossierRow.dataset.dossierId);
+      return;
+    }
+
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
 
@@ -316,6 +443,20 @@ function bindEvents() {
     if (!actionTarget) return;
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
+    if (action === 'authenticate') showDossiers();
+    if (action === 'dossier-select') selectDossier(actionTarget.dataset.dossierId);
+    if (action === 'dossier-open') openSelectedDossier();
+    if (action === 'dossier-refresh') { renderDossiers(); selectDossier(appState.selectedDossier); showToast('La liste des dossiers est à jour.'); }
+    if (action === 'dossier-duplicate') duplicateSelectedDossier();
+    if (action === 'dossier-delete') archiveSelectedDossier();
+    if (action === 'dossier-backup') showToast('Sauvegarde du dossier préparée localement.');
+    if (action === 'dossier-restore') showToast('Choisissez une sauvegarde FEC à restaurer.');
+    if (action === 'logout') showLogin();
+    if (action === 'toggle-password') {
+      const password = actionTarget.closest('.password-field')?.querySelector('input');
+      if (password) { password.type = password.type === 'password' ? 'text' : 'password'; actionTarget.textContent = password.type === 'password' ? 'Voir' : 'Masquer'; }
+    }
+    if (action === 'forgot-password') showToast('La récupération du mot de passe sera ajoutée avec l’authentification réelle.');
     if (action === 'show-company-modal') openModal('companyModal');
     if (action === 'show-asset-modal') openModal('assetModal');
     if (action === 'close-modal') closeModal();
