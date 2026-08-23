@@ -29,6 +29,8 @@ Le parcours d’accès initial — authentification puis sélection d’un dossi
 
 L’architecture multi-modules et l’association indépendante des modules aux dossiers sont décrites dans [`docs/05-modules-et-dossiers.md`](docs/05-modules-et-dossiers.md).
 
+La structure des menus **Fichier** et **Configuration** du module CSR est décrite dans [`docs/06-menus-pilotage.md`](docs/06-menus-pilotage.md).
+
 Pour l’ouvrir localement :
 
 ```bash

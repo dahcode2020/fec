@@ -430,7 +430,8 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 12. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
 13. **Rapports** — états, période, société, export et impression.
 14. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
-15. **Paramètres** — société, modules, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
+15. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
+16. **Configuration CSR** — société, plan comptable, journaux, taxes, utilisateurs et sauvegarde.
 
 ### Règles UX
 

@@ -580,6 +580,20 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+function selectMenuTab(tab) {
+  const parentView = tab.closest('.view');
+  if (!parentView) return;
+  $$('.menu-tab', parentView).forEach((item) => {
+    const selected = item === tab;
+    item.classList.toggle('is-active', selected);
+    item.setAttribute('aria-selected', String(selected));
+  });
+  const targetId = parentView.dataset.viewPanel === 'fichier' ? 'fichierSelectedLabel' : 'configurationSelectedLabel';
+  const target = $(`#${targetId}`);
+  if (target) target.textContent = tab.dataset.menuTab;
+  showToast(`Sous-menu « ${tab.dataset.menuTab} » sélectionné.`);
+}
+
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
@@ -599,6 +613,9 @@ function bindEvents() {
 
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
+
+    const menuTab = event.target.closest('.menu-tab[data-menu-tab]');
+    if (menuTab) { selectMenuTab(menuTab); return; }
 
     const companyOption = event.target.closest('[data-company-option]');
     if (companyOption) { setActiveCompany(companyOption.dataset.companyOption); return; }
@@ -655,6 +672,7 @@ function bindEvents() {
     if (action === 'download-report') downloadReport();
     if (action === 'download-template') downloadTemplate();
     if (action === 'show-member-modal') showToast('L’invitation d’un membre sera disponible dans le prochain jalon.');
+    if (action === 'menu-placeholder') showToast('Ce sous-menu sera paramétré dans l’étape dédiée.');
   });
 
   $('#companyPicker')?.addEventListener('click', () => {

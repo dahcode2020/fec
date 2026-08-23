@@ -64,6 +64,16 @@
 
       <nav class="main-nav" aria-label="Navigation principale">
         <span class="nav-label">PILOTAGE</span>
+        <button class="nav-item" type="button" data-view="fichier">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
+          <span>Fichier</span>
+          <svg class="nav-chevron icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button class="nav-item" type="button" data-view="configuration">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>
+          <span>Configuration</span>
+          <svg class="nav-chevron icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
         <button class="nav-item is-active" type="button" data-view="dashboard">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>Tableau de bord</span>
@@ -143,6 +153,18 @@
       </header>
 
       <div class="page-wrap">
+        <section class="view" id="view-fichier" data-view-panel="fichier">
+          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Pilotage <span>/</span> Fichier</p><h1>Fichier</h1><p class="page-subtitle">Retrouvez ici les actions liées à vos dossiers et à vos données.</p></div><div class="heading-actions"><button class="button button-primary" type="button" data-action="show-company-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nouveau dossier</button></div></div>
+          <div class="menu-tabs" role="tablist" aria-label="Sous-menus Fichier"><button class="menu-tab is-active" type="button" role="tab" aria-selected="true" data-menu-tab="Dossiers">Dossiers</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Nouveau dossier">Nouveau dossier</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Importer / exporter">Importer / exporter</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Sauvegardes">Sauvegardes</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Restaurer">Restaurer</button></div>
+          <article class="panel menu-panel"><div class="menu-panel-illustration"><span class="menu-folder-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span><span class="menu-panel-spark">✦</span></div><span class="eyebrow">SOUS-MENU SÉLECTIONNÉ</span><h2 id="fichierSelectedLabel">Dossiers</h2><p>Les sous-menus de la rubrique Fichier seront définis et paramétrés progressivement. Cette barre restera alignée horizontalement pour donner un accès rapide à chaque action.</p><div class="menu-placeholder-actions"><button class="button button-secondary" type="button" data-action="open-view" data-view="companies">Ouvrir les dossiers</button><button class="text-button" type="button" data-action="menu-placeholder">Configurer plus tard <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></article>
+        </section>
+
+        <section class="view" id="view-configuration" data-view-panel="configuration">
+          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Pilotage <span>/</span> Configuration</p><h1>Configuration</h1><p class="page-subtitle">Paramétrez votre société et votre environnement comptable depuis un seul endroit.</p></div><div class="heading-actions"><button class="button button-secondary" type="button" data-action="menu-placeholder">Guide de configuration</button></div></div>
+          <div class="menu-tabs" role="tablist" aria-label="Sous-menus Configuration"><button class="menu-tab is-active" type="button" role="tab" aria-selected="true" data-menu-tab="Société & dossier">Société &amp; dossier</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Plan comptable">Plan comptable</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Journaux">Journaux</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Taxes">Taxes</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Utilisateurs">Utilisateurs</button><button class="menu-tab" type="button" role="tab" aria-selected="false" data-menu-tab="Sauvegarde">Sauvegarde</button></div>
+          <article class="panel menu-panel"><div class="menu-panel-illustration"><span class="menu-gear-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg></span><span class="menu-panel-spark">✦</span></div><span class="eyebrow">SOUS-MENU SÉLECTIONNÉ</span><h2 id="configurationSelectedLabel">Société &amp; dossier</h2><p>Les paramètres de configuration seront organisés par onglets pour rester accessibles sans surcharger l’espace de travail. Les règles métier de chaque sous-menu seront ajoutées étape par étape.</p><div class="menu-placeholder-actions"><button class="button button-secondary" type="button" data-action="open-view" data-view="companies">Voir la société active</button><button class="text-button" type="button" data-action="menu-placeholder">Configurer plus tard <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></article>
+        </section>
+
         <section class="view is-visible" id="view-dashboard" data-view-panel="dashboard">
           <div class="page-heading">
             <div>
