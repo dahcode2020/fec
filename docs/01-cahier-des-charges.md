@@ -278,8 +278,95 @@ MVP :
 - état des immobilisations ;
 - tableau des amortissements par immobilisation et par période ;
 - dotations générées, à contrôler et validées ;
-- export CSV/XLSX ;
+- export TXT, CSV et formats Excel ;
 - export PDF imprimable.
+
+### 3.8.1 Import et export TXT / Excel
+
+L’application devra permettre d’échanger les balances et les livres comptables avec un cabinet, une ancienne solution ou un tableur, sans ressaisie manuelle. Les fichiers sont toujours rattachés à la société active, à un exercice et à une période explicitement choisis.
+
+#### Documents concernés
+
+- balance générale ;
+- balance auxiliaire clients ;
+- balance auxiliaire fournisseurs ;
+- grand livre ;
+- livre-journal ;
+- journaux par période ;
+- livre des ventes ;
+- livre des achats ;
+- livre de caisse et livre de banque ;
+- état des immobilisations et tableau des amortissements.
+
+#### Formats texte
+
+L’import et l’export TXT accepteront :
+
+- fichier délimité par tabulation, point-virgule, virgule ou barre verticale ;
+- fichier à largeur fixe, avec définition des positions de colonnes ;
+- encodages UTF-8, UTF-8 avec BOM, ISO-8859-1 et Windows-1252 ;
+- fins de ligne Windows, Linux ou macOS ;
+- séparateurs décimaux virgule ou point ;
+- séparateurs de milliers configurables ;
+- plusieurs formats de date configurables ;
+- présence ou absence d’une ligne d’en-tête ;
+- valeurs négatives avec signe `-` ou entre parenthèses.
+
+L’application détectera les paramètres probables, mais l’utilisateur pourra les confirmer et les enregistrer dans un profil d’import/export réutilisable.
+
+#### Formats Excel et tableurs
+
+Objectif de compatibilité avec les principaux formats de classeurs Excel :
+
+- `.xlsx` — format d’échange principal, à l’import comme à l’export ;
+- `.xls` — ancien format Excel, pour compatibilité avec les fichiers existants ;
+- `.xlsm` — classeur avec macros, importé sans exécuter ni conserver de code dangereux ;
+- `.xlsb` — classeur binaire, importé lorsque le connecteur disponible le permet ;
+- `.xltx` et `.xltm` — modèles Excel, traités comme des classeurs de données, sans exécuter de macros ;
+- `.csv` — format texte compatible avec Excel, avec choix du séparateur et de l’encodage ;
+- `.ods` — format tableur ouvert utile pour les échanges hors Excel.
+
+Le format `.xlsx` restera le format canonique de sortie. Si un format historique ou binaire ne peut pas être réémis sans perte, l’application devra l’indiquer clairement et proposer une sortie `.xlsx` ou `.txt` équivalente. Aucun fichier importé ne devra exécuter de macro, de formule externe ou de contenu actif.
+
+Les exports Excel contiendront au minimum :
+
+- une feuille de présentation lisible ;
+- une feuille de données brutes exploitable par un cabinet ;
+- les critères utilisés : société, exercice, période, journal et statut ;
+- les totaux débit et crédit ;
+- la date de génération et la version du format ;
+- les numéros de compte conservés comme texte lorsqu’ils comportent des zéros significatifs.
+
+Pour les volumes dépassant les limites d’une feuille Excel, le logiciel créera plusieurs feuilles ou plusieurs fichiers numérotés, avec un récapitulatif de contrôle.
+
+#### Parcours d’import contrôlé
+
+1. choisir la société, l’exercice, la période et le type de document ;
+2. sélectionner le fichier TXT ou tableur ;
+3. détecter ou définir l’encodage, les colonnes, les séparateurs et les formats ;
+4. associer les colonnes source aux champs comptables ;
+5. mapper les comptes, journaux, tiers et taxes inconnus ;
+6. afficher un aperçu des lignes et des écritures qui seraient créées ;
+7. exécuter les contrôles d’équilibre, de date, de doublon, de période et de compte ;
+8. placer les données dans une zone d’attente ;
+9. demander une validation explicite avant l’intégration au journal.
+
+L’import d’une balance pourra servir à reprendre des à-nouveaux ou des soldes d’ouverture. Il ne devra jamais écraser silencieusement une balance existante. L’import d’un livre ne créera des écritures que si les colonnes nécessaires sont présentes ; sinon, le fichier sera conservé comme archive consultable et l’utilisateur sera averti qu’il ne constitue pas une écriture comptable exploitable.
+
+Les doublons seront recherchés au moyen de la référence, du journal, de la date, du compte, du montant et d’une empreinte du fichier. L’utilisateur pourra exclure une ligne, corriger son mapping ou annuler toute la prévisualisation avant validation.
+
+#### Parcours d’export contrôlé
+
+L’utilisateur pourra sélectionner :
+
+- une société ou un espace complet, avec confirmation ;
+- un exercice et une période ;
+- un ou plusieurs journaux ;
+- les écritures brouillon, validées ou clôturées selon ses droits ;
+- le type d’état ;
+- le format et le profil de colonnes.
+
+Chaque export conservera sa configuration, son auteur, sa date, son périmètre et son empreinte dans la piste d’audit. Il sera impossible d’exporter par erreur les données d’une autre société depuis le contexte actif.
 
 Les états financiers SYSCOHADA complets seront livrés après validation du régime comptable et des données nécessaires. L’application doit néanmoins préparer une structure d’export compatible avec le travail du professionnel chargé de l’arrêté des comptes.
 
@@ -307,7 +394,8 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 9. **Tiers** — fiches et soldes clients/fournisseurs.
 10. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
 11. **Rapports** — états, période, société, export et impression.
-12. **Paramètres** — société, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
+12. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
+13. **Paramètres** — société, plan comptable, taxes, journaux, utilisateurs et sauvegarde.
 
 ### Règles UX
 
@@ -340,9 +428,11 @@ Entités principales :
 - `Payment`, `CashAccount`, `BankAccount` ;
 - `TaxCode` et `TaxRateVersion` ;
 - `FixedAsset`, `DepreciationPlan` et `DepreciationRun` ;
-- `Attachment` ;
+- `Attachment` et `SourceFile` ;
+- `ImportProfile` et `ImportJob` ;
+- `ExportProfile` et `ExportJob` ;
 - `AuditEvent` ;
-- `ReportDefinition` et `ExportJob`.
+- `ReportDefinition`.
 
 ### Invariants à tester
 
@@ -358,7 +448,11 @@ Entités principales :
 - total des lignes d’une facture cohérent avec son total affiché ;
 - unicité d’une dotation par immobilisation et période ;
 - total du plan d’amortissement cohérent avec la base amortissable ;
-- cumul amorti jamais supérieur à la base amortissable, sauf régularisation explicitement tracée.
+- cumul amorti jamais supérieur à la base amortissable, sauf régularisation explicitement tracée ;
+- fichier importé conservé avec son profil, son empreinte et son résultat de contrôle ;
+- import impossible dans une période clôturée sans procédure de réouverture ;
+- balance importée équilibrée avant intégration ;
+- export reproductible à périmètre identique et identifiable dans l’audit.
 
 ## 7. Architecture recommandée
 
@@ -370,6 +464,7 @@ Pour une application de bureau hors ligne destinée aux TPE :
 - **migrations** : versionnées et exécutées au démarrage ;
 - **validation métier** : moteur partagé, indépendant de l’interface ;
 - **moteur d’assistance** : règles d’imputation, modèles d’écriture et calcul d’amortissement testables indépendamment ;
+- **moteur d’échange** : lecteurs/écrivains TXT, CSV, XLSX et adaptateurs de compatibilité pour les formats Excel historiques ;
 - **exports** : PDF et tableurs ;
 - **sauvegarde** : fichier chiffré ou archive chiffrée, avec sauvegarde manuelle puis automatique ;
 - **synchronisation future** : service optionnel, sans rendre la saisie locale dépendante du réseau.
@@ -388,7 +483,10 @@ Cette proposition reste révisable après les premiers tests UX. Le moteur compt
 - avertissement clair lors d’un changement de société avec saisie non enregistrée ;
 - information claire sur les données collectées ;
 - aucun envoi vers un serveur distant sans consentement explicite ;
-- sauvegarde avant migration de schéma ou mise à jour majeure.
+- sauvegarde avant migration de schéma ou mise à jour majeure ;
+- neutralisation des macros, liens externes, formules exécutables et contenus actifs à l’import ;
+- analyse de taille et de structure des fichiers afin d’éviter qu’un import ne bloque l’application ;
+- confirmation explicite avant import massif ou export de plusieurs sociétés.
 
 La conformité juridique, fiscale, comptable et relative aux données personnelles devra être confirmée avec un conseil compétent au Bénin. Le logiciel ne doit pas être présenté comme une certification officielle sans base réglementaire vérifiée.
 
@@ -407,9 +505,13 @@ Le prototype est validé lorsqu’un utilisateur cible peut, sans formation long
 9. retrouver les opérations dans le journal de la bonne société ;
 10. comprendre la différence entre brouillon, proposition, validé et clôturé ;
 11. consulter le montant restant dû par un client ;
-12. exporter une synthèse sur une période et une société données ;
-13. identifier clairement les erreurs bloquantes ;
-14. restaurer ou demander une sauvegarde de ses données.
+12. importer une balance ou un livre depuis un fichier TXT ou Excel, mapper les colonnes et corriger les erreurs dans la prévisualisation ;
+13. refuser une balance déséquilibrée ou un doublon avant son intégration ;
+14. exporter une balance et un livre au format TXT, XLSX et dans un format Excel de compatibilité ;
+15. constater qu’un fichier Excel avec macros est traité sans exécuter son contenu actif ;
+16. exporter une synthèse sur une période et une société données ;
+17. identifier clairement les erreurs bloquantes ;
+18. restaurer ou demander une sauvegarde de ses données.
 
 Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de saisie et au moins un professionnel de la comptabilité. Les termes incompris et les étapes abandonnées doivent être consignés avant le développement du moteur complet.
 
@@ -422,7 +524,7 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 - architecture de l’information ;
 - parcours multi-sociétés et sélecteur de société ;
 - wireframes ;
-- prototype haute fidélité des propositions d’imputation et du registre des immobilisations ;
+- prototype haute fidélité des propositions d’imputation, du registre des immobilisations et de l’assistant TXT/Excel ;
 - test utilisateur et corrections.
 
 ### Phase 2 — socle local
@@ -444,7 +546,8 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 - immobilisations et calcul des plans d’amortissement ;
 - génération contrôlée d’écritures ;
 - journal, grand livre, balance et états d’immobilisations ;
-- exports.
+- import/export TXT, CSV et Excel avec profils de mapping, prévisualisation et contrôles ;
+- exports PDF.
 
 ### Phase 4 — validation métier et pilote
 
@@ -477,13 +580,14 @@ Tests qualitatifs recommandés : cinq à huit utilisateurs TPE, un opérateur de
 
 ## 12. Première tâche recommandée
 
-Produire les maquettes de six flux :
+Produire les maquettes de sept flux :
 
 1. onboarding de l’espace de travail et création de la première société ;
 2. ajout d’une société et changement de société active ;
 3. tableau de bord isolé par société ;
 4. saisie d’une vente avec proposition d’imputation ;
 5. création d’une immobilisation et prévisualisation de son plan d’amortissement ;
-6. journal, détail d’une écriture et validation d’une dotation.
+6. import d’une balance ou d’un livre TXT/Excel avec aperçu et mapping ;
+7. journal, détail d’une écriture, validation d’une dotation et export.
 
-Ces flux couvrent les trois décisions ajoutées au périmètre — multi-sociétés, imputations assistées et amortissements automatiques — tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles comptables complètes.
+Ces flux couvrent les quatre décisions intégrées au périmètre — multi-sociétés, imputations assistées, amortissements automatiques et échanges TXT/Excel — tout en permettant de valider le vocabulaire et le niveau de simplicité avant d’investir dans les règles comptables complètes.
