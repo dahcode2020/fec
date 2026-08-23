@@ -304,12 +304,17 @@ function addCompany(event) {
   const activity = String(formData.get('companyActivity') || '').trim();
   const address = String(formData.get('companyAddress') || '').trim();
   const year = exerciseYear(exerciseStart);
+  const generatedDossierCode = makeDossierCode(code, exerciseStart);
+  if (appState.dossiers.some((dossier) => dossier.dossier === generatedDossierCode)) {
+    showToast(`Le dossier ${generatedDossierCode} existe déjà dans cet espace.`);
+    return;
+  }
   const dossierId = `${id}-${year}`;
   const company = { id, name, shortName: code, code, legalForm: legalForm || 'Autres', type: legalForm || 'Autres', address, activity, exerciseStart, exerciseEnd, meta: `${legalForm || 'Autres'} · XOF`, ifu: String(formData.get('companyIfu') || '').trim(), color: 'teal', treasury: '0', sales: '0', receivables: '0', expenses: '0' };
   appState.companies[id] = company;
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
-  appState.dossiers.push({ id: dossierId, companyId: id, dossier: makeDossierCode(code, exerciseStart), period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
+  appState.dossiers.push({ id: dossierId, companyId: id, dossier: generatedDossierCode, period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
   setActiveCompany(id, false);
