@@ -112,6 +112,111 @@ const FICHIER_GROUPS = {
   }
 };
 
+const CONFIG_GROUPS = {
+  societe: {
+    label: 'Société & exercice',
+    description: 'Identité de la société, période et paramètres généraux du dossier actif.',
+    actions: [
+      { label: 'Fiche de la société', description: 'Nom, forme juridique, adresse, IFU et activité', symbol: '▣', tone: 'blue', action: 'companies' },
+      { label: 'Exercices et périodes', description: 'Créer, ouvrir ou clôturer une période comptable', symbol: '◷', tone: 'purple', action: 'placeholder' },
+      { label: 'Paramètres régionaux', description: 'Devise XOF, format des dates et préférences', symbol: '⚙', tone: 'green', action: 'placeholder' }
+    ]
+  },
+  comptes: {
+    label: 'Comptes généraux',
+    description: 'Plan Comptable SYSCOHADA Révisé : complétez et adaptez vos comptes aux besoins de votre société.',
+    actions: [
+      { label: 'Comptes Généraux (Plan Comptable Syscohada Révisé)', description: 'Consulter le plan et rechercher un compte', symbol: '▤', tone: 'green', action: 'placeholder' },
+      { label: 'Ajouter ou compléter un compte', description: 'Créer un sous-compte avec contrôle du référentiel', symbol: '+', tone: 'blue', action: 'placeholder' },
+      { label: 'Importer / exporter le plan comptable', description: 'Échanger vos comptes et vos personnalisations', symbol: '↕', tone: 'purple', action: 'imports' },
+      { label: 'Comptes favoris et règles par défaut', description: 'Accélérer la saisie des opérations courantes', symbol: '★', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  tiers: {
+    label: 'Tiers',
+    description: 'Organisez les fiches et les comptes auxiliaires de vos partenaires.',
+    actions: [
+      { label: 'Fournisseurs', description: 'Fiches, comptes auxiliaires, échéances et contacts', symbol: 'F', tone: 'blue', action: 'purchases' },
+      { label: 'Clients', description: 'Fiches, comptes auxiliaires, créances et règlements', symbol: 'C', tone: 'green', action: 'sales' },
+      { label: 'Personnel', description: 'Comptes de personnel et avances à suivre', symbol: 'P', tone: 'purple', action: 'placeholder' },
+      { label: 'Débiteurs / créditeurs divers', description: 'Tiers occasionnels et comptes à régulariser', symbol: 'D', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  journaux: {
+    label: 'Journaux',
+    description: 'Définissez vos journaux, leurs séquences et leurs comptes par défaut.',
+    actions: [
+      { label: 'Journaux comptables', description: 'Achats, ventes, banque, caisse et opérations diverses', symbol: '≡', tone: 'blue', action: 'journal' },
+      { label: 'Ajouter un journal', description: 'Créer un journal adapté à votre activité', symbol: '+', tone: 'green', action: 'placeholder' },
+      { label: 'Numérotation des pièces', description: 'Configurer les séquences par journal et exercice', symbol: '#', tone: 'purple', action: 'placeholder' }
+    ]
+  },
+  taxes: {
+    label: 'Taxes & TVA',
+    description: 'Paramétrez les codes de taxes et leurs versions sans modifier l’historique.',
+    actions: [
+      { label: 'Codes et taux de taxes', description: 'Créer et versionner les taux applicables', symbol: '%', tone: 'amber', action: 'placeholder' },
+      { label: 'TVA sur les ventes et achats', description: 'Associer les comptes et les règles de calcul', symbol: 'T', tone: 'blue', action: 'placeholder' },
+      { label: 'Retenues et taxes spécifiques', description: 'Préparer les règles à valider avec votre conseil', symbol: 'R', tone: 'purple', action: 'placeholder' }
+    ]
+  },
+  immobilisations: {
+    label: 'Immobilisations',
+    description: 'Préparez les fiches d’actifs et les règles de calcul des amortissements.',
+    actions: [
+      { label: 'Registre des immobilisations', description: 'Biens, catégories, comptes et pièces justificatives', symbol: '▥', tone: 'blue', action: 'assets' },
+      { label: 'Méthodes et durées', description: 'Linéaire, prorata temporis et durées par catégorie', symbol: '◴', tone: 'purple', action: 'placeholder' },
+      { label: 'Comptes de dotation par défaut', description: 'Préparer les écritures périodiques à contrôler', symbol: '↗', tone: 'green', action: 'assets' }
+    ]
+  },
+  imputations: {
+    label: 'Imputations',
+    description: 'Aidez l’utilisateur à comptabiliser ses opérations avec des règles explicables.',
+    actions: [
+      { label: 'Modèles d’écritures', description: 'Créer des schémas débit / crédit réutilisables', symbol: '✦', tone: 'purple', action: 'placeholder' },
+      { label: 'Règles par fournisseur ou client', description: 'Retrouver les comptes utilisés habituellement', symbol: '↗', tone: 'blue', action: 'placeholder' },
+      { label: 'Catégories d’opérations', description: 'Ventes, achats, frais, règlements et transferts', symbol: '◎', tone: 'green', action: 'placeholder' },
+      { label: 'Validation et niveau de confiance', description: 'Imposer un contrôle avant toute écriture', symbol: '✓', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  tresorerie: {
+    label: 'Banques & caisses',
+    description: 'Configurez les comptes de trésorerie et les modes de règlement de la société.',
+    actions: [
+      { label: 'Comptes bancaires', description: 'Banques, numéros de comptes et journaux associés', symbol: 'B', tone: 'blue', action: 'treasury' },
+      { label: 'Caisses', description: 'Créer et suivre les comptes de caisse', symbol: 'C', tone: 'green', action: 'treasury' },
+      { label: 'Modes de règlement', description: 'Espèces, virement, chèque, mobile money et autres', symbol: '₣', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  acces: {
+    label: 'Utilisateurs & accès',
+    description: 'Attribuez des rôles par société et, à terme, par fonction du module CSR.',
+    actions: [
+      { label: 'Utilisateurs de la société', description: 'Inviter, retirer ou modifier un accès', symbol: 'U', tone: 'purple', action: 'companies' },
+      { label: 'Rôles et permissions', description: 'Saisie, contrôle, validation, clôture et lecture', symbol: '✓', tone: 'green', action: 'placeholder' },
+      { label: 'Journal des connexions', description: 'Consulter les accès et actions sensibles', symbol: '◷', tone: 'blue', action: 'placeholder' }
+    ]
+  },
+  documents: {
+    label: 'Documents',
+    description: 'Paramétrez les modèles et les références affichées sur les pièces.',
+    actions: [
+      { label: 'Modèles de pièces', description: 'Factures, avoirs, reçus et impressions', symbol: '▧', tone: 'blue', action: 'placeholder' },
+      { label: 'Mentions et identité visuelle', description: 'Logo, coordonnées et mentions de la société', symbol: '✦', tone: 'purple', action: 'companies' },
+      { label: 'Références et numérotation', description: 'Préfixes et séquences des documents', symbol: '#', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  sauvegarde: {
+    label: 'Sauvegarde',
+    description: 'Protégez et restaurez les données du dossier actif.',
+    actions: [
+      { label: 'Sauvegarder le dossier', description: 'Créer une copie locale vérifiable', symbol: '↓', tone: 'green', action: 'backup' },
+      { label: 'Restaurer une sauvegarde', description: 'Reprendre les données depuis une copie', symbol: '↥', tone: 'blue', action: 'restore' },
+      { label: 'Historique des sauvegardes', description: 'Consulter les sauvegardes et leur état', symbol: '◷', tone: 'purple', action: 'placeholder' }
+    ]
+  }
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -658,6 +763,29 @@ function handleFichierAction(action) {
   if (action === 'close') showLogin();
 }
 
+function renderConfigurationGroup(groupId = 'societe') {
+  const group = CONFIG_GROUPS[groupId] || CONFIG_GROUPS.societe;
+  const label = $('#configurationSelectedLabel');
+  const description = $('#configurationSelectedDescription');
+  const actionList = $('#configurationActionList');
+  if (label) label.textContent = group.label;
+  if (description) description.textContent = group.description;
+  if (actionList) {
+    actionList.innerHTML = group.actions.map((item) => `<button class="fichier-action" type="button" data-configuration-action="${escapeHtml(item.action)}"><span class="fichier-action-icon fichier-action-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('');
+  }
+}
+
+function handleConfigurationAction(action) {
+  if (action === 'companies') openView('companies');
+  if (action === 'sales') openView('sales');
+  if (action === 'purchases') openView('purchases');
+  if (action === 'journal') openView('journal');
+  if (action === 'assets') openView('assets');
+  if (action === 'treasury') openView('treasury');
+  if (action === 'imports') { openView('imports'); setImportMode('import'); }
+  if (action === 'placeholder') showToast('Cette configuration sera paramétrée dans l’étape dédiée.');
+}
+
 function selectMenuTab(tab) {
   const parentView = tab.closest('.view');
   if (!parentView) return;
@@ -672,9 +800,9 @@ function selectMenuTab(tab) {
     showToast(`Rubrique « ${FICHIER_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
     return;
   }
-  const target = $('#configurationSelectedLabel');
-  if (target) target.textContent = tab.dataset.menuTab;
-  showToast(`Sous-menu « ${tab.dataset.menuTab} » sélectionné.`);
+  const groupId = tab.dataset.menuGroup || 'societe';
+  renderConfigurationGroup(groupId);
+  showToast(`Rubrique « ${CONFIG_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
 }
 
 function bindEvents() {
@@ -702,6 +830,9 @@ function bindEvents() {
 
     const fichierAction = event.target.closest('[data-fichier-action]');
     if (fichierAction) { handleFichierAction(fichierAction.dataset.fichierAction); return; }
+
+    const configurationAction = event.target.closest('[data-configuration-action]');
+    if (configurationAction) { handleConfigurationAction(configurationAction.dataset.configurationAction); return; }
 
     const companyOption = event.target.closest('[data-company-option]');
     if (companyOption) { setActiveCompany(companyOption.dataset.companyOption); return; }
@@ -803,4 +934,5 @@ document.addEventListener('DOMContentLoaded', () => {
   toggleOtherLegalForm();
   updateDossierPreview();
   renderFichierGroup('dossiers');
+  renderConfigurationGroup('societe');
 });

@@ -63,16 +63,21 @@ Les fonctions Dossiers, Sauvegardes et Restaurer de la structure précédente so
 
 ## Menu Configuration
 
-Les sous-menus provisoires sont conservés sous forme d’onglets horizontaux :
+La configuration est également regroupée par domaines pour éviter de créer un onglet pour chaque référentiel. Les rubriques et fonctionnalités sont détaillées dans [`07-configuration-csr.md`](07-configuration-csr.md).
 
-- Société & dossier ;
-- Plan comptable ;
+Onglets horizontaux retenus :
+
+- Société & exercice ;
+- Comptes généraux ;
+- Tiers ;
 - Journaux ;
-- Taxes ;
-- Utilisateurs ;
+- Taxes & TVA ;
+- Immobilisations ;
+- Imputations ;
+- Banques & caisses ;
+- Utilisateurs & accès ;
+- Documents ;
 - Sauvegarde.
-
-Ces sous-menus seront détaillés dans les prochaines étapes, module CSR par module CSR.
 
 ## Règles d’affichage
 

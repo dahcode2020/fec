@@ -431,7 +431,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 13. **Rapports** — états, période, société, export et impression.
 14. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
 15. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
-16. **Configuration CSR** — société, plan comptable, journaux, taxes, utilisateurs et sauvegarde.
+16. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
 
 ### Règles UX
 
