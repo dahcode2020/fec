@@ -58,6 +58,60 @@ const MODULES = {
   GC: { ...MODULE_DEFINITIONS.GC, color: 'amber' }
 };
 
+const FICHIER_GROUPS = {
+  dossiers: {
+    label: 'Dossiers',
+    description: 'Ouvrez, créez et protégez vos dossiers d’entreprises depuis un même espace.',
+    actions: [
+      { label: 'Dossiers en cours', description: 'Afficher les entreprises enregistrées', symbol: '▣', tone: 'blue', action: 'companies' },
+      { label: 'Nouveau dossier', description: 'Créer une nouvelle entreprise', symbol: '+', tone: 'green', action: 'new-dossier' },
+      { label: 'Sauvegarder les dossiers', description: 'Créer une sauvegarde locale', symbol: '↓', tone: 'purple', action: 'backup' },
+      { label: 'Restaurer une sauvegarde', description: 'Reprendre depuis une copie', symbol: '↥', tone: 'amber', action: 'restore' },
+      { label: 'Fermer', description: 'Fermer la session de travail', symbol: '×', tone: 'red', action: 'close' }
+    ]
+  },
+  echanges: {
+    label: 'Échanges comptables',
+    description: 'Échangez vos balances et livres comptables avec votre cabinet ou une autre solution.',
+    actions: [
+      { label: 'Exportation de Fichiers Comptables', description: 'Exporter une balance ou un livre', symbol: '↑', tone: 'green', action: 'export' },
+      { label: 'Importation de Fichiers Comptables', description: 'Importer un fichier TXT ou Excel', symbol: '↓', tone: 'blue', action: 'import' },
+      { label: 'Importation d’une Balance Générale', description: 'Reprendre les soldes d’un exercice', symbol: '▤', tone: 'purple', action: 'balance' }
+    ]
+  },
+  centralisation: {
+    label: 'Centralisation',
+    description: 'Regroupez les données comptables selon les règles qui seront définies pour votre dossier.',
+    actions: [
+      { label: 'Centralisation de Données Comptables', description: 'Préparer une centralisation', symbol: '◎', tone: 'blue', action: 'placeholder' },
+      { label: 'Annulation d’une Centralisation', description: 'Revenir sur une centralisation', symbol: '↶', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  consolidation: {
+    label: 'Consolidation',
+    description: 'Préparez vos travaux de consolidation avant ou après la détermination du résultat.',
+    actions: [
+      { label: 'Consolidation de Comptabilité (avant Résultat)', description: 'Étape de préparation avant résultat', symbol: '≋', tone: 'purple', action: 'placeholder' },
+      { label: 'Consolidation de Comptabilité (Après Résultat)', description: 'Étape de consolidation après résultat', symbol: '≋', tone: 'green', action: 'placeholder' }
+    ]
+  },
+  controle: {
+    label: 'Contrôle & maintenance',
+    description: 'Contrôlez les soldes et protégez l’intégrité de votre base comptable.',
+    actions: [
+      { label: 'Inspection et Recalcul du solde des Comptes', description: 'Vérifier la cohérence des soldes', symbol: '⌕', tone: 'blue', action: 'placeholder' },
+      { label: 'Réparation d’une Base', description: 'Diagnostiquer une base de données', symbol: '⚙', tone: 'red', action: 'placeholder' }
+    ]
+  },
+  aide: {
+    label: 'Aide',
+    description: 'Retrouvez les ressources pour prendre en main le module CSR.',
+    actions: [
+      { label: 'Tutoriel d’Utilisation', description: 'Découvrir les principaux parcours', symbol: '?', tone: 'purple', action: 'help' }
+    ]
+  }
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -580,6 +634,30 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+function renderFichierGroup(groupId = 'dossiers') {
+  const group = FICHIER_GROUPS[groupId] || FICHIER_GROUPS.dossiers;
+  const label = $('#fichierSelectedLabel');
+  const description = $('#fichierSelectedDescription');
+  const actionList = $('#fichierActionList');
+  if (label) label.textContent = group.label;
+  if (description) description.textContent = group.description;
+  if (actionList) {
+    actionList.innerHTML = group.actions.map((item) => `<button class="fichier-action" type="button" data-fichier-action="${escapeHtml(item.action)}"><span class="fichier-action-icon fichier-action-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('');
+  }
+}
+
+function handleFichierAction(action) {
+  if (action === 'companies') openView('companies');
+  if (action === 'new-dossier') openModal('companyModal');
+  if (action === 'backup') showToast('Sauvegarde du dossier préparée localement.');
+  if (action === 'restore') showToast('Choisissez une sauvegarde FEC à restaurer.');
+  if (action === 'import' || action === 'balance') { openView('imports'); setImportMode('import'); }
+  if (action === 'export') { openView('imports'); setImportMode('export'); }
+  if (action === 'help') showToast('Le tutoriel d’utilisation sera ajouté dans l’étape dédiée.');
+  if (action === 'placeholder') showToast('Cette opération sera paramétrée dans l’étape dédiée.');
+  if (action === 'close') showLogin();
+}
+
 function selectMenuTab(tab) {
   const parentView = tab.closest('.view');
   if (!parentView) return;
@@ -588,8 +666,13 @@ function selectMenuTab(tab) {
     item.classList.toggle('is-active', selected);
     item.setAttribute('aria-selected', String(selected));
   });
-  const targetId = parentView.dataset.viewPanel === 'fichier' ? 'fichierSelectedLabel' : 'configurationSelectedLabel';
-  const target = $(`#${targetId}`);
+  if (parentView.dataset.viewPanel === 'fichier') {
+    const groupId = tab.dataset.menuGroup || 'dossiers';
+    renderFichierGroup(groupId);
+    showToast(`Rubrique « ${FICHIER_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
+    return;
+  }
+  const target = $('#configurationSelectedLabel');
   if (target) target.textContent = tab.dataset.menuTab;
   showToast(`Sous-menu « ${tab.dataset.menuTab} » sélectionné.`);
 }
@@ -614,8 +697,11 @@ function bindEvents() {
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
 
-    const menuTab = event.target.closest('.menu-tab[data-menu-tab]');
+    const menuTab = event.target.closest('.menu-tab');
     if (menuTab) { selectMenuTab(menuTab); return; }
+
+    const fichierAction = event.target.closest('[data-fichier-action]');
+    if (fichierAction) { handleFichierAction(fichierAction.dataset.fichierAction); return; }
 
     const companyOption = event.target.closest('[data-company-option]');
     if (companyOption) { setActiveCompany(companyOption.dataset.companyOption); return; }
@@ -716,4 +802,5 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   toggleOtherLegalForm();
   updateDossierPreview();
+  renderFichierGroup('dossiers');
 });

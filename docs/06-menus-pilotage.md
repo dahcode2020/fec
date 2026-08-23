@@ -1,31 +1,69 @@
 # Menus de pilotage du module CSR
 
-**Version :** 0.1
+**Version :** 0.2
 **Périmètre :** module Comptabilité SYSCOHADA Révisé (CSR)
 **Statut :** structure UX initiale
 
 ## Objectif
 
-Dans l’espace de travail du module CSR, la section **Pilotage** comprend désormais deux menus structurants :
+Dans l’espace de travail du module CSR, la section **Pilotage** comprend deux menus structurants :
 
 - **Fichier** ;
 - **Configuration**.
 
-Chaque menu possède une barre de sous-menus présentée sous forme d’onglets alignés horizontalement. Les intitulés et les règles métier des sous-menus restent provisoires et seront paramétrés progressivement.
+Les sous-menus sont présentés dans une barre d’onglets alignés horizontalement. Pour éviter une barre surchargée, les fonctions proches sont regroupées dans des rubriques cohérentes. Les actions détaillées apparaissent ensuite sous forme de cartes d’action dans la rubrique sélectionnée.
 
 ## Menu Fichier
 
-Sous-menus proposés pour la structure initiale :
+### Onglets horizontaux
 
-- Dossiers ;
+- **Dossiers** ;
+- **Échanges comptables** ;
+- **Centralisation** ;
+- **Consolidation** ;
+- **Contrôle & maintenance** ;
+- **Aide**.
+
+### Fonctions regroupées
+
+#### Dossiers
+
+- Dossiers en cours ;
 - Nouveau dossier ;
-- Importer / exporter ;
-- Sauvegardes ;
-- Restaurer.
+- Sauvegarder les dossiers ;
+- Restaurer une sauvegarde ;
+- Fermer.
+
+Les fonctions Dossiers, Sauvegardes et Restaurer de la structure précédente sont ainsi conservées dans une même rubrique, au lieu de multiplier les onglets.
+
+#### Échanges comptables
+
+- Exportation de Fichiers Comptables ;
+- Importation de Fichiers Comptables ;
+- Importation d’une Balance Générale.
+
+#### Centralisation
+
+- Centralisation de Données Comptables ;
+- Annulation d’une Centralisation.
+
+#### Consolidation
+
+- Consolidation de Comptabilité (avant Résultat) ;
+- Consolidation de Comptabilité (Après Résultat).
+
+#### Contrôle & maintenance
+
+- Inspection et Recalcul du solde des Comptes ;
+- Réparation d’une Base.
+
+#### Aide
+
+- Tutoriel d’Utilisation.
 
 ## Menu Configuration
 
-Sous-menus proposés pour la structure initiale :
+Les sous-menus provisoires sont conservés sous forme d’onglets horizontaux :
 
 - Société & dossier ;
 - Plan comptable ;
@@ -34,16 +72,17 @@ Sous-menus proposés pour la structure initiale :
 - Utilisateurs ;
 - Sauvegarde.
 
-Ces sous-menus sont pour le moment des emplacements UX. Leur contenu, leurs formulaires et leurs droits seront définis dans les étapes suivantes.
+Ces sous-menus seront détaillés dans les prochaines étapes, module CSR par module CSR.
 
 ## Règles d’affichage
 
 - les menus Fichier et Configuration sont visibles dans la section Pilotage de la navigation CSR ;
 - le menu actif est mis en évidence ;
-- les sous-menus du menu actif sont affichés sur une ligne horizontale ;
+- les onglets du menu actif sont affichés sur une ligne horizontale ;
 - si les onglets dépassent la largeur disponible, la barre peut défiler horizontalement ;
-- un seul sous-menu est actif à la fois ;
-- la sélection d’un onglet conserve le contexte de la société active ;
+- un seul onglet est actif à la fois ;
+- la sélection d’un onglet conserve le contexte de la société et du dossier actifs ;
+- l’organisation par rubriques évite d’afficher mécaniquement toutes les fonctions au même niveau ;
 - les modules GP, GCSF et GC auront leurs propres menus et sous-menus lorsqu’ils seront conçus.
 
 ## Maquette
@@ -52,8 +91,10 @@ Dans le prototype :
 
 1. ouvrir un dossier ;
 2. choisir le module **CSR** ;
-3. utiliser la navigation latérale **Fichier** ou **Configuration** ;
-4. cliquer sur les onglets horizontaux ;
-5. observer le changement du sous-menu sélectionné.
+3. utiliser la navigation latérale **Fichier** ;
+4. cliquer sur **Échanges comptables**, **Centralisation**, **Consolidation**, **Contrôle & maintenance** ou **Aide** ;
+5. consulter les actions regroupées dans la rubrique active ;
+6. revenir à **Dossiers** pour accéder aux dossiers et aux sauvegardes ;
+7. ouvrir **Configuration** et parcourir ses onglets horizontaux.
 
-Les écrans affichent volontairement un état d’attente jusqu’au paramétrage détaillé de chaque sous-menu.
+Les actions non encore développées affichent un état d’attente. Elles seront paramétrées une par une dans les prochaines étapes.
