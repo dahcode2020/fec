@@ -1139,7 +1139,7 @@ function renderEditionGroup(groupId = 'journaux') {
   if (label) label.textContent = group.label;
   if (description) description.textContent = group.description;
   if (actionList) {
-    actionList.innerHTML = group.actions.map((item) => `<button class="edition-action ${item.control ? 'is-control' : ''}" type="button" data-edition-action="${escapeHtml(item.action)}"><span class="edition-action-icon edition-icon-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span>${item.control ? '<span class="edition-action-tag">Contrôle</span>' : '<span class="edition-action-tag edition-tag-ready">Disponible</span>'}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('');
+    actionList.innerHTML = group.actions.map((item) => `<button class="edition-action ${item.control ? 'is-control' : ''}" type="button" data-edition-action="${escapeHtml(item.action)}" data-edition-title="${escapeHtml(item.label)}"><span class="edition-action-icon edition-icon-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span>${item.control ? '<span class="edition-action-tag">Contrôle</span>' : '<span class="edition-action-tag edition-tag-ready">Disponible</span>'}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('');
   }
 }
 
@@ -1157,14 +1157,61 @@ function setEditionMode(mode) {
   showToast(mode === 'control' ? 'Mode contrôle activé.' : 'Mode éditions officielles activé.');
 }
 
-function handleEditionAction(action) {
-  if (action === 'journal') openView('journal');
-  if (action === 'reports') openView('reports');
-  if (action === 'assets') openView('assets');
-  if (action === 'treasury') openView('treasury');
-  if (action === 'sales') openView('sales');
-  if (action === 'purchases') openView('purchases');
-  if (action === 'placeholder') showToast('Cette édition sera paramétrée dans l’étape dédiée.');
+function editionPreviewRows(action, title) {
+  if (action === 'journal') {
+    return appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany).slice(0, 8).map((entry) => ({ date: displayDate(entry.date), ref: entry.reference, label: entry.label, debit: entry.debit || entry.amount || 0, credit: entry.credit || entry.amount || 0, status: statusLabel(entry.status)[0] }));
+  }
+  if (action === 'assets') {
+    return [
+      { date: '01/01/2025', ref: 'IMM-2025-001', label: 'Ordinateur portable Dell', debit: 850000, credit: 0, status: 'En service' },
+      { date: '30/06/2025', ref: 'OD-0003', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, status: 'À contrôler' }
+    ];
+  }
+  if (action === 'treasury') {
+    return [
+      { date: '16/06/2025', ref: 'BQ-0012', label: 'Vente — Bénin Services', debit: 240000, credit: 0, status: 'Rapproché' },
+      { date: '15/06/2025', ref: 'BQ-0011', label: 'Cotonou Bureau — fournitures', debit: 0, credit: 38500, status: 'À rapprocher' }
+    ];
+  }
+  if (action === 'sales') {
+    return [{ date: '16/06/2025', ref: 'FAC-2025-018', label: 'Awa Concept — prestation', debit: 250000, credit: 250000, status: 'Validée' }];
+  }
+  if (action === 'purchases') {
+    return [{ date: '15/06/2025', ref: 'FA-0154', label: 'Cotonou Bureau — fournitures', debit: 38500, credit: 38500, status: 'Validée' }];
+  }
+  return [
+    { date: '30/06/2025', ref: 'À définir', label: title, debit: 0, credit: 0, status: 'Aperçu' },
+    { date: '—', ref: '—', label: 'Les données seront disponibles après paramétrage', debit: 0, credit: 0, status: 'À définir' }
+  ];
+}
+
+function openEditionPreview(title = 'Livre journal intégré', action = 'journal') {
+  const company = appState.companies[appState.activeCompany];
+  const mode = $('.edition-status-button.is-active')?.textContent?.trim() || 'Officielles';
+  const rows = editionPreviewRows(action, title);
+  appState.editionPreview = { title, action, mode, rows, companyName: company.name };
+  openModal('editionPreviewModal');
+  $('#editionPreviewTitle').textContent = title;
+  $('#editionPreviewCompany').textContent = company.name;
+  $('#editionPreviewPeriod').textContent = 'Juin 2025';
+  $('#editionPreviewMode').textContent = mode === 'Contrôle' ? 'Édition de contrôle' : 'Édition officielle';
+  $('#editionPreviewCount').textContent = `${rows.length} ligne${rows.length > 1 ? 's' : ''}`;
+  const totalDebit = rows.reduce((sum, row) => sum + Number(row.debit || 0), 0);
+  const totalCredit = rows.reduce((sum, row) => sum + Number(row.credit || 0), 0);
+  $('#editionPreviewSummary').innerHTML = `<span><small>LIGNES AFFICHÉES</small><strong>${rows.length}</strong></span><span><small>TOTAL DÉBIT</small><strong>${numberLabel(totalDebit)} <em>FCFA</em></strong></span><span><small>TOTAL CRÉDIT</small><strong>${numberLabel(totalCredit)} <em>FCFA</em></strong></span><span><small>ÉTAT</small><strong class="preview-balanced">${totalDebit === totalCredit ? 'Équilibré' : 'À contrôler'}</strong></span>`;
+  $('#editionPreviewContent').innerHTML = `<div class="preview-table-wrap"><table class="preview-table"><thead><tr><th>DATE</th><th>RÉFÉRENCE</th><th>LIBELLÉ</th><th class="align-right">DÉBIT</th><th class="align-right">CRÉDIT</th><th>ÉTAT</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.date)}</td><td><b>${escapeHtml(row.ref)}</b></td><td>${escapeHtml(row.label)}</td><td class="align-right">${row.debit ? numberLabel(row.debit) : '—'}</td><td class="align-right">${row.credit ? numberLabel(row.credit) : '—'}</td><td><span class="status status-green">${escapeHtml(row.status)}</span></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function exportEditionPreview() {
+  const preview = appState.editionPreview;
+  if (!preview) return;
+  const rows = preview.rows.map((row) => [row.date, row.ref, row.label, row.debit || 0, row.credit || 0, row.status].map((cell) => String(cell).replace(/\t/g, ' ')).join('\t'));
+  downloadText(`${preview.title.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-apercu.txt`, ['SOCIETE\t' + preview.companyName, 'EDITION\t' + preview.title, 'PERIODE\tJuin 2025', '', 'DATE\tREFERENCE\tLIBELLE\tDEBIT\tCREDIT\tETAT', ...rows].join('\r\n') + '\r\n');
+  showToast('L’aperçu a été exporté en TXT.');
+}
+
+function handleEditionAction(action, title) {
+  openEditionPreview(title, action);
 }
 
 function bindEvents() {
@@ -1206,7 +1253,7 @@ function bindEvents() {
     if (editionMode) { setEditionMode(editionMode.dataset.editionMode); return; }
 
     const editionAction = event.target.closest('[data-edition-action]');
-    if (editionAction) { handleEditionAction(editionAction.dataset.editionAction); return; }
+    if (editionAction) { handleEditionAction(editionAction.dataset.editionAction, editionAction.dataset.editionTitle); return; }
 
     const entryTab = event.target.closest('.entry-tab[data-entry-tab]');
     if (entryTab) { selectEntryTab(entryTab); return; }
@@ -1247,8 +1294,11 @@ function bindEvents() {
     if (action === 'insert-entry') insertEntry();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
-    if (action === 'export-current-edition') downloadReport();
-    if (action === 'print-edition') showToast('Aperçu prêt à être imprimé.');
+    if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
+    if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');
+    if (action === 'export-preview') exportEditionPreview();
+    if (action === 'print-preview') window.print();
+    if (action === 'print-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');
     if (action === 'edition-help') showToast('Les éditions officielles et de contrôle resteront séparées.');
     if (action === 'authenticate') showDossiers();
     if (action === 'back-to-dossiers') backToDossiers();

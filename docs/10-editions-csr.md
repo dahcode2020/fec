@@ -116,9 +116,11 @@ Chaque onglet présente des cartes d’édition avec leur description et leur di
 3. confirmer la société et la période ;
 4. choisir le niveau officiel ou contrôle ;
 5. appliquer les filtres ;
-6. prévisualiser ;
-7. contrôler les totaux et le périmètre ;
-8. imprimer ou exporter.
+6. ouvrir l’aperçu des données ;
+7. contrôler les lignes, les totaux et le périmètre ;
+8. choisir ensuite d’imprimer, d’exporter ou de fermer l’aperçu sans sortie.
+
+L’aperçu est une étape indépendante et sans effet sur les données comptables. Aucune impression ou export ne doit être déclenché automatiquement à l’ouverture d’une édition.
 
 ## Formats
 
