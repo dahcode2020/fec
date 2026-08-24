@@ -39,7 +39,7 @@ Le moteur propose actuellement des règles déterministes pour :
 - achat de marchandises : 601000 / 401000 ;
 - frais bancaires : 627000 / 512000.
 
-Une suggestion renvoie les lignes, la règle utilisée, le motif et un niveau de confiance. Elle ne valide jamais l’écriture à la place de l’utilisateur.
+Une suggestion renvoie les lignes, la règle utilisée, le motif et un niveau de confiance. Elle ne valide jamais l’écriture à la place de l’utilisateur. Le modèle d’écriture accepte plusieurs lignes au débit et au crédit, à condition de rester équilibré.
 
 ### Amortissements
 

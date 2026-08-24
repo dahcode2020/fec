@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, OPERATION_STATES } from './core.js';
+import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, validateJournalEntry, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -98,6 +98,9 @@ function persistAppState() {
     showToast('Les données ne peuvent pas être sauvegardées localement.');
   }
 }
+
+let manualLineOverride = null;
+let manualLineDraft = [];
 
 const MODULES = {
   CSR: { ...MODULE_DEFINITIONS.CSR, color: 'green' },
@@ -949,9 +952,7 @@ function acceptSuggestion() {
 }
 
 function editSuggestion() {
-  const confidence = $('.suggestion-card .confidence');
-  if (confidence) confidence.textContent = 'À revoir';
-  showToast('Les comptes sont maintenant modifiables.');
+  openManualLineEditor();
 }
 
 function validateImport() {
@@ -1113,6 +1114,60 @@ const ENTRY_TAB_CONFIG = {
   asset: { title: 'Immobilisation', category: 'other', journal: 'OD' }
 };
 
+function parseUiAmount(value) {
+  const normalized = String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s/g, '').replace(',', '.');
+  if (!normalized) return 0;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? Math.round(number * 100) / 100 : NaN;
+}
+
+function normalizedManualLines() {
+  return manualLineDraft.map((line) => ({ accountId: String(line.accountId || '').trim(), label: String(line.label || '').trim(), debit: parseUiAmount(line.debit), credit: parseUiAmount(line.credit) }));
+}
+
+function renderManualLineEditor() {
+  const rows = $('#multiLineRows');
+  if (!rows) return;
+  rows.innerHTML = manualLineDraft.map((line, index) => `<div class="manual-line-row"><span class="manual-line-number">${index + 1}</span><input type="text" value="${escapeHtml(line.accountId || '')}" placeholder="N° compte" data-manual-line="${index}" data-manual-field="accountId"><input class="manual-line-label" type="text" value="${escapeHtml(line.label || '')}" placeholder="Libellé" data-manual-line="${index}" data-manual-field="label"><div class="manual-amount"><input type="text" value="${escapeHtml(line.debit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="debit"><span>D</span></div><div class="manual-amount manual-credit"><input type="text" value="${escapeHtml(line.credit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="credit"><span>C</span></div><button class="icon-button small" type="button" data-action="remove-manual-line" data-line-index="${index}" aria-label="Supprimer la ligne" ${manualLineDraft.length <= 2 ? 'disabled' : ''}><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>`).join('');
+  updateManualLineSummary();
+}
+
+function updateManualLineSummary() {
+  const lines = normalizedManualLines();
+  const debit = lines.reduce((sum, line) => sum + (Number.isFinite(line.debit) ? line.debit : 0), 0);
+  const credit = lines.reduce((sum, line) => sum + (Number.isFinite(line.credit) ? line.credit : 0), 0);
+  const totalDebit = $('#multiLineSummary span:first-child strong');
+  const totalCredit = $('#multiLineSummary span:nth-child(2) strong');
+  const balance = $('#multiLineBalance');
+  if (totalDebit) totalDebit.textContent = numberLabel(debit);
+  if (totalCredit) totalCredit.textContent = numberLabel(credit);
+  if (balance) { const balanced = lines.length >= 2 && Math.abs(debit - credit) < 0.005; balance.textContent = balanced ? 'Équilibrée ✓' : 'À équilibrer'; balance.className = `multi-line-balance ${balanced ? 'is-balanced' : 'is-unbalanced'}`; }
+}
+
+function openManualLineEditor() {
+  let suggestion;
+  try { suggestion = suggestPosting(entryOperation()); } catch { suggestion = { lines: [] }; }
+  manualLineDraft = (suggestion.lines?.length ? suggestion.lines : [{ accountId: '', label: '', debit: 0, credit: 0 }, { accountId: '', label: '', debit: 0, credit: 0 }]).map((line) => ({ accountId: line.accountId || '', label: line.label || '', debit: line.debit || 0, credit: line.credit || 0 }));
+  renderManualLineEditor();
+  openModal('multiLineModal');
+}
+
+function applyManualLines() {
+  const lines = normalizedManualLines();
+  const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
+  try {
+    validateJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, lines }, { companyId: appState.activeCompany, accountIds: setup.accounts.map((account) => account.id) });
+    manualLineOverride = lines;
+    closeModal();
+    renderLivePosting();
+    showToast(`${lines.length} lignes d’imputation prêtes à être contrôlées.`);
+  } catch (error) { updateManualLineSummary(); showToast(error.message); }
+}
+
+function entryLinesForCurrentOperation(suggestion) {
+  return manualLineOverride ? manualLineOverride : (suggestion.lines || []);
+}
+
 function entryOperation() {
   return {
     category: $('#entryCategory')?.value || 'other',
@@ -1135,29 +1190,40 @@ function renderLivePosting() {
   try { suggestion = suggestPosting(operation); } catch {
     suggestion = { lines: [], reason: 'Saisissez un montant valide pour obtenir une proposition.' };
   }
-  const parsedTotal = Number(String(operation.total).replace(/\s/g, '').replace(',', '.'));
+  const lines = entryLinesForCurrentOperation(suggestion);
+  const validSides = lines.length >= 2 && lines.every((line) => {
+    const debit = parseUiAmount(line.debit);
+    const credit = parseUiAmount(line.credit);
+    return Number.isFinite(debit) && Number.isFinite(credit) && ((debit > 0 && credit === 0) || (credit > 0 && debit === 0));
+  });
+  const debit = lines.reduce((sum, line) => { const value = parseUiAmount(line.debit); return sum + (Number.isFinite(value) ? value : 0); }, 0);
+  const credit = lines.reduce((sum, line) => { const value = parseUiAmount(line.credit); return sum + (Number.isFinite(value) ? value : 0); }, 0);
+  const parsedTotal = parseUiAmount(operation.total);
   const hasTotal = Number.isFinite(parsedTotal) && parsedTotal > 0;
+  const amountMatches = !manualLineOverride || (hasTotal && Math.abs(debit - parsedTotal) < 0.005);
   totalNode.innerHTML = `${hasTotal ? numberLabel(parsedTotal) : '—'} <small>FCFA</small>`;
-  if (!suggestion.lines?.length) {
-    rows.innerHTML = '<div class="posting-empty"><span>?</span><p>Complétez le montant et choisissez une catégorie pour obtenir une proposition d’imputation.</p></div>';
+  const balanced = validSides && amountMatches && Math.abs(debit - credit) < 0.005;
+  if (!balanced) {
+    rows.innerHTML = lines.length ? lines.map((line) => `<div class="live-posting-row"><span><b>${escapeHtml(line.accountId || 'Compte à compléter')}</b><small>${escapeHtml(line.label || 'Libellé à compléter')}</small></span><strong>${parseUiAmount(line.debit) > 0 ? numberLabel(parseUiAmount(line.debit)) : parseUiAmount(line.credit) > 0 ? numberLabel(parseUiAmount(line.credit)) : '—'}</strong><em class="${parseUiAmount(line.debit) > 0 ? '' : 'credit'}">${parseUiAmount(line.debit) > 0 ? 'D' : 'C'}</em></div>`).join('') : '<div class="posting-empty"><span>?</span><p>Complétez le montant et choisissez une catégorie pour obtenir une proposition d’imputation.</p></div>';
     status.className = 'entry-balance entry-balance-warning';
     status.querySelector('.balance-symbol').textContent = '!';
-    status.querySelector('strong').textContent = 'Imputation à compléter';
-    statusMessage.textContent = hasTotal ? 'Aucune règle automatique pour cette opération.' : 'Le montant est nécessaire pour contrôler l’écriture.';
-    if (titleNode) titleNode.textContent = 'En attente de catégorie';
-    if (reasonNode) reasonNode.textContent = suggestion.reason || 'Choisissez une catégorie d’opération.';
+    status.querySelector('strong').textContent = manualLineOverride ? 'Imputation à équilibrer' : 'Imputation à compléter';
+    statusMessage.textContent = manualLineOverride && hasTotal && !amountMatches ? `Le montant saisi est ${numberLabel(parsedTotal)} mais les lignes totalisent ${numberLabel(debit)}.` : manualLineOverride && hasTotal ? `Débit ${numberLabel(debit)} · Crédit ${numberLabel(credit)}.` : hasTotal ? 'Aucune règle automatique pour cette opération.' : 'Le montant est nécessaire pour contrôler l’écriture.';
+    if (titleNode) titleNode.textContent = manualLineOverride ? 'Saisie multi-lignes' : 'En attente de catégorie';
+    if (reasonNode) reasonNode.textContent = manualLineOverride ? 'Complétez les comptes et répartissez les montants avant insertion.' : suggestion.reason || 'Choisissez une catégorie d’opération.';
     return;
   }
-  rows.innerHTML = suggestion.lines.map((line) => `<div class="live-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${line.debit > 0 ? numberLabel(line.debit) : numberLabel(line.credit)}</strong><em class="${line.debit > 0 ? '' : 'credit'}">${line.debit > 0 ? 'D' : 'C'}</em></div>`).join('');
+  rows.innerHTML = lines.map((line) => `<div class="live-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${parseUiAmount(line.debit) > 0 ? numberLabel(parseUiAmount(line.debit)) : numberLabel(parseUiAmount(line.credit))}</strong><em class="${parseUiAmount(line.debit) > 0 ? '' : 'credit'}">${parseUiAmount(line.debit) > 0 ? 'D' : 'C'}</em></div>`).join('');
   status.className = 'entry-balance';
   status.querySelector('.balance-symbol').textContent = '✓';
   status.querySelector('strong').textContent = 'Écriture équilibrée';
   statusMessage.textContent = 'Débit et crédit correspondent au montant saisi.';
-  if (titleNode) titleNode.textContent = `Suggestion · ${Math.round(suggestion.confidence * 100)} %`;
-  if (reasonNode) reasonNode.textContent = suggestion.reason;
+  if (titleNode) titleNode.textContent = manualLineOverride ? `Imputation multi-lignes · ${lines.length} lignes` : `Suggestion · ${Math.round(suggestion.confidence * 100)} %`;
+  if (reasonNode) reasonNode.textContent = manualLineOverride ? 'Répartition saisie par l’utilisateur · prête pour insertion.' : suggestion.reason;
 }
 
 function selectEntryTab(tab) {
+  manualLineOverride = null;
   const config = ENTRY_TAB_CONFIG[tab.dataset.entryTab] || ENTRY_TAB_CONFIG.free;
   $$('.entry-tab').forEach((item) => item.classList.toggle('is-active', item === tab));
   const title = $('#entryTypeTitle');
@@ -1170,6 +1236,7 @@ function selectEntryTab(tab) {
 }
 
 function clearEntry(notify = true) {
+  manualLineOverride = null;
   const form = $('#entryForm');
   if (!form) return;
   form.reset();
@@ -1184,15 +1251,21 @@ function insertEntry() {
   const operation = entryOperation();
   let suggestion;
   try { suggestion = suggestPosting(operation); } catch (error) { showToast(error.message); return; }
-  if (!suggestion.lines?.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
+  const lines = entryLinesForCurrentOperation(suggestion);
+  if (!lines.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
   try {
     const dossierId = currentDossierCode(appState.activeCompany);
     const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
     appState.accountingSetups[appState.activeCompany] = setup;
-    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany, dossierId, accountIds: setup.accounts.map((account) => account.id) });
+    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines }, { activeCompanyId: appState.activeCompany, dossierId, accountIds: setup.accounts.map((account) => account.id) });
     const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
-    const total = suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
-    const queueEntry = { ...workflowEntry, amount: total, accountIds: suggestion.lines.map((line) => line.accountId) };
+    const total = lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+    const enteredAmount = parseUiAmount(operation.total);
+    if (manualLineOverride && (!Number.isFinite(enteredAmount) || Math.abs(total - enteredAmount) > 0.005)) {
+      showToast('Le total des lignes doit correspondre au montant de l’opération.');
+      return;
+    }
+    const queueEntry = { ...workflowEntry, amount: total, accountIds: lines.map((line) => line.accountId) };
     const correctionWindow = activeCorrectionWindow();
     try {
       appState.correctionWindows[appState.activeCompany] = registerCorrectionCandidate(correctionWindow, queueEntry);
@@ -1492,6 +1565,14 @@ function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#entryForm')?.addEventListener('change', renderLivePosting);
+  $('#multiLineRows')?.addEventListener('input', (event) => {
+    const input = event.target.closest('[data-manual-line]');
+    if (!input) return;
+    const index = Number(input.dataset.manualLine);
+    const field = input.dataset.manualField;
+    if (manualLineDraft[index]) manualLineDraft[index][field] = input.value;
+    updateManualLineSummary();
+  });
   $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
   $('#integratedSearch')?.addEventListener('input', renderIntegratedJournal);
   $('#integratedCategoryFilter')?.addEventListener('change', renderIntegratedJournal);
@@ -1528,6 +1609,12 @@ function bindEvents() {
 
     const calculatorButton = event.target.closest('[data-calculator-key]');
     if (calculatorButton) { calculatorKey(calculatorButton.dataset.calculatorKey); return; }
+
+    const manualAdd = event.target.closest('[data-action="add-manual-line"]');
+    if (manualAdd) { manualLineDraft.push({ accountId: '', label: '', debit: 0, credit: 0 }); renderManualLineEditor(); return; }
+
+    const manualRemove = event.target.closest('[data-action="remove-manual-line"]');
+    if (manualRemove) { manualLineDraft.splice(Number(manualRemove.dataset.lineIndex), 1); renderManualLineEditor(); return; }
 
     const parameterTab = event.target.closest('.parameter-tab[data-parameter-group]');
     if (parameterTab) {
@@ -1600,6 +1687,7 @@ function bindEvents() {
     if (action === 'show-shortcuts') showToast('Ctrl + Alt + S : capture · Ctrl + Alt + C : calculatrice.');
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
+    if (action === 'apply-manual-lines') applyManualLines();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
     if (action === 'sync-integrated') synchronizeIntegratedJournal();

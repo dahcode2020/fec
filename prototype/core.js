@@ -153,6 +153,7 @@ export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
   Object.freeze({ id: '571000', label: 'Caisse' }),
   Object.freeze({ id: '681000', label: 'Dotations aux amortissements' }),
   Object.freeze({ id: '284500', label: 'Amortissements du matériel' }),
+  Object.freeze({ id: '445700', label: 'TVA collectée' }),
   Object.freeze({ id: '706000', label: 'Services vendus' })
 ]);
 

@@ -67,6 +67,17 @@ test('prépare un paramétrage CSR avec comptes et journaux', () => {
   assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
 });
 
+test('accepte une imputation multi-lignes équilibrée', () => {
+  const entry = createJournalEntry({ companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
+    { accountId: '411000', debit: 250000, credit: 0 },
+    { accountId: '706000', debit: 0, credit: 200000 },
+    { accountId: '445700', debit: 0, credit: 50000 }
+  ] });
+  assert.equal(entry.lines.length, 3);
+  assert.equal(entry.lines.reduce((sum, line) => sum + line.debit, 0), 250000);
+  assert.equal(entry.lines.reduce((sum, line) => sum + line.credit, 0), 250000);
+});
+
 test('fait progresser une écriture sans autoriser de saut de statut', () => {
   const draft = createJournalEntry({ companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
     { accountId: '411000', debit: 250000, credit: 0 },

@@ -50,6 +50,26 @@ Le panneau de contrôle à droite affiche :
 
 Une modification de la catégorie, du tiers ou du montant relance la suggestion. La proposition ne devient jamais une écriture validée sans action explicite.
 
+## Imputations multi-lignes
+
+Une imputation n’est pas limitée à une ligne au débit et une ligne au crédit. L’utilisateur peut ouvrir **Modifier / ajouter des lignes** pour compléter la proposition :
+
+- une ligne ou plusieurs lignes au débit ;
+- une ligne ou plusieurs lignes au crédit ;
+- comptes, libellés et montants distincts par ligne ;
+- répartition contrôlée pour que le total des lignes corresponde au montant de l’opération ;
+- équilibre débit/crédit vérifié avant insertion.
+
+Exemple :
+
+```text
+Débit   411000 — Client                         250 000
+Crédit  706000 — Prestation                     200 000
+Crédit  445700 — TVA collectée                   50 000
+```
+
+Le moteur accepte un nombre quelconque de lignes tant que chaque ligne possède un seul côté, que les comptes existent dans le référentiel et que le total débit égale le total crédit.
+
 ## Fenêtre fixe de correction
 
 Une fenêtre de correction est ouverte pour le dossier actif. Elle enregistre au maximum les trois premières imputations récentes de la séquence de saisie, tous journaux confondus.

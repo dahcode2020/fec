@@ -14,7 +14,7 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - gestion de plusieurs sociétés dans un même espace de travail, avec isolation des données ;
 - association indépendante de chaque dossier aux modules CSR, GP, GCSF et GC ;
 - accueil de sélection des modules après ouverture d’un dossier ;
-- menu opérationnel « Saisie et insertion » avec recalcul en temps réel ;
+- menu opérationnel « Saisie et insertion » avec recalcul en temps réel et imputations multi-lignes ;
 - menu « Paramétrage » pour organiser les règles opérationnelles du dossier ;
 - menu « Outils » avec capture d’écran, calculatrice et aides comptables ;
 - livre journal intégré, catégorisé et synchronisé automatiquement ;
