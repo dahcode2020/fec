@@ -23,7 +23,7 @@ Le menu est disponible :
 Raccourci proposé :
 
 ```text
-Ctrl + Shift + S
+Ctrl + Alt + S
 ```
 
 Fonctionnement prévu :
@@ -41,7 +41,7 @@ La disponibilité dépend des autorisations du navigateur ou du système d’exp
 Raccourci proposé :
 
 ```text
-Ctrl + Shift + C
+Ctrl + Alt + C
 ```
 
 La calculatrice permet les opérations intermédiaires sans quitter la saisie. Elle accepte les nombres, parenthèses et opérations `+`, `-`, `×` et `÷`. Le résultat n’est pas injecté automatiquement dans une écriture : l’utilisateur décide de le reporter.
@@ -86,7 +86,7 @@ Parcours de démonstration :
 1. ouvrir un dossier ;
 2. sélectionner le module CSR ;
 3. cliquer sur **Outils** dans la section **Opérations** ;
-4. ouvrir **Calculatrice** ou utiliser `Ctrl + Shift + C` ;
+4. ouvrir **Calculatrice** ou utiliser `Ctrl + Alt + C` ;
 5. essayer les opérations ;
-6. ouvrir **Capture d’écran** ou utiliser `Ctrl + Shift + S` ;
+6. ouvrir **Capture d’écran** ou utiliser `Ctrl + Alt + S` ;
 7. parcourir les outils comptables complémentaires.

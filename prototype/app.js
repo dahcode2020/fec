@@ -355,8 +355,8 @@ const TOOL_GROUPS = {
   rapides: {
     label: 'Outils rapides', description: 'Les outils accessibles à tout moment pendant la saisie.',
     actions: [
-      { label: 'Capture d’écran', description: 'Conserver une pièce ou une information affichée', symbol: '▣', tone: 'blue', shortcut: 'Ctrl + Shift + S', action: 'capture' },
-      { label: 'Calculatrice', description: 'Effectuer un calcul sans quitter votre dossier', symbol: '±', tone: 'green', shortcut: 'Ctrl + Shift + C', action: 'calculator' }
+      { label: 'Capture d’écran', description: 'Conserver une pièce ou une information affichée', symbol: '▣', tone: 'blue', shortcut: 'Ctrl + Alt + S', action: 'capture' },
+      { label: 'Calculatrice', description: 'Effectuer un calcul sans quitter votre dossier', symbol: '±', tone: 'green', shortcut: 'Ctrl + Alt + C', action: 'calculator' }
     ]
   },
   calculs: {
@@ -1318,7 +1318,7 @@ function handleToolAction(action) {
   if (action === 'capture') captureScreen();
   if (action === 'calculator') openCalculator();
   if (action === 'entry') { openView('entry'); showToast('Utilisez le panneau de contrôle en direct pour vérifier l’écriture.'); }
-  if (action === 'shortcuts') showToast('Ctrl + Shift + S : capture · Ctrl + Shift + C : calculatrice.');
+  if (action === 'shortcuts') showToast('Ctrl + Alt + S : capture · Ctrl + Alt + C : calculatrice.');
   if (action === 'placeholder') showToast('Cet outil sera paramétré dans l’étape dédiée.');
 }
 
@@ -1536,7 +1536,7 @@ function bindEvents() {
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
     if (action === 'show-calculator') openCalculator();
     if (action === 'capture-screen') captureScreen();
-    if (action === 'show-shortcuts') showToast('Ctrl + Shift + S : capture · Ctrl + Shift + C : calculatrice.');
+    if (action === 'show-shortcuts') showToast('Ctrl + Alt + S : capture · Ctrl + Alt + C : calculatrice.');
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
@@ -1613,8 +1613,8 @@ function bindEvents() {
   dropZone?.addEventListener('drop', (event) => handleFile(event.dataTransfer.files?.[0]));
 
   document.addEventListener('keydown', (event) => {
-    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'c') { event.preventDefault(); openCalculator(); return; }
-    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); captureScreen(); return; }
+    if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'c') { event.preventDefault(); openCalculator(); return; }
+    if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 's') { event.preventDefault(); captureScreen(); return; }
     if ($('#calculatorModal') && !$('#calculatorModal').hasAttribute('hidden') && event.key === 'Enter') { event.preventDefault(); calculatorKey('='); return; }
     if (event.key === 'Escape') { closeModal(); $('#quickMenu')?.setAttribute('hidden', ''); $('#companyMenu')?.classList.remove('is-open'); }
   });
