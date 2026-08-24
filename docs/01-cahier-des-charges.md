@@ -437,6 +437,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 17. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
 18. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
 19. **Paramétrage CSR** — sections analytiques, engagements, cadres d’états, devises et droits opérationnels.
+20. **Outils CSR** — capture d’écran, calculatrice, contrôles et aides comptables.
 
 ### Règles UX
 

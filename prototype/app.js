@@ -351,6 +351,41 @@ const PARAMETER_GROUPS = {
   }
 };
 
+const TOOL_GROUPS = {
+  rapides: {
+    label: 'Outils rapides', description: 'Les outils accessibles à tout moment pendant la saisie.',
+    actions: [
+      { label: 'Capture d’écran', description: 'Conserver une pièce ou une information affichée', symbol: '▣', tone: 'blue', shortcut: 'Ctrl + Shift + S', action: 'capture' },
+      { label: 'Calculatrice', description: 'Effectuer un calcul sans quitter votre dossier', symbol: '±', tone: 'green', shortcut: 'Ctrl + Shift + C', action: 'calculator' }
+    ]
+  },
+  calculs: {
+    label: 'Calculs comptables', description: 'Des aides de calcul pour préparer une opération.',
+    actions: [
+      { label: 'Calcul TVA / HT / TTC', description: 'Retrouver rapidement une base et un montant de taxe', symbol: '%', tone: 'amber', shortcut: '', action: 'placeholder' },
+      { label: 'Montant en lettres', description: 'Convertir un montant FCFA pour une pièce ou un règlement', symbol: 'A', tone: 'purple', shortcut: '', action: 'placeholder' },
+      { label: 'Prorata temporis', description: 'Estimer une durée ou une dotation au prorata', symbol: '◷', tone: 'blue', shortcut: '', action: 'placeholder' },
+      { label: 'Conversion de devises', description: 'Appliquer un cours enregistré au dossier', symbol: '₣', tone: 'green', shortcut: '', action: 'placeholder' }
+    ]
+  },
+  controles: {
+    label: 'Contrôles', description: 'Vérifiez une opération avant de l’insérer dans le brouillard.',
+    actions: [
+      { label: 'Vérifier l’équilibre débit / crédit', description: 'Tester les lignes d’une écriture', symbol: '✓', tone: 'green', shortcut: '', action: 'entry' },
+      { label: 'Calculer un écart de caisse', description: 'Comparer le solde théorique et le comptage réel', symbol: 'Δ', tone: 'amber', shortcut: '', action: 'placeholder' },
+      { label: 'Calculer une échéance', description: 'Obtenir une date à partir d’un délai de règlement', symbol: '◷', tone: 'blue', shortcut: '', action: 'placeholder' }
+    ]
+  },
+  aide: {
+    label: 'Aide à la saisie', description: 'Des repères pratiques pendant le travail comptable.',
+    actions: [
+      { label: 'Mémo des classes SYSCOHADA', description: 'Rappeler les grandes classes de comptes', symbol: 'C', tone: 'purple', shortcut: '', action: 'placeholder' },
+      { label: 'Raccourcis clavier', description: 'Afficher les commandes disponibles', symbol: '⌘', tone: 'blue', shortcut: '', action: 'shortcuts' },
+      { label: 'Bloc-notes de saisie', description: 'Noter une information avant de l’imputer', symbol: 'N', tone: 'green', shortcut: '', action: 'placeholder' }
+    ]
+  }
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -1181,6 +1216,112 @@ function selectMenuTab(tab) {
   showToast(`Rubrique « ${CONFIG_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
 }
 
+function renderToolGroup(groupId = 'rapides') {
+  const group = TOOL_GROUPS[groupId] || TOOL_GROUPS.rapides;
+  const label = $('#toolSelectedLabel');
+  const description = $('#toolSelectedDescription');
+  const count = $('#toolSelectedCount');
+  const actionList = $('#toolActionList');
+  if (label) label.textContent = group.label;
+  if (description) description.textContent = group.description;
+  if (count) count.textContent = `${group.actions.length} outil${group.actions.length > 1 ? 's' : ''}`;
+  if (actionList) {
+    actionList.innerHTML = group.actions.map((item) => `<button class="fichier-action tool-action" type="button" data-tool-action="${escapeHtml(item.action)}"><span class="fichier-action-icon fichier-action-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span>${item.shortcut ? `<span class="tool-action-shortcut">${escapeHtml(item.shortcut)}</span>` : ''}<span class="parameter-action-arrow">›</span></button>`).join('');
+  }
+}
+
+function safeEvaluate(expression) {
+  const source = String(expression || '').replace(/×/g, '*').replace(/÷/g, '/').replace(/,/g, '.').trim();
+  if (!source || !/^[0-9+\-*/(). ]+$/.test(source)) throw new Error('Expression non valide.');
+  const tokens = source.match(/\d+(?:\.\d+)?|[()+\-*/]/g) || [];
+  const values = [];
+  const operators = [];
+  const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
+  const apply = () => {
+    const operator = operators.pop();
+    const right = values.pop();
+    const left = values.pop();
+    if (operator === '/' && right === 0) throw new Error('Division par zéro.');
+    values.push(operator === '+' ? left + right : operator === '-' ? left - right : operator === '*' ? left * right : left / right);
+  };
+  let previous = 'operator';
+  tokens.forEach((token) => {
+    if (/^\d/.test(token)) { values.push(Number(token)); previous = 'value'; return; }
+    if (token === '(') { operators.push(token); previous = 'operator'; return; }
+    if (token === ')') { while (operators.length && operators.at(-1) !== '(') apply(); if (operators.pop() !== '(') throw new Error('Parenthèses incorrectes.'); previous = 'value'; return; }
+    if (token === '-' && previous === 'operator') { values.push(0); }
+    while (operators.length && operators.at(-1) !== '(' && precedence[operators.at(-1)] >= precedence[token]) apply();
+    operators.push(token); previous = 'operator';
+  });
+  while (operators.length) { if (operators.at(-1) === '(') throw new Error('Parenthèses incorrectes.'); apply(); }
+  if (values.length !== 1 || !Number.isFinite(values[0])) throw new Error('Expression non valide.');
+  return values[0];
+}
+
+let calculatorExpression = '';
+function updateCalculator() {
+  const expressionNode = $('#calculatorExpression');
+  const resultNode = $('#calculatorResult');
+  if (expressionNode) expressionNode.textContent = calculatorExpression || '0';
+  if (!resultNode) return;
+  if (!calculatorExpression) { resultNode.textContent = '0'; return; }
+  try { resultNode.textContent = numberLabel(safeEvaluate(calculatorExpression)); } catch { resultNode.textContent = '…'; }
+}
+
+function calculatorKey(key) {
+  if (key === 'C') calculatorExpression = '';
+  else if (key === '=') {
+    try { calculatorExpression = String(safeEvaluate(calculatorExpression)); } catch { showToast('Expression de calcul non valide.'); }
+  } else calculatorExpression += key;
+  updateCalculator();
+}
+
+function openCalculator() {
+  calculatorExpression = '';
+  openModal('calculatorModal');
+  updateCalculator();
+}
+
+async function captureScreen() {
+  if (!navigator.mediaDevices?.getDisplayMedia) { showToast('La capture d’écran dépend des autorisations du navigateur.'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+    const canvas = document.createElement('canvas');
+    canvas.width = settings.width || 1280;
+    canvas.height = settings.height || 720;
+    const context = canvas.getContext('2d');
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    await video.play();
+    await new Promise((resolve) => { video.onloadeddata = resolve; });
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    track.stop();
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'fec-capture-ecran.png';
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast('Capture d’écran enregistrée.');
+    }, 'image/png');
+  } catch (error) {
+    if (error?.name !== 'NotAllowedError') showToast('La capture d’écran n’a pas pu être enregistrée.');
+  }
+}
+
+function handleToolAction(action) {
+  if (action === 'capture') captureScreen();
+  if (action === 'calculator') openCalculator();
+  if (action === 'entry') { openView('entry'); showToast('Utilisez le panneau de contrôle en direct pour vérifier l’écriture.'); }
+  if (action === 'shortcuts') showToast('Ctrl + Shift + S : capture · Ctrl + Shift + C : calculatrice.');
+  if (action === 'placeholder') showToast('Cet outil sera paramétré dans l’étape dédiée.');
+}
+
 function renderParameterGroup(groupId = 'dossier') {
   const group = PARAMETER_GROUPS[groupId] || PARAMETER_GROUPS.dossier;
   const label = $('#parameterSelectedLabel');
@@ -1310,6 +1451,23 @@ function bindEvents() {
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
 
+    const toolTab = event.target.closest('.tool-tab[data-tool-group]');
+    if (toolTab) {
+      $$('.tool-tab').forEach((item) => {
+        const selected = item === toolTab;
+        item.classList.toggle('is-active', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+      renderToolGroup(toolTab.dataset.toolGroup);
+      return;
+    }
+
+    const toolAction = event.target.closest('[data-tool-action]');
+    if (toolAction) { handleToolAction(toolAction.dataset.toolAction); return; }
+
+    const calculatorButton = event.target.closest('[data-calculator-key]');
+    if (calculatorButton) { calculatorKey(calculatorButton.dataset.calculatorKey); return; }
+
     const parameterTab = event.target.closest('.parameter-tab[data-parameter-group]');
     if (parameterTab) {
       $$('.parameter-tab').forEach((item) => {
@@ -1376,6 +1534,9 @@ function bindEvents() {
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
+    if (action === 'show-calculator') openCalculator();
+    if (action === 'capture-screen') captureScreen();
+    if (action === 'show-shortcuts') showToast('Ctrl + Shift + S : capture · Ctrl + Shift + C : calculatrice.');
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
@@ -1452,6 +1613,9 @@ function bindEvents() {
   dropZone?.addEventListener('drop', (event) => handleFile(event.dataTransfer.files?.[0]));
 
   document.addEventListener('keydown', (event) => {
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'c') { event.preventDefault(); openCalculator(); return; }
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); captureScreen(); return; }
+    if ($('#calculatorModal') && !$('#calculatorModal').hasAttribute('hidden') && event.key === 'Enter') { event.preventDefault(); calculatorKey('='); return; }
     if (event.key === 'Escape') { closeModal(); $('#quickMenu')?.setAttribute('hidden', ''); $('#companyMenu')?.classList.remove('is-open'); }
   });
 }
@@ -1467,5 +1631,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderConfigurationGroup('societe');
   renderEditionGroup('journaux');
   renderParameterGroup('dossier');
+  renderToolGroup('rapides');
   renderLivePosting();
 });
