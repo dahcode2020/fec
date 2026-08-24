@@ -19,7 +19,8 @@ Il constitue le point d’entrée quotidien de l’utilisateur. Les menus Fichie
 6. il contrôle les lignes débit/crédit et la justification de la proposition ;
 7. il clique sur **Prévisualiser et insérer** ;
 8. l’écriture est placée dans le brouillard avec l’état **À contrôler** ;
-9. un utilisateur habilité la valide ensuite dans le journal.
+9. la ligne reste consultable dans les dernières saisies ;
+10. un utilisateur habilité la valide ensuite avec l’action de validation.
 
 ## Onglets de saisie
 
@@ -28,6 +29,7 @@ Les types de saisie sont affichés horizontalement :
 - Écriture libre ;
 - Vente ;
 - Achat ;
+- Abonnement ;
 - Encaissement ;
 - Décaissement ;
 - Transfert ;

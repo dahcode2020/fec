@@ -142,6 +142,33 @@ export function addCompany(workspace, company) {
   return { ...workspace, companies: [...workspace.companies, { ...company }] };
 }
 
+export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
+  Object.freeze({ id: '411000', label: 'Clients' }),
+  Object.freeze({ id: '401000', label: 'Fournisseurs' }),
+  Object.freeze({ id: '601000', label: 'Achats de marchandises' }),
+  Object.freeze({ id: '606000', label: 'Achats de fournitures' }),
+  Object.freeze({ id: '627000', label: 'Services bancaires' }),
+  Object.freeze({ id: '628000', label: 'Abonnements' }),
+  Object.freeze({ id: '512000', label: 'Banque' }),
+  Object.freeze({ id: '571000', label: 'Caisse' }),
+  Object.freeze({ id: '681000', label: 'Dotations aux amortissements' }),
+  Object.freeze({ id: '284500', label: 'Amortissements du matériel' }),
+  Object.freeze({ id: '706000', label: 'Services vendus' })
+]);
+
+export const DEFAULT_CSR_JOURNALS = Object.freeze([
+  Object.freeze({ id: 'VE', label: 'Ventes' }),
+  Object.freeze({ id: 'AC', label: 'Achats' }),
+  Object.freeze({ id: 'BQ', label: 'Banque' }),
+  Object.freeze({ id: 'CA', label: 'Caisse' }),
+  Object.freeze({ id: 'OD', label: 'Opérations diverses' })
+]);
+
+export function createCsrSetup({ companyId, regime = 'NORMAL', planVersion = 'SYSCOHADA-RÉVISÉ' } = {}) {
+  if (!companyId) throw new DomainError('Le paramétrage CSR doit être rattaché à une société.', 'INVALID_CSR_SETUP');
+  return { companyId, regime, planVersion, accounts: DEFAULT_CSR_ACCOUNTS.map((account) => ({ ...account })), journals: DEFAULT_CSR_JOURNALS.map((journal) => ({ ...journal })), createdAt: new Date().toISOString() };
+}
+
 export function companiesFor(workspace, { includeArchived = false } = {}) {
   return workspace.companies.filter((company) => includeArchived || !company.archived);
 }

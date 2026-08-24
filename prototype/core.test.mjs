@@ -9,6 +9,9 @@ import {
   assertModuleAccess,
   attachModule,
   classifyIntegratedEntry,
+  createCsrSetup,
+  OPERATION_STATES,
+  transitionOperation,
   createDossier,
   createIntegratedJournal,
   syncIntegratedJournal,
@@ -54,6 +57,25 @@ test('associe les modules séparément à un dossier', () => {
   assert.equal(assertModuleAccess(dossier, 'CSR'), true);
   assert.throws(() => assertModuleAccess(dossier, 'GP'), (error) => error.code === 'MODULE_NOT_ACTIVE');
   assert.throws(() => attachModule(dossier, 'CSR'), (error) => error.code === 'DUPLICATE_MODULE');
+});
+
+test('prépare un paramétrage CSR avec comptes et journaux', () => {
+  const setup = createCsrSetup({ companyId: 'co-a', regime: 'SMT' });
+  assert.equal(setup.planVersion, 'SYSCOHADA-RÉVISÉ');
+  assert.equal(setup.regime, 'SMT');
+  assert.ok(setup.accounts.some((account) => account.id === '411000'));
+  assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
+});
+
+test('fait progresser une écriture sans autoriser de saut de statut', () => {
+  const draft = createJournalEntry({ companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
+    { accountId: '411000', debit: 250000, credit: 0 },
+    { accountId: '706000', debit: 0, credit: 250000 }
+  ] });
+  const imputed = transitionOperation(draft, OPERATION_STATES.IMPUTED);
+  const review = transitionOperation(imputed, OPERATION_STATES.TO_REVIEW);
+  assert.equal(review.status, 'TO_REVIEW');
+  assert.throws(() => transitionOperation(draft, OPERATION_STATES.VALIDATED), (error) => error.code === 'INVALID_OPERATION_TRANSITION');
 });
 
 test('catégorise et synchronise le livre journal intégré', () => {

@@ -6,7 +6,7 @@
 
 ## Ce qui est maintenant en place
 
-Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototype/core.js). Il est chargé par l’interface, mais reste indépendant du DOM afin d’être testé et réutilisé dans l’application de bureau.
+Le prototype dispose d’un noyau métier dans [`prototype/core.js`](../prototype/core.js). Il est chargé par l’interface, mais reste indépendant du DOM afin d’être testé et réutilisé dans l’application de bureau. La première tranche persiste maintenant son état dans le stockage local du navigateur ; le contrat sera conservé lors du remplacement par SQLite.
 
 ### Espaces, sociétés et modules
 
@@ -57,6 +57,10 @@ Le calcul du plan, la proposition d’écriture et sa validation restent trois �
 ### Livre journal intégré
 
 Le noyau sait créer et synchroniser une vue intégrée du livre journal par société. Il catégorise les écritures en opérations générales, amortissements automatiques, centralisations, abonnements et résultat de la période. Une synchronisation remplace une ligne portant le même identifiant au lieu de la dupliquer.
+
+### Paramétrage CSR minimal
+
+Le socle initialise une configuration par société avec le régime comptable, une version du plan SYSCOHADA révisé, les comptes de base et les journaux VE, AC, BQ, CA et OD. Cette liste est un point de départ configurable ; elle devra être remplacée par le référentiel validé du dossier.
 
 ### Échanges TXT
 

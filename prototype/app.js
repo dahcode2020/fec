@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createIntegratedJournal, createJournalEntry, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, OPERATION_STATES } from './core.js';
+import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -44,6 +44,10 @@ const appState = {
       expenses: '267 900'
     }
   },
+  accountingSetups: {
+    acacia: createCsrSetup({ companyId: 'acacia', regime: 'NORMAL' }),
+    noria: createCsrSetup({ companyId: 'noria', regime: 'SMT' })
+  },
   dossiers: [
     { id: 'acacia-25-csr', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'CSR', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
     { id: 'acacia-25-gcsf', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' },
@@ -68,6 +72,32 @@ const appState = {
   ],
   auditEvents: []
 };
+
+const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+
+function hydrateAppState() {
+  const saved = appStore.load();
+  if (!saved || saved.version !== 1) return;
+  persistedStateKeys.forEach((key) => {
+    if (saved[key] !== undefined) appState[key] = saved[key];
+  });
+  Object.keys(appState.companies).forEach((companyId) => {
+    if (!appState.accountingSetups?.[companyId]) appState.accountingSetups[companyId] = createCsrSetup({ companyId });
+  });
+  if (!appState.correctionWindows) appState.correctionWindows = {};
+  if (!appState.recentEntries) appState.recentEntries = [];
+}
+
+function persistAppState() {
+  try {
+    const payload = { version: 1 };
+    persistedStateKeys.forEach((key) => { payload[key] = appState[key]; });
+    appStore.save(payload);
+  } catch {
+    showToast('Les données ne peuvent pas être sauvegardées localement.');
+  }
+}
 
 const MODULES = {
   CSR: { ...MODULE_DEFINITIONS.CSR, color: 'green' },
@@ -433,6 +463,7 @@ function setActiveCompany(companyId, notify = true) {
   const company = appState.companies[companyId];
   if (!company) return;
   appState.activeCompany = companyId;
+  persistAppState();
 
   $$('[data-company-name]').forEach((node) => { node.textContent = company.name; });
   const meta = $('[data-company-meta]');
@@ -574,6 +605,7 @@ function openSelectedDossier() {
     return;
   }
   dossier.sessions = Math.max(1, dossier.sessions || 0);
+  persistAppState();
   appState.moduleCompanyId = dossier.companyId;
   appState.moduleDossierCode = dossier.dossier;
   setActiveCompany(dossier.companyId, false);
@@ -595,6 +627,7 @@ function activateModule(moduleId) {
   const entry = { ...selected, id: `${selected.companyId}-${selected.dossier.toLowerCase()}-${moduleId.toLowerCase()}`, moduleId, sessions: 0, status: 'Disponible', statusClass: 'status-blue' };
   appState.dossiers.push(entry);
   appState.selectedDossier = entry.id;
+  persistAppState();
   renderDossiers();
   renderModuleHome(selected.companyId, selected.dossier);
   showToast(`${MODULES[moduleId].label} a été rattaché à ${selected.dossier}.`);
@@ -653,6 +686,7 @@ function duplicateSelectedDossier() {
   if (!source) return;
   const copyId = `${source.companyId}-copie-${Date.now()}`;
   appState.dossiers.push({ ...source, id: copyId, dossier: `${source.dossier}-COPIE`, sessions: 0, status: 'Copie de travail', statusClass: 'status-blue' });
+  persistAppState();
   selectDossier(copyId);
   showToast('Une copie de travail du dossier a été créée.');
 }
@@ -668,6 +702,7 @@ function archiveSelectedDossier() {
   dossier.statusClass = 'status-muted';
   const next = appState.dossiers.find((item) => item.status !== 'Archivé');
   if (next) appState.selectedDossier = next.id;
+  persistAppState();
   renderDossiers();
   selectDossier(appState.selectedDossier);
   showToast(`${dossier.dossier} a été archivé. Ses données sont conservées.`);
@@ -764,6 +799,8 @@ function addCompany(event) {
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
   appState.dossiers.push({ id: dossierId, companyId: id, dossier: generatedDossierCode, period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
+  appState.accountingSetups[id] = createCsrSetup({ companyId: id, regime: 'NORMAL' });
+  persistAppState();
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
   setActiveCompany(id, false);
@@ -885,6 +922,7 @@ function generateDepreciation() {
   const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
   if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
   else appState.integratedEntries.unshift(syncedEntry);
+  persistAppState();
   renderIntegratedJournal();
   $$('.summary-card-action .button').forEach((button) => { button.textContent = 'Préparée'; });
   showToast(`Dotation de juin préparée : ${new Intl.NumberFormat('fr-FR').format(amount)} FCFA à contrôler.`);
@@ -964,11 +1002,30 @@ function renderEntryQueue() {
   rows.innerHTML = entries.map((entry) => {
     const [label, statusClass] = queueStatus(entry.status);
     const deletable = canDeleteCorrectionCandidate(window, entry);
-    const action = deletable ? `<button class="icon-button small delete-entry-button" type="button" data-action="delete-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Supprimer cette imputation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : '<span class="entry-locked" title="Correction verrouillée">⌁</span>';
+    const deleteAction = deletable ? `<button class="icon-button small delete-entry-button" type="button" data-action="delete-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Supprimer cette imputation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : '<span class="entry-locked" title="Correction verrouillée">⌁</span>';
+    const validateAction = entry.status === OPERATION_STATES.TO_REVIEW ? `<button class="icon-button small validate-entry-button" type="button" data-action="validate-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Valider cette imputation">✓</button>` : '';
+    const action = `<span class="entry-actions">${validateAction}${deleteAction}</span>`;
     const journalClass = entry.journalId === 'AC' ? 'journal-badge-blue' : entry.journalId === 'BQ' ? 'journal-badge-teal' : '';
     return `<tr><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${deletable ? 'Dans la fenêtre de correction' : 'Correction verrouillée'}</small></td><td class="align-right">${numberLabel(entry.amount)}</td><td>${escapeHtml(entry.accountIds?.join(' / ') || 'À compléter')}</td><td><span class="status ${statusClass}">${label}</span></td><td>${action}</td></tr>`;
   }).join('');
   if (!entries.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucune saisie active dans ce dossier.</td></tr>';
+}
+
+function validateRecentEntry(entryId) {
+  const entryIndex = appState.recentEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (entryIndex < 0) return;
+  const entry = appState.recentEntries[entryIndex];
+  if (entry.status !== OPERATION_STATES.TO_REVIEW) return;
+  const validated = transitionOperation(entry, OPERATION_STATES.VALIDATED);
+  appState.recentEntries[entryIndex] = validated;
+  const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], status: OPERATION_STATES.VALIDATED, validatedAt: validated.statusChangedAt };
+  appState.auditEvents.push({ type: 'ENTRY_VALIDATED', companyId: entry.companyId, entryId, at: validated.statusChangedAt });
+  persistAppState();
+  renderEntryQueue();
+  renderIntegratedJournal();
+  renderCorrectionWindow();
+  showToast('Écriture validée et verrouillée.');
 }
 
 function deleteRecentEntry(entryId) {
@@ -984,6 +1041,7 @@ function deleteRecentEntry(entryId) {
   appState.recentEntries = appState.recentEntries.filter((item) => item.id !== entryId);
   appState.auditEvents.push({ type: 'CORRECTION_DELETE', companyId: entry.companyId, entryId, reason: result.entry.cancellationReason, at: result.entry.cancelledAt });
   appState.integratedEntries = appState.integratedEntries.filter((item) => item.id !== entryId);
+  persistAppState();
   renderEntryQueue();
   renderCorrectionWindow();
   renderIntegratedJournal();
@@ -1129,7 +1187,9 @@ function insertEntry() {
   if (!suggestion.lines?.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
   try {
     const dossierId = currentDossierCode(appState.activeCompany);
-    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany, dossierId });
+    const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
+    appState.accountingSetups[appState.activeCompany] = setup;
+    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines: suggestion.lines }, { activeCompanyId: appState.activeCompany, dossierId, accountIds: setup.accounts.map((account) => account.id) });
     const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
     const total = suggestion.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
     const queueEntry = { ...workflowEntry, amount: total, accountIds: suggestion.lines.map((line) => line.accountId) };
@@ -1142,6 +1202,7 @@ function insertEntry() {
     appState.recentEntries.unshift(queueEntry);
     const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
     appState.integratedEntries.unshift(syncedEntry);
+    persistAppState();
     renderIntegratedJournal();
     renderEntryQueue();
     renderCorrectionWindow();
@@ -1540,6 +1601,7 @@ function bindEvents() {
     if (action === 'clear-entry') clearEntry();
     if (action === 'insert-entry') insertEntry();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
+    if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');
@@ -1621,6 +1683,7 @@ function bindEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  hydrateAppState();
   renderCompanyMenu();
   setActiveCompany(appState.activeCompany, false);
   buildExportPane();
