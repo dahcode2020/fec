@@ -301,6 +301,56 @@ const EDITION_GROUPS = {
   }
 };
 
+const PARAMETER_GROUPS = {
+  dossier: {
+    label: 'Dossier & analytique',
+    description: 'Les éléments d’organisation du dossier et de ses sections analytiques.',
+    actions: [
+      { label: 'Configuration du dossier', description: 'Paramètres généraux, exercice et comportement du dossier', symbol: '▣', tone: 'blue', action: 'companies' },
+      { label: 'Sections et comptes analytiques', description: 'Créer les axes et sections de suivi de l’activité', symbol: 'A', tone: 'purple', action: 'placeholder' },
+      { label: 'Clés de répartition des sections', description: 'Distribuer les charges et produits par section', symbol: '÷', tone: 'green', action: 'placeholder' },
+      { label: 'Natures des comptes généraux', description: 'Définir les natures utilisées dans les analyses', symbol: 'C', tone: 'amber', action: 'placeholder' },
+      { label: 'Natures analytiques', description: 'Structurer les natures de dépenses et de recettes', symbol: 'N', tone: 'blue', action: 'placeholder' }
+    ]
+  },
+  immobilisations: {
+    label: 'Immobilisations & engagements',
+    description: 'Reliez les actifs et les engagements aux bons comptes et aux bons suivis.',
+    actions: [
+      { label: 'Comptes associés aux immobilisations', description: 'Comptes d’acquisition, de dotation et d’amortissement', symbol: '▥', tone: 'purple', action: 'assets' },
+      { label: 'Comptes de suivi des commandes et marchés accordés', description: 'Suivre les engagements et leurs comptes dédiés', symbol: 'M', tone: 'blue', action: 'placeholder' },
+      { label: 'Natures des commandes', description: 'Classer les commandes et marchés du dossier', symbol: 'C', tone: 'amber', action: 'placeholder' }
+    ]
+  },
+  comptes: {
+    label: 'Comptes & états',
+    description: 'Contrôlez les attributs des comptes et le cadre utilisé pour les états financiers.',
+    actions: [
+      { label: 'Comptes lettrables, pointables, à payer et à recevoir', description: 'Définir les comptes concernés par chaque suivi', symbol: '✓', tone: 'green', action: 'journal' },
+      { label: 'Cadre comptable et postes des tableaux financiers', description: 'Associer les comptes aux postes de restitution', symbol: '▤', tone: 'blue', action: 'reports' },
+      { label: 'Tableaux de passage entre comptabilités', description: 'Préparer les correspondances de reprise', symbol: '↔', tone: 'purple', action: 'placeholder' }
+    ]
+  },
+  referentiels: {
+    label: 'Éditions & référentiels',
+    description: 'Préparez les informations communes aux états imprimés et les devises du dossier.',
+    actions: [
+      { label: 'Informations communes aux états imprimés', description: 'En-têtes, mentions et informations de la société', symbol: '▧', tone: 'blue', action: 'editions' },
+      { label: 'Devises', description: 'Devises autorisées, cours et règles de conversion', symbol: '₣', tone: 'green', action: 'placeholder' },
+      { label: 'Définitions des éditions', description: 'Modèles, colonnes et profils de sortie', symbol: 'D', tone: 'amber', action: 'editions' }
+    ]
+  },
+  securite: {
+    label: 'Sécurité',
+    description: 'Limitez les accès aux informations sensibles et aux opérations du dossier.',
+    actions: [
+      { label: 'Comptes confidentiels', description: 'Masquer les comptes sensibles dans les éditions', symbol: '◉', tone: 'red', action: 'placeholder' },
+      { label: 'Droits des opérateurs', description: 'Saisie, contrôle, édition et validation par rôle', symbol: 'U', tone: 'purple', action: 'companies' },
+      { label: 'Journal des changements', description: 'Historiser les modifications de paramétrage', symbol: '◷', tone: 'blue', action: 'placeholder' }
+    ]
+  }
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -1131,6 +1181,28 @@ function selectMenuTab(tab) {
   showToast(`Rubrique « ${CONFIG_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
 }
 
+function renderParameterGroup(groupId = 'dossier') {
+  const group = PARAMETER_GROUPS[groupId] || PARAMETER_GROUPS.dossier;
+  const label = $('#parameterSelectedLabel');
+  const description = $('#parameterSelectedDescription');
+  const count = $('#parameterSelectedCount');
+  const actionList = $('#parameterActionList');
+  if (label) label.textContent = group.label;
+  if (description) description.textContent = group.description;
+  if (count) count.textContent = `${group.actions.length} paramètre${group.actions.length > 1 ? 's' : ''}`;
+  if (actionList) {
+    actionList.innerHTML = group.actions.map((item) => `<button class="fichier-action parameter-action" type="button" data-parameter-action="${escapeHtml(item.action)}"><span class="fichier-action-icon fichier-action-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span><span class="parameter-action-arrow">›</span></button>`).join('');
+  }
+}
+
+function handleParameterAction(action) {
+  if (action === 'companies') openView('companies');
+  if (action === 'assets') openView('assets');
+  if (action === 'journal') openView('journal');
+  if (action === 'reports' || action === 'editions') openView('editions');
+  if (action === 'placeholder') showToast('Ce paramètre sera défini dans l’étape dédiée.');
+}
+
 function renderEditionGroup(groupId = 'journaux') {
   const group = EDITION_GROUPS[groupId] || EDITION_GROUPS.journaux;
   const label = $('#editionSelectedLabel');
@@ -1237,6 +1309,20 @@ function bindEvents() {
 
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
+
+    const parameterTab = event.target.closest('.parameter-tab[data-parameter-group]');
+    if (parameterTab) {
+      $$('.parameter-tab').forEach((item) => {
+        const selected = item === parameterTab;
+        item.classList.toggle('is-active', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+      renderParameterGroup(parameterTab.dataset.parameterGroup);
+      return;
+    }
+
+    const parameterAction = event.target.closest('[data-parameter-action]');
+    if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
 
     const editionTab = event.target.closest('.edition-tab[data-edition-group]');
     if (editionTab) {
@@ -1380,5 +1466,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderFichierGroup('dossiers');
   renderConfigurationGroup('societe');
   renderEditionGroup('journaux');
+  renderParameterGroup('dossier');
   renderLivePosting();
 });

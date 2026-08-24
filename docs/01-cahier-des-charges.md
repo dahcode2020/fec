@@ -436,6 +436,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 16. **Éditions CSR** — informations exploitables, impressions, contrôles et exports.
 17. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
 18. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
+19. **Paramétrage CSR** — sections analytiques, engagements, cadres d’états, devises et droits opérationnels.
 
 ### Règles UX
 
