@@ -235,6 +235,72 @@ const CONFIG_GROUPS = {
   }
 };
 
+const EDITION_GROUPS = {
+  journaux: {
+    label: 'Journaux & pièces', description: 'Les livres et contrôles issus des écritures de la société.',
+    actions: [
+      { label: 'Livre journal intégré', description: 'Toutes les écritures classées et synchronisées', symbol: '▤', tone: 'green', action: 'journal' },
+      { label: 'Détail des lignes saisies', description: 'Lignes débit/crédit avec leur imputation', symbol: '≡', tone: 'blue', action: 'journal' },
+      { label: 'Pièces modifiées après la 1ère saisie', description: 'Repérer les corrections avant validation', symbol: '↻', tone: 'amber', action: 'placeholder', control: true },
+      { label: 'Pièces déséquilibrées', description: 'Anomalies bloquantes à régulariser', symbol: '!', tone: 'red', action: 'placeholder', control: true },
+      { label: 'Cumul des pièces saisies', description: 'Synthèse par période et par journal', symbol: '∑', tone: 'purple', action: 'journal' }
+    ]
+  },
+  comptes: {
+    label: 'Comptes & tiers', description: 'Les balances, grands livres et situations des comptes auxiliaires.',
+    actions: [
+      { label: 'Comptes généraux', description: 'Balance et mouvements par compte', symbol: 'C', tone: 'green', action: 'reports' },
+      { label: 'Grand livre', description: 'Détail chronologique des mouvements', symbol: '▥', tone: 'blue', action: 'reports' },
+      { label: 'Cumul par comptes individuels', description: 'Vue détaillée des comptes sélectionnés', symbol: '1', tone: 'purple', action: 'reports' },
+      { label: 'Cumul par comptes de synthèse', description: 'Vue regroupée pour le pilotage', symbol: 'Σ', tone: 'amber', action: 'reports' },
+      { label: 'Fournisseurs', description: 'Soldes, mouvements et comptes à payer', symbol: 'F', tone: 'blue', action: 'purchases' },
+      { label: 'Clients', description: 'Soldes, mouvements et comptes à recevoir', symbol: 'C', tone: 'green', action: 'sales' },
+      { label: 'Personnel', description: 'Mouvements des comptes de personnel', symbol: 'P', tone: 'purple', action: 'placeholder' },
+      { label: 'Débiteurs / créditeurs divers', description: 'Situations des comptes occasionnels', symbol: 'D', tone: 'amber', action: 'placeholder' },
+      { label: 'Lettrage', description: 'Écritures lettrées et non lettrées', symbol: '✓', tone: 'green', action: 'placeholder' }
+    ]
+  },
+  analytique: {
+    label: 'Analytique & budgets', description: 'Mesurez vos activités et comparez vos réalisations à vos prévisions.',
+    actions: [
+      { label: 'États analytiques', description: 'Résultats par axe ou centre analytique', symbol: 'A', tone: 'purple', action: 'reports' },
+      { label: 'Cumul par tiers', description: 'Répartition par client, fournisseur ou tiers', symbol: 'T', tone: 'blue', action: 'placeholder' },
+      { label: 'Cumul par centres analytiques', description: 'Comparer les activités ou projets', symbol: '◎', tone: 'green', action: 'placeholder' },
+      { label: 'Cumul par devises', description: 'Mouvements par devise et conversion', symbol: '₣', tone: 'amber', action: 'placeholder' },
+      { label: 'Budgets prévisionnels', description: 'Budget, réalisé et écarts', symbol: 'B', tone: 'purple', action: 'placeholder' }
+    ]
+  },
+  tresorerie: {
+    label: 'Trésorerie & rapprochements', description: 'Suivez les mouvements de caisse, de banque et les règlements.',
+    actions: [
+      { label: 'Opérations de caisse', description: 'Livre de caisse et solde en temps réel', symbol: 'C', tone: 'green', action: 'treasury' },
+      { label: 'Comptes à payer', description: 'Échéances fournisseurs et règlements', symbol: '↓', tone: 'red', action: 'purchases' },
+      { label: 'Comptes à recevoir', description: 'Échéances clients et encaissements', symbol: '↑', tone: 'blue', action: 'sales' },
+      { label: 'Pointage et rapprochements bancaires', description: 'Mouvements pointés et non rapprochés', symbol: '✓', tone: 'purple', action: 'treasury' },
+      { label: 'Programmation des règlements', description: 'Paiements à effectuer sur une période', symbol: '◷', tone: 'amber', action: 'placeholder' },
+      { label: 'Affectation des règlements aux factures émises', description: 'Factures réglées, partielles ou non affectées', symbol: '↗', tone: 'green', action: 'placeholder' }
+    ]
+  },
+  immobilisations: {
+    label: 'Immobilisations & fiscalité', description: 'Éditez vos actifs, amortissements et documents de suivi fiscal.',
+    actions: [
+      { label: 'Immobilisations', description: 'Registre des biens et valeurs nettes', symbol: '▥', tone: 'blue', action: 'assets' },
+      { label: 'Tableau des amortissements', description: 'Plans et dotations par période', symbol: '◴', tone: 'amber', action: 'assets' },
+      { label: 'Déclarations périodiques', description: 'États préparatoires à contrôler', symbol: '%', tone: 'purple', action: 'placeholder' },
+      { label: 'Déductions et réintégrations fiscales', description: 'Traitements documentés de fin de période', symbol: 'R', tone: 'red', action: 'placeholder' }
+    ]
+  },
+  etats: {
+    label: 'États & plans', description: 'Préparez les états spécifiques et tableaux financiers du dossier.',
+    actions: [
+      { label: 'États spécifiques au dossier', description: 'Éditions personnalisées de la société', symbol: '▧', tone: 'blue', action: 'reports' },
+      { label: 'Tableaux financiers OHADA révisé', description: 'États selon le régime comptable retenu', symbol: 'O', tone: 'green', action: 'reports' },
+      { label: 'Calcul du résultat de la période', description: 'Résultat avant clôture et écritures sources', symbol: '≋', tone: 'purple', action: 'placeholder' },
+      { label: 'Définitions et plans', description: 'Paramètres et modèles d’éditions', symbol: 'D', tone: 'amber', action: 'placeholder' }
+    ]
+  }
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -530,6 +596,7 @@ function authenticate(event) {
 function openView(viewName) {
   $$('.view').forEach((view) => view.classList.toggle('is-visible', view.dataset.viewPanel === viewName));
   $$('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === viewName));
+  $$('.workspace-top-menu-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === viewName));
   $('#companyMenu')?.classList.remove('is-open');
   $('#companyPicker')?.setAttribute('aria-expanded', 'false');
   $('#quickMenu')?.setAttribute('hidden', '');
@@ -1064,6 +1131,42 @@ function selectMenuTab(tab) {
   showToast(`Rubrique « ${CONFIG_GROUPS[groupId]?.label || groupId} » sélectionnée.`);
 }
 
+function renderEditionGroup(groupId = 'journaux') {
+  const group = EDITION_GROUPS[groupId] || EDITION_GROUPS.journaux;
+  const label = $('#editionSelectedLabel');
+  const description = $('#editionSelectedDescription');
+  const actionList = $('#editionActionList');
+  if (label) label.textContent = group.label;
+  if (description) description.textContent = group.description;
+  if (actionList) {
+    actionList.innerHTML = group.actions.map((item) => `<button class="edition-action ${item.control ? 'is-control' : ''}" type="button" data-edition-action="${escapeHtml(item.action)}"><span class="edition-action-icon edition-icon-${escapeHtml(item.tone)}">${escapeHtml(item.symbol)}</span><span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.description)}</small></span>${item.control ? '<span class="edition-action-tag">Contrôle</span>' : '<span class="edition-action-tag edition-tag-ready">Disponible</span>'}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>`).join('');
+  }
+}
+
+function setEditionMode(mode) {
+  $$('.edition-status-button').forEach((button) => button.classList.toggle('is-active', button.dataset.editionMode === mode));
+  const label = $('#editionStatusLabel');
+  const description = $('#editionStatusDescription');
+  if (mode === 'control') {
+    if (label) label.textContent = 'Éditions de contrôle';
+    if (description) description.textContent = 'Retrouvez les brouillons, anomalies et pièces à régulariser.';
+  } else {
+    if (label) label.textContent = 'Éditions officielles';
+    if (description) description.textContent = 'Les états officiels utilisent les écritures validées et clôturées.';
+  }
+  showToast(mode === 'control' ? 'Mode contrôle activé.' : 'Mode éditions officielles activé.');
+}
+
+function handleEditionAction(action) {
+  if (action === 'journal') openView('journal');
+  if (action === 'reports') openView('reports');
+  if (action === 'assets') openView('assets');
+  if (action === 'treasury') openView('treasury');
+  if (action === 'sales') openView('sales');
+  if (action === 'purchases') openView('purchases');
+  if (action === 'placeholder') showToast('Cette édition sera paramétrée dans l’étape dédiée.');
+}
+
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
@@ -1087,6 +1190,23 @@ function bindEvents() {
 
     const navItem = event.target.closest('.nav-item[data-view]');
     if (navItem) { openView(navItem.dataset.view); return; }
+
+    const editionTab = event.target.closest('.edition-tab[data-edition-group]');
+    if (editionTab) {
+      $$('.edition-tab').forEach((item) => {
+        const selected = item === editionTab;
+        item.classList.toggle('is-active', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+      renderEditionGroup(editionTab.dataset.editionGroup);
+      return;
+    }
+
+    const editionMode = event.target.closest('.edition-status-button[data-edition-mode]');
+    if (editionMode) { setEditionMode(editionMode.dataset.editionMode); return; }
+
+    const editionAction = event.target.closest('[data-edition-action]');
+    if (editionAction) { handleEditionAction(editionAction.dataset.editionAction); return; }
 
     const entryTab = event.target.closest('.entry-tab[data-entry-tab]');
     if (entryTab) { selectEntryTab(entryTab); return; }
@@ -1127,6 +1247,9 @@ function bindEvents() {
     if (action === 'insert-entry') insertEntry();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
+    if (action === 'export-current-edition') downloadReport();
+    if (action === 'print-edition') showToast('Aperçu prêt à être imprimé.');
+    if (action === 'edition-help') showToast('Les éditions officielles et de contrôle resteront séparées.');
     if (action === 'authenticate') showDossiers();
     if (action === 'back-to-dossiers') backToDossiers();
     if (action === 'back-to-modules') backToModules();
@@ -1206,5 +1329,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateDossierPreview();
   renderFichierGroup('dossiers');
   renderConfigurationGroup('societe');
+  renderEditionGroup('journaux');
   renderLivePosting();
 });
