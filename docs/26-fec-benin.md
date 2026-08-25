@@ -104,6 +104,12 @@ Les contrôles portent notamment sur :
 
 Chaque génération est enregistrée dans l’historique et la piste d’audit du dossier.
 
+## Jeu d’essai annuel
+
+Le bouton **Tester un jeu annuel** de l’assistant construit en mémoire un exercice de démonstration couvrant les douze mois. Il comprend les reports, ventes, achats, règlements, amortissements, abonnements, une centralisation et un résultat à exclure. Il contient 57 écritures sources ; 55 sont retenues dans le FEC et représentent 128 lignes d’imputation. Ce jeu ne modifie pas la comptabilité de la société active.
+
+Il sert à contrôler les variantes Système normal et SMT, le séquencement, l’équilibre et la sérialisation du fichier avant de corriger les données réelles.
+
 ## Préparation des données sources
 
 Les nouveaux flux d’écriture conservent désormais la date de pièce, le tiers, l’auxiliaire et, pour les règlements, la date et le mode de règlement. La transition vers l’état `VALIDATED` conserve une date de validation dédiée. L’assistant FEC signale encore les écritures historiques qui ne possèdent pas ces informations plutôt que de les inventer dans un FEC officiel.

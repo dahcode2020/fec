@@ -29,6 +29,7 @@ import {
   finalizeFiscalYear,
   calculatePeriodResult,
   createDossier,
+  createFecAnnualDemoEntries,
   createIntegratedJournal,
   createInvoiceDocument,
   documentToJournalLines,
@@ -487,4 +488,21 @@ test('contrôle une séquence FEC annuelle avec reports, opérations détaillée
   assert.equal(checked.valid, true);
   assert.deepEqual(prepared.records.filter((record, index, records) => index === 0 || record.values.NumEcriture !== records[index - 1].values.NumEcriture).map((record) => record.values.NumEcriture), ['1', '2', '3', '4']);
   assert.equal(prepared.records.at(-1).values.DateEcriture, '20251220');
+});
+
+test('produit un jeu annuel de démonstration complet pour le système normal et le SMT', () => {
+  const setup = createCsrSetup({ companyId: 'co-a' });
+  const client = { id: 'demo-client', name: 'Client démonstration', type: 'CLIENT', collectiveAccountId: '4111', auxiliaryAccountId: '411101' };
+  const supplier = { id: 'demo-supplier', name: 'Fournisseur démonstration', type: 'SUPPLIER', collectiveAccountId: '4011', auxiliaryAccountId: '401101' };
+  const entries = createFecAnnualDemoEntries({ companyId: 'co-a', fiscalYear: '2025', client, supplier });
+  assert.equal(entries.length, 57);
+  const normal = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'NORMAL', journals: setup.journals, accounts: setup.accounts, thirdParties: [client, supplier], startDate: '2025-01-01', endDate: '2025-12-31' });
+  const smt = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'SMT', journals: setup.journals, accounts: setup.accounts, thirdParties: [client, supplier], startDate: '2025-01-01', endDate: '2025-12-31' });
+  assert.equal(normal.valid, true);
+  assert.equal(normal.entryCount, 55);
+  assert.equal(normal.lineCount, 128);
+  assert.equal(normal.excludedEntries.length, 2);
+  assert.equal(smt.valid, true);
+  assert.equal(smt.fields.length, 21);
+  assert.ok(smt.records.every((record) => record.values['Date Règlement']));
 });

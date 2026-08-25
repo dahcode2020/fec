@@ -819,3 +819,9 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .fec-issues li { flex-wrap:wrap; }
   .fec-correction-button { margin-left:21px; }
 }
+.fec-warning > div { min-width:0; flex:1; }
+.fec-warning > .button { flex:0 0 auto; white-space:nowrap; }
+@media (max-width: 620px) {
+  .fec-warning { flex-wrap:wrap; }
+  .fec-warning > .button { margin-left:33px; }
+}

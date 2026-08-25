@@ -144,6 +144,7 @@ export function addCompany(workspace, company) {
 }
 
 export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
+  Object.freeze({ id: '101', label: 'Capital social', nature: 'Ressources durables' }),
   Object.freeze({ id: '4111', label: 'Clients', nature: 'Actif / tiers' }),
   Object.freeze({ id: '4011', label: 'Fournisseurs', nature: 'Passif / tiers' }),
   Object.freeze({ id: '6011', label: 'Achats de marchandises dans la Région', nature: 'Charge' }),
@@ -1226,4 +1227,32 @@ export function exportFecControlReportTxt({ prepared, validation = null, company
     'Ce rapport accompagne la préparation du FEC et ne remplace pas la validation par la DGID.'
   ];
   return lines.join('\r\n') + '\r\n';
+}
+
+export function createFecAnnualDemoEntries({ companyId, fiscalYear = '2025', client = null, supplier = null } = {}) {
+  if (!companyId) throw new DomainError('Le jeu annuel FEC doit être rattaché à une société.', 'FEC_DEMO_COMPANY_REQUIRED');
+  const year = String(fiscalYear);
+  const entries = [];
+  const isoMonthDate = (month, day) => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const metadata = (date, mode = 'À terme') => ({ pieceDate: date, settlementDate: date, settlementMode: mode, natureOperation: mode === 'À terme' ? 'FACTURE' : 'REGLEMENT' });
+  const addEntry = ({ id, journalId, date, reference, label, lines, integrationCategory = 'GENERAL' }) => entries.push({ id: `fec-demo-${companyId}-${id}`, companyId, journalId, date, pieceDate: date, reference, label, validatedAt: `${date}T18:00:00.000Z`, status: OPERATION_STATES.VALIDATED, integrationCategory, lines });
+  const clientAccountId = client?.auxiliaryAccountId || '4111';
+  const supplierAccountId = supplier?.auxiliaryAccountId || '4011';
+  const clientLine = (date, mode = 'À terme') => ({ accountId: clientAccountId, thirdPartyId: client?.id, auxiliaryAccountId: client?.auxiliaryAccountId, auxiliaryLabel: client?.name, ...metadata(date, mode) });
+  const supplierLine = (date, mode = 'À terme') => ({ accountId: supplierAccountId, thirdPartyId: supplier?.id, auxiliaryAccountId: supplier?.auxiliaryAccountId, auxiliaryLabel: supplier?.name, ...metadata(date, mode) });
+  addEntry({ id: 'report', journalId: 'AN', date: isoMonthDate(1, 1), reference: 'AN-DEMO-0001', label: 'Report des soldes', integrationCategory: 'REPORTS_A_NOUVEAU', lines: [{ accountId: '5211', debit: 500000, credit: 0, ...metadata(isoMonthDate(1, 1), 'Report') }, { accountId: '101', debit: 0, credit: 500000, ...metadata(isoMonthDate(1, 1), 'Report') }] });
+  for (let month = 1; month <= 12; month += 1) {
+    const saleDate = isoMonthDate(month, 15);
+    addEntry({ id: `sale-${String(month).padStart(2, '0')}`, journalId: 'VE', date: saleDate, reference: `FAC-DEMO-${String(month).padStart(2, '0')}`, label: `Vente de services — ${month}/${year}`, lines: [{ ...clientLine(saleDate), debit: 118000, credit: 0 }, { accountId: '7061', debit: 0, credit: 100000, ...metadata(saleDate) }, { accountId: '4431', debit: 0, credit: 18000, ...metadata(saleDate) }] });
+    addEntry({ id: `receipt-${String(month).padStart(2, '0')}`, journalId: 'BQ', date: isoMonthDate(month, 20), reference: `REG-DEMO-${String(month).padStart(2, '0')}`, label: `Encaissement client — ${month}/${year}`, lines: [{ accountId: '5211', debit: 118000, credit: 0, ...metadata(isoMonthDate(month, 20), 'Virement') }, { ...clientLine(isoMonthDate(month, 20), 'Virement'), debit: 0, credit: 118000 }] });
+    addEntry({ id: `depreciation-${String(month).padStart(2, '0')}`, journalId: 'AM', date: isoMonthDate(month, 28), reference: `AM-DEMO-${String(month).padStart(2, '0')}`, label: `Dotation aux amortissements — ${month}/${year}`, integrationCategory: 'AMORTISSEMENTS', lines: [{ accountId: '6813', debit: 23667, credit: 0, ...metadata(isoMonthDate(month, 28)) }, { accountId: '2844', debit: 0, credit: 23667, ...metadata(isoMonthDate(month, 28)) }] });
+    addEntry({ id: `subscription-${String(month).padStart(2, '0')}`, journalId: 'AB', date: isoMonthDate(month, 5), reference: `AB-DEMO-${String(month).padStart(2, '0')}`, label: `Abonnement internet — ${month}/${year}`, integrationCategory: 'ABONNEMENTS', lines: [{ accountId: '6281', debit: 12000, credit: 0, ...metadata(isoMonthDate(month, 5)) }, { ...supplierLine(isoMonthDate(month, 5)), debit: 0, credit: 12000 }] });
+    if (month % 2 === 0) {
+      const purchaseDate = isoMonthDate(month, 10);
+      addEntry({ id: `purchase-${String(month).padStart(2, '0')}`, journalId: 'AC', date: purchaseDate, reference: `FA-DEMO-${String(month).padStart(2, '0')}`, label: `Fournitures de bureau — ${month}/${year}`, lines: [{ accountId: '6047', debit: 50000, credit: 0, ...metadata(purchaseDate) }, { accountId: '4452', debit: 9000, credit: 0, ...metadata(purchaseDate) }, { ...supplierLine(purchaseDate), debit: 0, credit: 59000 }] });
+    }
+  }
+  addEntry({ id: 'centralization', journalId: 'CT', date: isoMonthDate(12, 30), reference: 'CT-DEMO-0001', label: `Centralisation de test — ${year}`, integrationCategory: 'CENTRALISATION', lines: [{ accountId: '5211', debit: 1, credit: 0 }, { accountId: '101', debit: 0, credit: 1 }] });
+  addEntry({ id: 'result', journalId: 'RP', date: isoMonthDate(12, 31), reference: 'RP-DEMO-0001', label: `Résultat de test — ${year}`, integrationCategory: 'RESULTAT', lines: [{ accountId: '7061', debit: 1, credit: 0 }, { accountId: '131', debit: 0, credit: 1 }] });
+  return entries;
 }
