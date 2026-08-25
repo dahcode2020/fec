@@ -135,6 +135,7 @@ function hydrateAppState() {
   persistedStateKeys.forEach((key) => {
     if (saved[key] !== undefined) appState[key] = saved[key];
   });
+  if (!appState.companies[appState.activeCompany]) appState.activeCompany = Object.keys(appState.companies)[0] || 'acacia';
   Object.keys(appState.companies).forEach((companyId) => {
     const defaults = createCsrSetup({ companyId });
     const existing = appState.accountingSetups?.[companyId];
@@ -738,6 +739,9 @@ function showDossiers() {
   $('#dossiersScreen')?.removeAttribute('hidden');
   document.body.style.overflow = '';
   renderDossiers();
+  if (!appState.dossiers.some((dossier) => dossier.id === appState.selectedDossier && dossier.status !== 'Archivé')) {
+    appState.selectedDossier = appState.dossiers.find((dossier) => dossier.status !== 'Archivé')?.id || null;
+  }
   selectDossier(appState.selectedDossier);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
