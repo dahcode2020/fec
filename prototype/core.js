@@ -1128,3 +1128,102 @@ export function encodeFecText(text, encoding = 'ISO-8859-15') {
   }
   return Uint8Array.from(bytes);
 }
+
+function fecNumericValue(value) {
+  const normalized = String(value ?? '').trim().replace(',', '.');
+  if (!/^[+-]?\d+(?:\.\d+)?$/.test(normalized)) return NaN;
+  return Number(normalized);
+}
+
+export function validateFecTxt(text, { regime = 'NORMAL', delimiter = '\t', allowProvisional = false } = {}) {
+  const fields = fecFieldDefinitions({ regime });
+  const errors = [];
+  const warnings = [];
+  const rawLines = String(text ?? '').split(/\r\n|\n|\r/);
+  if (rawLines.at(-1) === '') rawLines.pop();
+  if (!rawLines.length || !rawLines[0]) return { valid: false, errors: [{ code: 'FEC_EMPTY_FILE', message: 'Le fichier FEC est vide.' }], warnings, fields, entryCount: 0, lineCount: 0, totalDebit: 0, totalCredit: 0 };
+  const header = rawLines.shift().split(delimiter);
+  const expectedHeader = fields.map((field) => field.name);
+  if (header.length !== expectedHeader.length || header.some((field, index) => field !== expectedHeader[index])) errors.push({ code: 'FEC_INVALID_HEADER', message: `L’en-tête doit contenir exactement ${expectedHeader.length} champs dans l’ordre réglementaire.` });
+  const records = [];
+  rawLines.forEach((rawLine, lineIndex) => {
+    const sourceLine = lineIndex + 2;
+    if (!rawLine) { errors.push({ code: 'FEC_EMPTY_RECORD', line: sourceLine, message: `L’enregistrement ${sourceLine} est vide.` }); return; }
+    const values = rawLine.split(delimiter);
+    if (values.length !== expectedHeader.length) { errors.push({ code: 'FEC_INVALID_FIELD_COUNT', line: sourceLine, message: `La ligne ${sourceLine} contient ${values.length} champs au lieu de ${expectedHeader.length}.` }); return; }
+    const record = Object.fromEntries(expectedHeader.map((name, index) => [name, values[index]]));
+    fields.filter((field) => field.required && !record[field.name]).forEach((field) => {
+      const issue = { code: 'FEC_REQUIRED_FIELD_EMPTY', line: sourceLine, field: field.name, message: `Le champ obligatoire ${field.name} est vide à la ligne ${sourceLine}.` };
+      (allowProvisional ? warnings : errors).push(issue);
+    });
+    ['DateEcriture', 'DatePiece', 'DateValid', 'DateLetEcriture', 'Date Règlement'].forEach((fieldName) => {
+      if (record[fieldName] && !/^\d{8}$/.test(record[fieldName])) errors.push({ code: 'FEC_INVALID_DATE_FORMAT', line: sourceLine, field: fieldName, message: `${fieldName} doit être au format AAAAMMJJ.` });
+    });
+    ['MontDebit', 'MontCredit', 'MontDevise'].forEach((fieldName) => {
+      if (record[fieldName] && !Number.isFinite(fecNumericValue(record[fieldName]))) errors.push({ code: 'FEC_INVALID_NUMERIC_FORMAT', line: sourceLine, field: fieldName, message: `${fieldName} doit être un montant décimal avec une virgule.` });
+    });
+    records.push({ line: sourceLine, values: record });
+  });
+  let expectedNumber = 1;
+  let currentNumber = null;
+  let currentDebit = 0;
+  let currentCredit = 0;
+  let currentRecords = [];
+  let reportSectionEnded = false;
+  const closeEntry = () => {
+    if (currentNumber === null) return;
+    if (Math.abs(currentDebit - currentCredit) > 0.005) errors.push({ code: 'FEC_UNBALANCED_RECORD_ENTRY', line: currentRecords[0]?.line, entryNumber: currentNumber, message: `L’écriture ${currentNumber} n’est pas équilibrée dans le fichier exporté.` });
+  };
+  records.forEach((record) => {
+    const number = Number(record.values.NumEcriture);
+    if (!Number.isInteger(number) || number < 1) errors.push({ code: 'FEC_INVALID_ENTRY_NUMBER', line: record.line, message: `NumEcriture invalide à la ligne ${record.line}.` });
+    if (currentNumber === null) currentNumber = number;
+    if (number !== currentNumber) {
+      closeEntry();
+      if (number !== expectedNumber + 1) errors.push({ code: 'FEC_SEQUENCE_BREAK', line: record.line, message: `La séquence NumEcriture passe de ${expectedNumber} à ${number}.` });
+      expectedNumber = number;
+      currentNumber = number;
+      currentDebit = 0;
+      currentCredit = 0;
+      currentRecords = [];
+    }
+    currentRecords.push(record);
+    currentDebit += Number.isFinite(fecNumericValue(record.values.MontDebit)) ? fecNumericValue(record.values.MontDebit) : 0;
+    currentCredit += Number.isFinite(fecNumericValue(record.values.MontCredit)) ? fecNumericValue(record.values.MontCredit) : 0;
+    const isReport = record.values.LibEcriture === 'REPORT';
+    if (isReport && reportSectionEnded) errors.push({ code: 'FEC_REPORT_NOT_FIRST', line: record.line, message: 'Une écriture REPORT doit apparaître au début de la séquence.' });
+    if (!isReport) reportSectionEnded = true;
+  });
+  closeEntry();
+  const totalDebit = records.reduce((sum, record) => sum + (Number.isFinite(fecNumericValue(record.values.MontDebit)) ? fecNumericValue(record.values.MontDebit) : 0), 0);
+  const totalCredit = records.reduce((sum, record) => sum + (Number.isFinite(fecNumericValue(record.values.MontCredit)) ? fecNumericValue(record.values.MontCredit) : 0), 0);
+  return { valid: errors.length === 0, errors, warnings, fields, records, entryCount: new Set(records.map((record) => record.values.NumEcriture)).size, lineCount: records.length, totalDebit: round(totalDebit), totalCredit: round(totalCredit) };
+}
+
+export function exportFecControlReportTxt({ prepared, validation = null, companyName = '', ifu = '', mode = '', fileBase = '' } = {}) {
+  if (!prepared?.fields) throw new DomainError('Préparation FEC absente.', 'FEC_PREPARATION_REQUIRED');
+  const allErrors = [...(prepared.errors || []), ...(validation?.errors || [])];
+  const allWarnings = [...(prepared.warnings || []), ...(validation?.warnings || [])];
+  const lines = [
+    'RAPPORT DE CONTROLE DU FEC',
+    `SOCIETE\t${String(companyName).replace(/[\t\r\n]/g, ' ')}`,
+    `IFU\t${String(ifu).replace(/[\t\r\n]/g, ' ')}`,
+    `FICHIER\t${fileBase}`,
+    `MODE\t${mode}`,
+    `CHAMPS\t${prepared.fields.length}`,
+    `ECRITURES\t${prepared.entryCount}`,
+    `LIGNES\t${prepared.lineCount}`,
+    `TOTAL_DEBIT\t${fecAmount(prepared.totalDebit)}`,
+    `TOTAL_CREDIT\t${fecAmount(prepared.totalCredit)}`,
+    `STATUT\t${allErrors.length ? 'BLOQUE' : 'PRET'}`,
+    '',
+    `ERREURS\t${allErrors.length}`,
+    ...allErrors.map((issue) => `${issue.code || 'FEC_ERROR'}\t${issue.message}`),
+    '',
+    `AVERTISSEMENTS\t${allWarnings.length}`,
+    ...allWarnings.map((issue) => `${issue.code || 'FEC_WARNING'}\t${issue.message}`),
+    '',
+    'Ce rapport accompagne la préparation du FEC et ne remplace pas la validation par la DGID.'
+  ];
+  return lines.join('\r\n') + '\r\n';
+}

@@ -54,6 +54,7 @@ import {
   createPayment,
   paymentToJournalLines,
   encodeFecText,
+  exportFecControlReportTxt,
   exportFecNoticeTxt,
   exportFecTxt,
   fecFieldDefinitions,
@@ -64,6 +65,7 @@ import {
   parseDelimited,
   suggestPosting,
   prepareFecExport,
+  validateFecTxt,
   validateImportedBalance
 } from './core.js';
 
@@ -445,6 +447,10 @@ test('prépare le FEC béninois normal avec ses 18 champs et exclut les écritur
   assert.match(content, /1000,00/);
   assert.equal(content.split('\r\n')[0].split('\t').length, 18);
   assert.match(exportFecNoticeTxt({ prepared }), /SEPARATEUR_CHAMPS\tTABULATION/);
+  const checked = validateFecTxt(content, { regime: 'NORMAL' });
+  assert.equal(checked.valid, true);
+  assert.equal(checked.entryCount, 2);
+  assert.match(exportFecControlReportTxt({ prepared, validation: checked, companyName: 'Acacia Conseil', ifu: '3201900045612', mode: 'FEC officiel', fileBase: 'FEC_3201900045612_20251231.txt' }), /STATUT\tPRET/);
 });
 
 test('ajoute les trois champs du SMT et bloque le FEC officiel si la date de validation manque', () => {
@@ -462,4 +468,23 @@ test('encode le FEC dans les jeux de caractères prévus', () => {
   assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ASCII')], [0x41, 0x09, 0x45, 0x0d, 0x0a]);
   assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ISO-8859-15')], [0x41, 0x09, 0xc9, 0x0d, 0x0a]);
   assert.deepEqual([...encodeFecText('A1\t', 'EBCDIC')], [0xc1, 0xf1, 0x05]);
+});
+
+test('contrôle une séquence FEC annuelle avec reports, opérations détaillées et plusieurs mois', () => {
+  const journals = [{ id: 'AN', label: 'À-nouveaux' }, { id: 'VE', label: 'Ventes' }, { id: 'BQ', label: 'Banque' }];
+  const accounts = [{ id: '4111', label: 'Clients' }, { id: '5211', label: 'Banque locale' }, { id: '7061', label: 'Services vendus' }, { id: '101', label: 'Capital social' }];
+  const entry = (id, journalId, date, reference, lines, extra = {}) => ({ id, companyId: 'co-a', journalId, date, reference, label: reference, status: 'VALIDATED', validatedAt: `${date}T12:00:00.000Z`, lines, ...extra });
+  const entries = [
+    entry('report', 'AN', '2025-01-01', 'AN-0001', [{ accountId: '101', debit: 0, credit: 500000 }, { accountId: '5211', debit: 500000, credit: 0 }], { integrationCategory: 'REPORTS_A_NOUVEAU' }),
+    entry('jan', 'VE', '2025-01-15', 'FAC-001', [{ accountId: '4111', debit: 100000, credit: 0 }, { accountId: '7061', debit: 0, credit: 100000 }]),
+    entry('jun', 'BQ', '2025-06-16', 'BQ-001', [{ accountId: '5211', debit: 100000, credit: 0 }, { accountId: '4111', debit: 0, credit: 100000 }]),
+    entry('dec', 'VE', '2025-12-20', 'FAC-099', [{ accountId: '4111', debit: 250000, credit: 0 }, { accountId: '7061', debit: 0, credit: 250000 }])
+  ];
+  const prepared = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'NORMAL', journals, accounts, startDate: '2025-01-01', endDate: '2025-12-31' });
+  const content = exportFecTxt({ prepared });
+  const checked = validateFecTxt(content, { regime: 'NORMAL' });
+  assert.equal(prepared.valid, true);
+  assert.equal(checked.valid, true);
+  assert.deepEqual(prepared.records.filter((record, index, records) => index === 0 || record.values.NumEcriture !== records[index - 1].values.NumEcriture).map((record) => record.values.NumEcriture), ['1', '2', '3', '4']);
+  assert.equal(prepared.records.at(-1).values.DateEcriture, '20251220');
 });

@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -1243,6 +1243,11 @@ function prepareFecFromForm() {
   prepared.companyName = company.name;
   prepared.ifu = company.ifu;
   prepared.mode = draft.mode;
+  const delimiter = draft.separator === 'SEMICOLON' ? ';' : '\t';
+  const serialized = exportFecTxt({ prepared, delimiter });
+  const fileValidation = validateFecTxt(serialized, { regime: draft.regime, delimiter, allowProvisional: draft.mode === 'DIAGNOSTIC' });
+  prepared.fileValidation = fileValidation;
+  if (fileValidation.errors.length && prepared.errors.length === 0) appendFecIssue(prepared, { code: 'FEC_SERIALIZED_INVALID', severity: 'ERROR', message: `${fileValidation.errors.length} anomalie(s) ont été détectées dans le fichier FEC sérialisé.` });
   appState.fecDraft = draft;
   fecPrepared = prepared;
   renderFecResult(prepared);
@@ -1258,15 +1263,17 @@ function renderFecResult(prepared, returnOnly = false) {
   if (!prepared) return '';
   const draft = prepared.fecDraft || appState.fecDraft || defaultFecDraft();
   const official = draft.mode !== 'DIAGNOSTIC';
-  const canGenerate = prepared.valid || !official;
-  const issueItems = [...prepared.errors, ...prepared.warnings].slice(0, 60).map((issue) => `<li class="fec-issue-${issue.severity === 'WARNING' ? 'warning' : 'error'}"><span>${issue.severity === 'WARNING' ? '!' : '×'}</span><span>${escapeHtml(fecIssueLabel(issue))}</span></li>`).join('');
+  const canGenerate = prepared.valid || !official || draft.mode === 'OFFICIAL_REPORT';
+  const fileIssues = prepared.fileValidation?.errors || [];
+  const fileWarnings = prepared.fileValidation?.warnings || [];
+  const issueItems = [...prepared.errors, ...fileIssues, ...prepared.warnings, ...fileWarnings].slice(0, 60).map((issue) => `<li class="fec-issue-${issue.severity === 'WARNING' ? 'warning' : 'error'}"><span>${issue.severity === 'WARNING' ? '!' : '×'}</span><span>${escapeHtml(fecIssueLabel(issue))}</span></li>`).join('');
   const previewRows = prepared.records.slice(0, 8).map((record) => `<tr><td>${escapeHtml(record.values.CodeJournal)}</td><td>${escapeHtml(record.values.NumEcriture)}</td><td>${escapeHtml(record.values.DateEcriture)}</td><td><b>${escapeHtml(record.values.NumCompte)}</b></td><td>${escapeHtml(record.values.RefPiece)}</td><td class="align-right">${escapeHtml(record.values.MontDebit)}</td><td class="align-right">${escapeHtml(record.values.MontCredit)}</td></tr>`).join('');
   const html = `<section class="fec-control-result"><div class="fec-result-heading"><div><span class="eyebrow">RÉSULTAT DU PRÉCONTRÔLE</span><h3>${prepared.valid ? 'FEC contrôlé' : 'Corrections nécessaires avant remise'}</h3><p>${official ? 'Le mode officiel ne produit aucun fichier tant qu’un blocage subsiste.' : 'Ce diagnostic peut être généré pour préparer les corrections, mais reste non transmissible.'}</p></div><span class="fec-result-status ${prepared.valid ? 'is-valid' : 'is-invalid'}"><i></i>${prepared.valid ? 'Aucune erreur bloquante' : `${prepared.errors.length} blocage${prepared.errors.length > 1 ? 's' : ''}`}</span></div><div class="fec-summary"><span><small>ÉCRITURES</small><strong>${prepared.entryCount}</strong><em>retenues</em></span><span><small>LIGNES</small><strong>${prepared.lineCount}</strong><em>enregistrements</em></span><span><small>EXCLUES</small><strong>${prepared.excludedEntries.length}</strong><em>centralisation / résultat</em></span><span><small>EN ATTENTE</small><strong>${prepared.pendingCount}</strong><em>non validées</em></span></div>${issueItems ? `<div class="fec-issues"><strong>Anomalies et avertissements</strong><ul>${issueItems}</ul><button class="text-button" type="button" data-action="open-view" data-view="entry">Compléter les écritures sources <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>` : '<div class="fec-clean"><span>✓</span><strong>Le périmètre ne présente aucune anomalie bloquante.</strong></div>'}<div class="fec-preview-table"><div class="fec-preview-table-heading"><strong>Premières lignes du fichier</strong><span>${prepared.lineCount} ligne${prepared.lineCount > 1 ? 's' : ''} · ${prepared.totalDebit.toFixed(2).replace('.', ',')} débit / ${prepared.totalCredit.toFixed(2).replace('.', ',')} crédit</span></div><div class="table-wrap"><table><thead><tr><th>JOURNAL</th><th>N° ÉCRITURE</th><th>DATE</th><th>COMPTE</th><th>PIÈCE</th><th class="align-right">DÉBIT</th><th class="align-right">CRÉDIT</th></tr></thead><tbody>${previewRows || '<tr><td colspan="7" class="fec-empty">Aucune ligne dans la période sélectionnée.</td></tr>'}</tbody></table></div></div></section>`;
   if (returnOnly) return html;
   const result = $('#fecResult');
   if (result) result.innerHTML = html;
   const button = $('#generateFecButton');
-  if (button) { button.disabled = !canGenerate; button.textContent = draft.mode === 'DIAGNOSTIC' ? 'Générer le diagnostic' : 'Générer le FEC'; }
+  if (button) { button.disabled = !canGenerate; button.textContent = draft.mode === 'DIAGNOSTIC' ? 'Générer le diagnostic' : (draft.mode === 'OFFICIAL_REPORT' && !prepared.valid ? 'Générer le rapport' : 'Générer le FEC'); }
   return html;
 }
 
@@ -1287,13 +1294,18 @@ function generateFec() {
   if (!prepared) return;
   const draft = prepared.fecDraft || readFecForm();
   const official = draft.mode !== 'DIAGNOSTIC';
-  if (official && !prepared.valid) {
-    showToast('Génération bloquée : corrigez les anomalies du FEC officiel.');
-    return;
-  }
   const company = appState.companies[appState.activeCompany];
   const delimiter = draft.separator === 'SEMICOLON' ? ';' : '\t';
   const base = fecFileBase(company, draft);
+  const fileValidation = prepared.fileValidation || validateFecTxt(exportFecTxt({ prepared, delimiter }), { regime: draft.regime, delimiter, allowProvisional: draft.mode === 'DIAGNOSTIC' });
+  if (official && !prepared.valid) {
+    if (draft.mode === 'OFFICIAL_REPORT') {
+      const report = exportFecControlReportTxt({ prepared, validation: fileValidation, companyName: company.name, ifu: company.ifu, mode: 'FEC officiel + rapport de contrôle', fileBase: `${base}.txt` });
+      downloadBytes(`${base}.rapport.txt`, encodeFecText(report, draft.encoding), 'text/plain');
+      showToast('Rapport de contrôle généré. Le FEC reste bloqué tant que les anomalies subsistent.');
+    } else showToast('Génération bloquée : corrigez les anomalies du FEC officiel.');
+    return;
+  }
   const maxRecords = Number(draft.maxRecords || 0);
   const chunks = maxRecords > 0 ? Array.from({ length: Math.max(1, Math.ceil(prepared.records.length / maxRecords)) }, (_, index) => prepared.records.slice(index * maxRecords, (index + 1) * maxRecords)) : [prepared.records];
   chunks.forEach((records, index) => {
@@ -1304,6 +1316,8 @@ function generateFec() {
   });
   const notice = exportFecNoticeTxt({ prepared, delimiter, encoding: draft.encoding, recordSeparator: 'CRLF' });
   downloadBytes(`${base}.notice.txt`, encodeFecText(notice, draft.encoding), 'text/plain');
+  const report = exportFecControlReportTxt({ prepared, validation: fileValidation, companyName: company.name, ifu: company.ifu, mode: draft.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'FEC officiel', fileBase: `${base}.txt` });
+  downloadBytes(`${base}.rapport.txt`, encodeFecText(report, draft.encoding), 'text/plain');
   const history = { id: `fec-${Date.now()}`, companyId: appState.activeCompany, ifu: company.ifu, exercise: draft.fiscalYear, startDate: draft.startDate, endDate: draft.endDate, closureDate: draft.closureDate, regime: draft.regime, mode: draft.mode, encoding: draft.encoding, separator: draft.separator, files: chunks.length, entryCount: prepared.entryCount, lineCount: prepared.lineCount, valid: prepared.valid, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
   appState.fecHistory.unshift(history);
   appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'FEC_GENERATED', companyId: appState.activeCompany, label: `FEC ${company.ifu} ${draft.fiscalYear}`, metadata: history, at: history.createdAt, userId: 'claire-dossou' });

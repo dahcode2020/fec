@@ -85,7 +85,7 @@ Il décrit les champs, leur signification, le jeu de caractères et les séparat
 Trois modes sont prévus :
 
 - **FEC officiel strict** : les erreurs bloquantes empêchent la génération ;
-- **FEC officiel + rapport** : les anomalies sont détaillées et la génération reste bloquée tant qu’elles ne sont pas corrigées ;
+- **FEC officiel + rapport** : les anomalies sont détaillées ; le rapport peut être généré, mais le fichier FEC reste bloqué tant qu’elles ne sont pas corrigées ;
 - **Diagnostic provisoire** : les écritures en attente peuvent être analysées et une sortie de diagnostic peut être générée, avec la mention non transmissible.
 
 Les contrôles portent notamment sur :
