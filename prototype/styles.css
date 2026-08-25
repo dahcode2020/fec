@@ -796,3 +796,6 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 .fec-history-empty { margin:0; color:#9ba4b3; font-size:9px; }
 .fec-issues > .text-button { margin-top:8px; font-size:8px; }
 .fec-issues > .text-button .icon { width:11px; }
+
+.auth-reset { display:block; margin:12px auto 0; border:0; padding:0; color:#a0a9b7; background:transparent; font-size:8px; cursor:pointer; }
+.auth-reset:hover { color:var(--red); text-decoration:underline; }

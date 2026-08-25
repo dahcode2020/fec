@@ -131,6 +131,7 @@ const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'ac
 function hydrateAppState() {
   const saved = appStore.load();
   if (!saved || saved.version !== 1) return;
+  if (!saved.companies || typeof saved.companies !== 'object' || Array.isArray(saved.companies)) return;
   persistedStateKeys.forEach((key) => {
     if (saved[key] !== undefined) appState[key] = saved[key];
   });
@@ -168,7 +169,12 @@ function hydrateAppState() {
   if (!appState.statementMode) appState.statementMode = 'control';
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
-  if (!appState.bankMovements) appState.bankMovements = [];
+  if (!Array.isArray(appState.integratedEntries)) appState.integratedEntries = [];
+  if (!Array.isArray(appState.recentEntries)) appState.recentEntries = [];
+  if (!Array.isArray(appState.auditEvents)) appState.auditEvents = [];
+  if (!appState.accountingSetups || typeof appState.accountingSetups !== 'object' || Array.isArray(appState.accountingSetups)) appState.accountingSetups = {};
+  if (!appState.thirdParties || typeof appState.thirdParties !== 'object' || Array.isArray(appState.thirdParties)) appState.thirdParties = {};
+  if (!appState.bankMovements || !Array.isArray(appState.bankMovements)) appState.bankMovements = [];
 }
 
 async function loadFullSyscohadaPlan() {
@@ -745,6 +751,37 @@ function showLogin() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function resetLocalData() {
+  const confirmed = typeof window.confirm !== 'function' || window.confirm('Réinitialiser le prototype et effacer les données locales ?');
+  if (!confirmed) return;
+  try {
+    appStore.clear();
+    sessionStorage.removeItem('fec.bootstrap.recovered');
+  } catch {
+    // Le rechargement remettra les données de démonstration si le stockage est indisponible.
+  }
+  window.location.reload();
+}
+
+function recoverFromBootstrapError() {
+  let alreadyRecovered = false;
+  try {
+    alreadyRecovered = sessionStorage.getItem('fec.bootstrap.recovered') === '1';
+    if (!alreadyRecovered) {
+      appStore.clear();
+      sessionStorage.setItem('fec.bootstrap.recovered', '1');
+    } else sessionStorage.removeItem('fec.bootstrap.recovered');
+  } catch {
+    // Le rechargement reste le dernier recours si le stockage est indisponible.
+  }
+  if (!alreadyRecovered && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+    window.location.reload();
+    return;
+  }
+  // Même si une erreur persiste, l’authentification reste utilisable et son erreur est visible dans la console.
+  bindAuthForm();
+}
+
 function openSelectedDossier() {
   const dossier = appState.dossiers.find((item) => item.id === appState.selectedDossier);
   if (!dossier || dossier.status === 'Archivé') {
@@ -855,9 +892,21 @@ function archiveSelectedDossier() {
   showToast(`${dossier.dossier} a été archivé. Ses données sont conservées.`);
 }
 
+function bindAuthForm() {
+  const form = $('#authForm');
+  if (!form || form.dataset.authBound === 'true') return;
+  form.addEventListener('submit', authenticate);
+  form.dataset.authBound = 'true';
+}
+
 function authenticate(event) {
   event.preventDefault();
-  showDossiers();
+  try {
+    showDossiers();
+  } catch (error) {
+    console.error('Impossible d’ouvrir les dossiers.', error);
+    recoverFromBootstrapError();
+  }
 }
 
 function openView(viewName) {
@@ -3344,7 +3393,7 @@ function handleEditionAction(action, title) {
 }
 
 function bindEvents() {
-  $('#authForm')?.addEventListener('submit', authenticate);
+  bindAuthForm();
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
   ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax'].forEach((field) => {
@@ -3690,21 +3739,41 @@ function bindEvents() {
   });
 }
 
+function bindResetLocalData() {
+  const button = $('#resetLocalData');
+  if (!button || button.dataset.resetBound === 'true') return;
+  button.addEventListener('click', resetLocalData);
+  button.dataset.resetBound = 'true';
+}
+
+function bootstrapApp() {
+  try {
+    hydrateAppState();
+    persistAppState();
+    loadFullSyscohadaPlan();
+    renderCompanyMenu();
+    setActiveCompany(appState.activeCompany, false);
+    buildExportPane();
+    buildFecPane();
+    bindEvents();
+    bindResetLocalData();
+    toggleOtherLegalForm();
+    updateDossierPreview();
+    renderFichierGroup('dossiers');
+    renderConfigurationGroup('societe');
+    renderEditionGroup('journaux');
+    renderParameterGroup('dossier');
+    renderToolGroup('rapides');
+    renderLivePosting();
+  } catch (error) {
+    console.error('Échec du démarrage de FEC.', error);
+    recoverFromBootstrapError();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  hydrateAppState();
-  persistAppState();
-  loadFullSyscohadaPlan();
-  renderCompanyMenu();
-  setActiveCompany(appState.activeCompany, false);
-  buildExportPane();
-  buildFecPane();
-  bindEvents();
-  toggleOtherLegalForm();
-  updateDossierPreview();
-  renderFichierGroup('dossiers');
-  renderConfigurationGroup('societe');
-  renderEditionGroup('journaux');
-  renderParameterGroup('dossier');
-  renderToolGroup('rapides');
-  renderLivePosting();
+  // L’accès aux dossiers reste disponible même si une vue secondaire rencontre une donnée locale ancienne.
+  bindAuthForm();
+  bindResetLocalData();
+  bootstrapApp();
 });
