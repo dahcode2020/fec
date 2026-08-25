@@ -143,18 +143,18 @@ export function addCompany(workspace, company) {
 }
 
 export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
-  Object.freeze({ id: '411000', label: 'Clients', nature: 'Actif / tiers' }),
-  Object.freeze({ id: '401000', label: 'Fournisseurs', nature: 'Passif / tiers' }),
-  Object.freeze({ id: '601000', label: 'Achats de marchandises', nature: 'Charge' }),
-  Object.freeze({ id: '606000', label: 'Achats de fournitures', nature: 'Charge' }),
-  Object.freeze({ id: '627000', label: 'Services bancaires', nature: 'Charge' }),
-  Object.freeze({ id: '628000', label: 'Abonnements', nature: 'Charge' }),
-  Object.freeze({ id: '512000', label: 'Banque', nature: 'Actif / trésorerie' }),
-  Object.freeze({ id: '571000', label: 'Caisse', nature: 'Actif / trésorerie' }),
-  Object.freeze({ id: '681000', label: 'Dotations aux amortissements', nature: 'Charge' }),
-  Object.freeze({ id: '284500', label: 'Amortissements du matériel', nature: 'Correctif d’actif' }),
-  Object.freeze({ id: '445700', label: 'TVA collectée', nature: 'Passif / taxe' }),
-  Object.freeze({ id: '706000', label: 'Services vendus', nature: 'Produit' })
+  Object.freeze({ id: '4111', label: 'Clients', nature: 'Actif / tiers' }),
+  Object.freeze({ id: '4011', label: 'Fournisseurs', nature: 'Passif / tiers' }),
+  Object.freeze({ id: '6011', label: 'Achats de marchandises dans la Région', nature: 'Charge' }),
+  Object.freeze({ id: '6047', label: 'Fournitures de bureau', nature: 'Charge' }),
+  Object.freeze({ id: '6318', label: 'Autres frais bancaires', nature: 'Charge' }),
+  Object.freeze({ id: '6281', label: 'Frais de téléphone', nature: 'Charge' }),
+  Object.freeze({ id: '5211', label: 'Banque locale', nature: 'Actif / trésorerie' }),
+  Object.freeze({ id: '5711', label: 'Caisse en monnaie nationale', nature: 'Actif / trésorerie' }),
+  Object.freeze({ id: '6813', label: 'Dotations aux amortissements des immobilisations corporelles', nature: 'Charge' }),
+  Object.freeze({ id: '2844', label: 'Amortissements du matériel et mobilier', nature: 'Correctif d’actif' }),
+  Object.freeze({ id: '4431', label: 'TVA facturée sur ventes', nature: 'Passif / taxe' }),
+  Object.freeze({ id: '7061', label: 'Services vendus dans la Région', nature: 'Produit' })
 ]);
 
 export const DEFAULT_CSR_JOURNALS = Object.freeze([
@@ -406,8 +406,8 @@ const defaultPostingRules = [
     confidence: 0.96,
     reason: 'Catégorie « Prestation de services » · déjà utilisée dans votre société',
     build: (operation) => [
-      { accountId: operation.customerAccount || '411000', label: `Client — ${operation.thirdPartyName || 'à préciser'}`, debit: operation.total, credit: 0 },
-      { accountId: operation.revenueAccount || '706000', label: 'Services vendus', debit: 0, credit: operation.total }
+      { accountId: operation.customerAccount || '4111', label: `Client — ${operation.thirdPartyName || 'à préciser'}`, debit: operation.total, credit: 0 },
+      { accountId: operation.revenueAccount || '7061', label: 'Services vendus dans la Région', debit: 0, credit: operation.total }
     ]
   },
   {
@@ -416,8 +416,8 @@ const defaultPostingRules = [
     confidence: 0.91,
     reason: 'Catégorie « Achat de marchandises » · règle de société',
     build: (operation) => [
-      { accountId: operation.expenseAccount || '601000', label: 'Achats de marchandises', debit: operation.total, credit: 0 },
-      { accountId: operation.supplierAccount || '401000', label: `Fournisseur — ${operation.thirdPartyName || 'à préciser'}`, debit: 0, credit: operation.total }
+      { accountId: operation.expenseAccount || '6011', label: 'Achats de marchandises dans la Région', debit: operation.total, credit: 0 },
+      { accountId: operation.supplierAccount || '4011', label: `Fournisseur — ${operation.thirdPartyName || 'à préciser'}`, debit: 0, credit: operation.total }
     ]
   },
   {
@@ -426,8 +426,8 @@ const defaultPostingRules = [
     confidence: 0.98,
     reason: 'Libellé reconnu · modèle « Frais bancaires »',
     build: (operation) => [
-      { accountId: operation.expenseAccount || '627000', label: 'Services bancaires', debit: operation.total, credit: 0 },
-      { accountId: operation.bankAccount || '512000', label: 'Banque', debit: 0, credit: operation.total }
+      { accountId: operation.expenseAccount || '6318', label: 'Autres frais bancaires', debit: operation.total, credit: 0 },
+      { accountId: operation.bankAccount || '5211', label: 'Banque locale', debit: 0, credit: operation.total }
     ]
   },
   {
@@ -436,8 +436,8 @@ const defaultPostingRules = [
     confidence: 0.94,
     reason: 'Catégorie « Abonnement » · modèle d’écriture récurrente',
     build: (operation) => [
-      { accountId: operation.expenseAccount || '628000', label: 'Abonnements', debit: operation.total, credit: 0 },
-      { accountId: operation.supplierAccount || '401000', label: `Fournisseur — ${operation.thirdPartyName || 'à préciser'}`, debit: 0, credit: operation.total }
+      { accountId: operation.expenseAccount || '6281', label: 'Frais de téléphone et abonnements', debit: operation.total, credit: 0 },
+      { accountId: operation.supplierAccount || '4011', label: `Fournisseur — ${operation.thirdPartyName || 'à préciser'}`, debit: 0, credit: operation.total }
     ]
   }
 ];

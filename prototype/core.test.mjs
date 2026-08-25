@@ -72,7 +72,7 @@ test('prépare un paramétrage CSR avec comptes et journaux', () => {
   const setup = createCsrSetup({ companyId: 'co-a', regime: 'SMT' });
   assert.equal(setup.planVersion, 'SYSCOHADA-RÉVISÉ');
   assert.equal(setup.regime, 'SMT');
-  assert.ok(setup.accounts.some((account) => account.id === '411000'));
+  assert.ok(setup.accounts.some((account) => account.id === '4111'));
   assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
 });
 
@@ -87,7 +87,7 @@ test('configure les journaux et verrouille le code utilisé', () => {
 });
 
 test('réserve les journaux automatiques aux traitements système', () => {
-  const lines = [{ accountId: '628000', debit: 12000, credit: 0 }, { accountId: '401000', debit: 0, credit: 12000 }];
+  const lines = [{ accountId: '6281', debit: 12000, credit: 0 }, { accountId: '4011', debit: 0, credit: 12000 }];
   const entry = createAutomaticJournalEntry({ companyId: 'co-a', integrationCategory: 'ABONNEMENTS', date: '2025-06-01', label: 'Abonnement internet', lines });
   assert.equal(entry.journalId, SYSTEM_JOURNAL_BY_CATEGORY.ABONNEMENTS);
   assert.equal(entry.integrationCategory, 'ABONNEMENTS');
@@ -109,7 +109,7 @@ test('ajoute, modifie et importe des comptes sans doublon', () => {
   assert.equal(setup.accounts.at(-1).isCustom, true);
   setup.accounts = updateAccountInPlan(setup.accounts, '411100', { label: 'Clients administrations', nature: 'Actif / tiers' });
   assert.equal(setup.accounts.at(-1).label, 'Clients administrations');
-  assert.throws(() => updateAccountInPlan(setup.accounts, '411000', { id: '411001' }, { usedAccountIds: ['411000'] }), (error) => error.code === 'USED_ACCOUNT_NUMBER_LOCKED');
+  assert.throws(() => updateAccountInPlan(setup.accounts, '4111', { id: '411001' }, { usedAccountIds: ['4111'] }), (error) => error.code === 'USED_ACCOUNT_NUMBER_LOCKED');
   assert.throws(() => addAccountToPlan(setup.accounts, { id: '411100', label: 'Doublon' }), (error) => error.code === 'DUPLICATE_ACCOUNT');
   const imported = importAccountPlanRows([{ id: '512100', label: 'Banque locale', nature: 'Actif / trésorerie' }], { existingAccounts: setup.accounts });
   assert.equal(imported.valid, true);
@@ -118,8 +118,8 @@ test('ajoute, modifie et importe des comptes sans doublon', () => {
 
 test('accepte une imputation multi-lignes équilibrée', () => {
   const entry = createJournalEntry({ companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
-    { accountId: '411000', debit: 250000, credit: 0 },
-    { accountId: '706000', debit: 0, credit: 200000 },
+    { accountId: '4111', debit: 250000, credit: 0 },
+    { accountId: '7061', debit: 0, credit: 200000 },
     { accountId: '445700', debit: 0, credit: 50000 }
   ] });
   assert.equal(entry.lines.length, 3);
@@ -129,8 +129,8 @@ test('accepte une imputation multi-lignes équilibrée', () => {
 
 test('fait progresser une écriture sans autoriser de saut de statut', () => {
   const draft = createJournalEntry({ companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
-    { accountId: '411000', debit: 250000, credit: 0 },
-    { accountId: '706000', debit: 0, credit: 250000 }
+    { accountId: '4111', debit: 250000, credit: 0 },
+    { accountId: '7061', debit: 0, credit: 250000 }
   ] });
   const imputed = transitionOperation(draft, OPERATION_STATES.IMPUTED);
   const review = transitionOperation(imputed, OPERATION_STATES.TO_REVIEW);
@@ -186,15 +186,15 @@ test('persiste l’espace de travail localement', () => {
 test('refuse une écriture déséquilibrée ou hors société', () => {
   assert.throws(() => createJournalEntry({
     companyId: 'co-a', journalId: 'VE', date: '2025-06-16', lines: [
-      { accountId: '411000', debit: 250000, credit: 0 },
-      { accountId: '706000', debit: 0, credit: 200000 }
+      { accountId: '4111', debit: 250000, credit: 0 },
+      { accountId: '7061', debit: 0, credit: 200000 }
     ]
   }), (error) => error.code === 'UNBALANCED_ENTRY');
 
   assert.throws(() => createJournalEntry({
     companyId: 'co-b', journalId: 'VE', date: '2025-06-16', lines: [
-      { accountId: '411000', debit: 250000, credit: 0 },
-      { accountId: '706000', debit: 0, credit: 250000 }
+      { accountId: '4111', debit: 250000, credit: 0 },
+      { accountId: '7061', debit: 0, credit: 250000 }
     ]
   }, { activeCompanyId: 'co-a' }), (error) => error.code === 'COMPANY_SCOPE_VIOLATION');
 });
@@ -202,16 +202,16 @@ test('refuse une écriture déséquilibrée ou hors société', () => {
 test('propose une imputation d’abonnement équilibrée', () => {
   const suggestion = suggestPosting({ category: 'subscription', total: 12000, thirdPartyName: 'Fournisseur internet' });
   assert.equal(suggestion.status, 'SUGGESTED');
-  assert.equal(suggestion.lines[0].accountId, '628000');
-  assert.equal(suggestion.lines[1].accountId, '401000');
+  assert.equal(suggestion.lines[0].accountId, '6281');
+  assert.equal(suggestion.lines[1].accountId, '4011');
 });
 
 test('propose une imputation de vente équilibrée', () => {
   const suggestion = suggestPosting({ category: 'service-sale', total: '250 000', thirdPartyName: 'Awa Concept' });
   assert.equal(suggestion.status, 'SUGGESTED');
   assert.equal(suggestion.confidence, 0.96);
-  assert.equal(suggestion.lines[0].accountId, '411000');
-  assert.equal(suggestion.lines[1].accountId, '706000');
+  assert.equal(suggestion.lines[0].accountId, '4111');
+  assert.equal(suggestion.lines[1].accountId, '7061');
   assert.equal(suggestion.lines[0].debit, 250000);
   assert.equal(suggestion.lines[1].credit, 250000);
 });
@@ -240,11 +240,11 @@ test('gère le prorata temporis sans perdre la base amortissable', () => {
 });
 
 test('importe une balance TXT délimitée et contrôle son équilibre', () => {
-  const source = '\uFEFFCOMPTE;LIBELLE;DEBIT;CREDIT\n411000;Clients;250 000;0\n706000;Services vendus;0;250 000\n';
+  const source = '\uFEFFCOMPTE;LIBELLE;DEBIT;CREDIT\n4111;Clients;250 000;0\n7061;Services vendus;0;250 000\n';
   const parsed = parseDelimited(source, { delimiter: ';' });
   const rows = mapImportedRows(parsed.rows, { account: 'COMPTE', label: 'LIBELLE', debit: 'DEBIT', credit: 'CREDIT', date: 'COMPTE' });
   rows.forEach((row) => { row.date = '2025-06-30'; });
-  const result = validateImportedBalance(rows, { knownAccounts: ['411000', '706000'] });
+  const result = validateImportedBalance(rows, { knownAccounts: ['4111', '7061'] });
   assert.equal(result.valid, true);
   assert.equal(result.debit, 250000);
   assert.equal(result.credit, 250000);

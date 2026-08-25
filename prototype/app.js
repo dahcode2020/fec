@@ -66,9 +66,9 @@ const appState = {
     acacia: createCorrectionWindow({ id: 'correction-acacia-25', dossierId: 'ACACIA-25', companyId: 'acacia', userId: 'claire-dossou', periodId: '2025-06' })
   },
   recentEntries: [
-    { id: 'queue-1', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0003', date: '2025-06-16', journalId: 'OD', label: 'Accompagnement administratif', amount: 250000, accountIds: ['411000', '706000'], status: OPERATION_STATES.TO_REVIEW },
-    { id: 'queue-2', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0002', date: '2025-06-15', journalId: 'AC', label: 'Fournitures de bureau', amount: 38500, accountIds: ['605000', '401000'], status: OPERATION_STATES.VALIDATED },
-    { id: 'queue-3', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0001', date: '2025-06-12', journalId: 'BQ', label: 'Frais de tenue de compte', amount: 4800, accountIds: ['627000', '512000'], status: OPERATION_STATES.VALIDATED }
+    { id: 'queue-1', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0003', date: '2025-06-16', journalId: 'OD', label: 'Accompagnement administratif', amount: 250000, accountIds: ['4111', '7061'], status: OPERATION_STATES.TO_REVIEW },
+    { id: 'queue-2', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0002', date: '2025-06-15', journalId: 'AC', label: 'Fournitures de bureau', amount: 38500, accountIds: ['6047', '4011'], status: OPERATION_STATES.VALIDATED },
+    { id: 'queue-3', companyId: 'acacia', dossierId: 'acacia-25', reference: 'SAI-0001', date: '2025-06-12', journalId: 'BQ', label: 'Frais de tenue de compte', amount: 4800, accountIds: ['6318', '5211'], status: OPERATION_STATES.VALIDATED }
   ],
   auditEvents: []
 };
@@ -910,9 +910,9 @@ function downloadReport() {
     companyName: company.name,
     period: 'Juin 2025',
     rows: [
-      { accountId: '411000', label: 'Clients', debit: 486000, credit: 0 },
-      { accountId: '512100', label: 'Banque', debit: 2340500, credit: 0 },
-      { accountId: '706000', label: 'Services vendus', debit: 0, credit: 1265000 }
+      { accountId: '4111', label: 'Clients', debit: 486000, credit: 0 },
+      { accountId: '5211', label: 'Banque', debit: 2340500, credit: 0 },
+      { accountId: '7061', label: 'Services vendus', debit: 0, credit: 1265000 }
     ]
   });
   downloadText(filename, content);
@@ -920,7 +920,7 @@ function downloadReport() {
 }
 
 function downloadTemplate() {
-  downloadText('modele-import-fec.txt', 'DATE\tJOURNAL\tNUMERO\tCOMPTE\tLIBELLE\tDEBIT\tCREDIT\n16/06/2025\tVE\tVE-0001\t411000\tClient exemple\t250000\t0\n16/06/2025\tVE\tVE-0001\t706000\tPrestation exemple\t0\t250000\n');
+  downloadText('modele-import-fec.txt', 'DATE\tJOURNAL\tNUMERO\tCOMPTE\tLIBELLE\tDEBIT\tCREDIT\n16/06/2025\tVE\tVE-0001\t4111\tClient exemple\t250000\t0\n16/06/2025\tVE\tVE-0001\t7061\tPrestation exemple\t0\t250000\n');
   showToast('Le modèle TXT a été téléchargé.');
 }
 
@@ -947,8 +947,8 @@ function generateDepreciation() {
     serviceDate: '2025-01-01',
     usefulLifeMonths: 36,
     prorata: false,
-    expenseAccount: '681000',
-    accumulatedAccount: '284500'
+    expenseAccount: '6813',
+    accumulatedAccount: '2844'
   });
   const entry = depreciationEntry(plan, { journalId: 'AM', date: '2025-06-30' });
   $$('#assetRows .status-amber').forEach((status) => {
