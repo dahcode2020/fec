@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateFiscalResult, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, evaluatePeriodClosure, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateFiscalResult, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, deleteCorrectionCandidate, evaluatePeriodClosure, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -59,8 +59,12 @@ const appState = {
     acacia: { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 }
   },
   periods: {
-    acacia: [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }],
-    noria: [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }]
+    acacia: createMonthlyPeriods(2025),
+    noria: createMonthlyPeriods(2025)
+  },
+  activePeriodIds: {
+    acacia: '2025-06',
+    noria: '2025-06'
   },
   fiscalYears: {
     acacia: { id: '2025', label: 'Exercice 2025', status: 'OPEN' },
@@ -115,7 +119,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -141,7 +145,13 @@ function hydrateAppState() {
   if (!appState.fiscalSettings) appState.fiscalSettings = {};
   if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
   if (!appState.periods) appState.periods = {};
-  if (!appState.periods[appState.activeCompany]) appState.periods[appState.activeCompany] = [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }];
+  if (!appState.activePeriodIds) appState.activePeriodIds = {};
+  Object.keys(appState.companies).forEach((companyId) => {
+    const existingPeriods = appState.periods[companyId] || [];
+    const defaults = createMonthlyPeriods(Number(appState.fiscalYears?.[companyId]?.id || 2025));
+    appState.periods[companyId] = defaults.map((period) => ({ ...period, ...(existingPeriods.find((item) => item.id === period.id) || {}) }));
+    if (!appState.activePeriodIds[companyId]) appState.activePeriodIds[companyId] = appState.periods[companyId].find((period) => period.id === '2025-06')?.id || appState.periods[companyId][0].id;
+  });
   if (!appState.periodClosures) appState.periodClosures = [];
   if (!appState.fiscalYears) appState.fiscalYears = {};
   Object.keys(appState.companies).forEach((companyId) => { if (!appState.fiscalYears[companyId]) appState.fiscalYears[companyId] = { id: '2025', label: 'Exercice 2025', status: 'OPEN' }; });
@@ -259,7 +269,7 @@ const CONFIG_GROUPS = {
     description: 'Identité de la société, période et paramètres généraux du dossier actif.',
     actions: [
       { label: 'Fiche de la société', description: 'Nom, forme juridique, adresse, IFU et activité', symbol: '▣', tone: 'blue', action: 'companies' },
-      { label: 'Exercices et périodes', description: 'Créer, ouvrir ou clôturer une période comptable', symbol: '◷', tone: 'purple', action: 'placeholder' },
+      { label: 'Exercices et périodes', description: 'Créer, ouvrir ou clôturer une période comptable', symbol: '◷', tone: 'purple', action: 'periods' },
       { label: 'Paramètres régionaux', description: 'Devise XOF, format des dates et préférences', symbol: '⚙', tone: 'green', action: 'placeholder' }
     ]
   },
@@ -599,6 +609,7 @@ function setActiveCompany(companyId, notify = true) {
   renderBankMovements();
   renderAutomaticTasks();
   renderAutomaticRuns();
+  renderPeriods();
   renderFiscalPreview();
   renderClosure();
   renderFinalization();
@@ -916,7 +927,8 @@ function addCompany(event) {
   const newSetup = createCsrSetup({ companyId: id, regime: 'NORMAL' });
   if (fullPlanPayload) newSetup.accounts = fullPlanPayload.accounts.map((account) => ({ ...account, nature: account.nature || 'À définir', active: account.active !== false, isCustom: false }));
   appState.accountingSetups[id] = newSetup;
-  appState.periods[id] = [{ id: `${year}-01`, label: `Janvier ${year}`, start: `${year}-01-01`, end: `${year}-01-31`, status: 'OPEN' }];
+  appState.periods[id] = createMonthlyPeriods(Number(year));
+  appState.activePeriodIds[id] = `${year}-01`;
   appState.fiscalYears[id] = { id: year, label: `Exercice ${year}`, status: 'OPEN' };
   appState.fiscalSettings[id] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
   persistAppState();
@@ -1030,7 +1042,7 @@ function renderFiscalPreview() {
   const beforeNode = $('#fiscalBeforeTax');
   if (!beforeNode) return;
   const settings = currentFiscalSettings();
-  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: '2025-06' });
+  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: currentPeriod().id });
   const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
   beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
   $('#fiscalTaxableResult').innerHTML = `${numberLabel(fiscal.taxableResult)} <em>FCFA</em>`;
@@ -1051,16 +1063,16 @@ function updateFiscalSetting(field, value) {
 
 function generateFiscalResult() {
   const settings = currentFiscalSettings();
-  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: '2025-06' });
+  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: currentPeriod().id });
   const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
   if (fiscal.tax <= 0) { showToast('Aucun impôt à générer : paramétrez un taux ou un minimum validé.'); return; }
   const accountId = fiscal.calculatedTax >= fiscal.minimumTax ? '8911' : '895';
-  const taxEntry = createAutomaticJournalEntry({ companyId: appState.activeCompany, integrationCategory: 'RESULTAT', date: '2025-06-30', reference: 'RP-0002', label: `Impôt sur le résultat — juin 2025`, dossierId: currentDossierCode(appState.activeCompany), lines: [{ accountId, label: accountId === '895' ? 'Impôt minimum forfaitaire' : 'Impôts sur les bénéfices', debit: fiscal.tax, credit: 0 }, { accountId: '441', label: 'État, impôt sur les bénéfices', debit: 0, credit: fiscal.tax }] });
+  const taxEntry = createAutomaticJournalEntry({ companyId: appState.activeCompany, integrationCategory: 'RESULTAT', date: currentPeriod().end, reference: 'RP-0002', label: `Impôt sur le résultat — ${currentPeriod().label}`, dossierId: currentDossierCode(appState.activeCompany), lines: [{ accountId, label: accountId === '895' ? 'Impôt minimum forfaitaire' : 'Impôts sur les bénéfices', debit: fiscal.tax, credit: 0 }, { accountId: '441', label: 'État, impôt sur les bénéfices', debit: 0, credit: fiscal.tax }] });
   const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...taxEntry, id: `auto-tax-${appState.activeCompany}-2025-06`, amount: fiscal.tax, debit: fiscal.tax, credit: fiscal.tax, source: 'Calcul fiscal automatique', integrationCategory: 'RESULTAT', technicalOnly: true, status: OPERATION_STATES.TO_REVIEW }).entries[0];
   const index = appState.integratedEntries.findIndex((entry) => entry.id === synced.id && entry.companyId === synced.companyId);
   if (index >= 0) appState.integratedEntries[index] = synced; else appState.integratedEntries.unshift(synced);
-  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === 'FISCAL_TAX' && run.period === '2025-06'));
-  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category: 'FISCAL_TAX', period: '2025-06', count: 1, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === 'FISCAL_TAX' && run.period === currentPeriod().id));
+  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category: 'FISCAL_TAX', period: currentPeriod().id, count: 1, at: new Date().toISOString(), status: 'TO_REVIEW' });
   persistAppState();
   renderIntegratedJournal();
   renderAutomaticRuns();
@@ -1069,34 +1081,36 @@ function generateFiscalResult() {
 
 function automaticPreview(category) {
   const companyId = appState.activeCompany;
+  const period = currentPeriod();
+  const periodId = period.id;
   const dossierId = currentDossierCode(companyId);
   if (category === 'AMORTISSEMENTS') {
     const plan = calculateStraightLinePlan({ assetId: 'IMM-2025-001', companyId, cost: 850000, serviceDate: '2025-01-01', usefulLifeMonths: 36, prorata: false, expenseAccount: '6813', accumulatedAccount: '2844' });
-    const entry = depreciationEntry(plan, { journalId: 'AM', date: '2025-06-30' });
+    const entry = depreciationEntry(plan, { journalId: 'AM', date: period.end });
     return { ready: true, entries: [{ ...entry, id: `auto-amort-${companyId}-2025-06`, dossierId, reference: 'AM-0003', source: 'Traitement automatique des amortissements', integrationCategory: category, amount: entry.lines[0].debit, debit: entry.lines[0].debit, credit: entry.lines[1].credit, status: OPERATION_STATES.TO_REVIEW }] };
   }
   if (category === 'ABONNEMENTS') {
     const schedules = appState.automaticSchedules.filter((schedule) => schedule.companyId === companyId && schedule.active !== false);
     const entries = schedules.map((schedule) => {
-      const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: `AB-${String(schedules.indexOf(schedule) + 1).padStart(4, '0')}`, label: `${schedule.label} — juin 2025`, dossierId, lines: [{ accountId: schedule.expenseAccount || '6281', debit: schedule.amount, credit: 0 }, { accountId: schedule.supplierAccount || '4011', debit: 0, credit: schedule.amount }] });
+      const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: `AB-${String(schedules.indexOf(schedule) + 1).padStart(4, '0')}`, label: `${schedule.label} — ${period.label}`, dossierId, lines: [{ accountId: schedule.expenseAccount || '6281', debit: schedule.amount, credit: 0 }, { accountId: schedule.supplierAccount || '4011', debit: 0, credit: schedule.amount }] });
       return { ...entry, id: `auto-${schedule.id}-2025-06`, source: 'Abonnement périodique', amount: schedule.amount, debit: schedule.amount, credit: schedule.amount, status: OPERATION_STATES.TO_REVIEW };
     });
     return { ready: entries.length > 0, entries, reason: entries.length ? '' : 'Aucun abonnement actif n’est paramétré pour cette société.' };
   }
   if (category === 'CENTRALISATION') {
-    const source = centralizeEntries(appState.integratedEntries, { companyId, period: '2025-06', sourceJournalIds: ['VE', 'AC', 'BQ', 'CA', 'OD'] });
+    const source = centralizeEntries(appState.integratedEntries, { companyId, period: periodId, sourceJournalIds: ['VE', 'AC', 'BQ', 'CA', 'OD'] });
     if (!source.sourceCount || !source.lines.length) return { ready: false, entries: [], reason: 'Aucune écriture source validée n’est disponible pour cette période.' };
-    const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: 'CT-0001', label: 'Centralisation des journaux — juin 2025', dossierId, lines: source.lines });
+    const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: period.end, reference: 'CT-0001', label: 'Centralisation des journaux — juin 2025', dossierId, lines: source.lines });
     return { ready: true, entries: [{ ...entry, id: `auto-centralization-${companyId}-2025-06`, amount: source.totalDebit, debit: source.totalDebit, credit: source.totalCredit, source: `Centralisation de ${source.sourceCount} écriture${source.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: source.sourceEntryIds, technicalOnly: true, status: OPERATION_STATES.TO_REVIEW }] };
   }
   const result = calculatePeriodResult(appState.integratedEntries, { companyId, period: '2025-06' });
   if (!result.sourceCount || !result.lines.length || result.result === 0) return { ready: false, entries: [], reason: 'Aucun résultat à générer pour cette période.' };
-  const resultEntry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: 'RP-0001', label: 'Résultat de la période — juin 2025', dossierId, lines: result.lines });
+  const resultEntry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: period.end, reference: 'RP-0001', label: `Résultat de la période — ${period.label}`, dossierId, lines: result.lines });
   return { ready: true, entries: [{ ...resultEntry, id: `auto-result-${companyId}-2025-06`, amount: Math.abs(result.result), debit: result.totalDebit, credit: result.totalCredit, source: `Résultat calculé sur ${result.sourceCount} écriture${result.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: result.sourceEntryIds, technicalOnly: true, result: result.result, status: OPERATION_STATES.TO_REVIEW }] };
 }
 
 function automaticRunFor(category) {
-  return appState.automaticRuns.find((run) => run.companyId === appState.activeCompany && run.category === category && run.period === '2025-06');
+  return appState.automaticRuns.find((run) => run.companyId === appState.activeCompany && run.category === category && run.period === currentPeriod().id);
 }
 
 function renderAutomaticRuns() {
@@ -1152,8 +1166,8 @@ function runAutomaticProcess(category) {
     if (index >= 0) appState.integratedEntries[index] = synced;
     else appState.integratedEntries.unshift(synced);
   });
-  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === category && run.period === '2025-06'));
-  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category, period: '2025-06', count: preview.entries.length, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === category && run.period === currentPeriod().id));
+  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category, period: currentPeriod().id, count: preview.entries.length, at: new Date().toISOString(), status: 'TO_REVIEW' });
   persistAppState();
   closeModal();
   renderAutomaticTasks();
@@ -1948,6 +1962,32 @@ function applyAccountImport() {
   showToast(`${pendingAccountImport.imported.length} comptes ajoutés au plan.`);
 }
 
+function renderPeriods() {
+  const grid = $('#periodGrid');
+  if (!grid) return;
+  const periods = appState.periods[appState.activeCompany] || [];
+  const activeId = appState.activePeriodIds?.[appState.activeCompany];
+  const open = periods.filter((period) => period.status !== 'CLOSED').length;
+  const closed = periods.filter((period) => period.status === 'CLOSED').length;
+  const active = periods.find((period) => period.id === activeId) || periods[0];
+  grid.innerHTML = periods.map((period) => `<button class="period-card ${period.id === active?.id ? 'is-active' : ''} ${period.status === 'CLOSED' ? 'is-closed' : ''}" type="button" data-period-id="${period.id}" aria-pressed="${period.id === active?.id}"><span class="period-card-number">${period.id.slice(-2)}</span><span><strong>${period.label}</strong><small>${displayDate(period.start)} — ${displayDate(period.end)}</small></span><span class="period-card-status">${period.status === 'CLOSED' ? 'Clôturée' : period.id === active?.id ? 'Active' : 'Ouverte'}</span></button>`).join('');
+  $('#openPeriodsCount').textContent = String(open);
+  $('#closedPeriodsCount').textContent = String(closed);
+  $('#activePeriodLabel').textContent = active?.label?.split(' ')[0] || '—';
+  $('#activePeriodDates').textContent = active ? `${displayDate(active.start)} — ${displayDate(active.end)}` : '—';
+}
+
+function selectPeriod(periodId) {
+  const period = (appState.periods[appState.activeCompany] || []).find((item) => item.id === periodId);
+  if (!period) return;
+  appState.activePeriodIds[appState.activeCompany] = period.id;
+  persistAppState();
+  renderPeriods();
+  renderClosure();
+  renderFiscalPreview();
+  showToast(`${period.label} est maintenant la période active.`);
+}
+
 function currentFiscalYear() {
   if (!appState.fiscalYears[appState.activeCompany]) appState.fiscalYears[appState.activeCompany] = { id: '2025', label: 'Exercice 2025', status: 'OPEN' };
   return appState.fiscalYears[appState.activeCompany];
@@ -1978,7 +2018,7 @@ function renderFinalization() {
   $('#finalizationProgress').textContent = `${evaluation.passedCount} / ${evaluation.totalCount} contrôles`;
   $('#finalizationBlockCount').textContent = evaluation.blockingCount ? `${evaluation.blockingCount} blocage${evaluation.blockingCount > 1 ? 's' : ''}` : 'Prêt à arrêter';
   $('#finalizationScore').textContent = String(evaluation.passedCount);
-  $('#finalNetResult').innerHTML = `${numberLabel(calculateFiscalResult({ accountingResult: calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: '2025-06' }).result, ...currentFiscalSettings() }).netResult)} <em>FCFA</em>`;
+  $('#finalNetResult').innerHTML = `${numberLabel(calculateFiscalResult({ accountingResult: calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: currentPeriod().id }).result, ...currentFiscalSettings() }).netResult)} <em>FCFA</em>`;
   $('#closedPeriodCount').textContent = `${closedPeriods} / 12`;
   $('#finalizationMessage').textContent = year.status === 'FINALIZED' ? 'L’exercice est arrêté et son état est verrouillé.' : evaluation.valid ? 'Tous les contrôles sont satisfaits. L’exercice peut être arrêté.' : 'L’exercice reste ouvert tant que les contrôles bloquants ne sont pas terminés.';
   const button = $('#finalizeYearButton');
@@ -2003,7 +2043,8 @@ function finalizeCurrentYear() {
 function currentPeriod() {
   const periods = appState.periods[appState.activeCompany] || [];
   if (!periods.length) { appState.periods[appState.activeCompany] = [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }]; }
-  return appState.periods[appState.activeCompany][0];
+  const activeId = appState.activePeriodIds?.[appState.activeCompany];
+  return appState.periods[appState.activeCompany].find((period) => period.id === activeId) || appState.periods[appState.activeCompany][0];
 }
 
 function currentClosureChecks() {
@@ -2421,6 +2462,7 @@ function renderConfigurationGroup(groupId = 'societe') {
 
 function handleConfigurationAction(action) {
   if (action === 'companies') openView('companies');
+  if (action === 'periods') openView('periods');
   if (action === 'thirdparties-client') { currentThirdpartyType = THIRD_PARTY_TYPES.CLIENT; openView('thirdparties'); renderThirdpartyList(); }
   if (action === 'thirdparties-supplier') { currentThirdpartyType = THIRD_PARTY_TYPES.SUPPLIER; openView('thirdparties'); renderThirdpartyList(); }
   if (action === 'accounts') openView('accounts');
@@ -2779,6 +2821,9 @@ function bindEvents() {
 
     const parameterAction = event.target.closest('[data-parameter-action]');
     if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
+
+    const periodCard = event.target.closest('[data-period-id]');
+    if (periodCard) { selectPeriod(periodCard.dataset.periodId); return; }
 
     const closureAction = event.target.closest('[data-closure-action]');
     if (closureAction) { openView(closureAction.dataset.closureAction); return; }

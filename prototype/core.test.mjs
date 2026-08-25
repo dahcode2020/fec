@@ -21,6 +21,7 @@ import {
   calculateDocumentTotals,
   calculateFiscalResult,
   closePeriod,
+  createMonthlyPeriods,
   evaluatePeriodClosure,
   finalizeFiscalYear,
   calculatePeriodResult,
@@ -195,6 +196,15 @@ test('verrouille une période uniquement après les contrôles bloquants', () =>
   const closed = closePeriod(period, { checks: ready.checks, userId: 'user-1' });
   assert.equal(closed.status, 'CLOSED');
   assert.equal(closed.closedBy, 'user-1');
+});
+
+test('génère les 12 périodes mensuelles avec des bornes correctes', () => {
+  const periods = createMonthlyPeriods(2025);
+  assert.equal(periods.length, 12);
+  assert.equal(periods[0].id, '2025-01');
+  assert.equal(periods[0].end, '2025-01-31');
+  assert.equal(periods[1].end, '2025-02-28');
+  assert.equal(periods[11].end, '2025-12-31');
 });
 
 test('arrête un exercice uniquement après clôture de toutes ses périodes', () => {

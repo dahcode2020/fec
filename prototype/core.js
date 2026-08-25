@@ -411,6 +411,18 @@ export function calculateFiscalResult({ accountingResult = 0, deductions = 0, re
 
 export const PERIOD_STATUSES = Object.freeze({ OPEN: 'OPEN', READY: 'READY', CLOSED: 'CLOSED', REOPEN_REQUESTED: 'REOPEN_REQUESTED' });
 
+const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+export function createMonthlyPeriods(year, { status = PERIOD_STATUSES.OPEN } = {}) {
+  const numericYear = Number(year);
+  if (!Number.isInteger(numericYear) || numericYear < 2000 || numericYear > 2200) throw new DomainError('Année d’exercice invalide.', 'INVALID_FISCAL_YEAR');
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1).padStart(2, '0');
+    const nextMonth = index === 11 ? new Date(Date.UTC(numericYear + 1, 0, 0)) : new Date(Date.UTC(numericYear, index + 1, 0));
+    return { id: `${numericYear}-${month}`, label: `${monthNames[index]} ${numericYear}`, start: `${numericYear}-${month}-01`, end: nextMonth.toISOString().slice(0, 10), status };
+  });
+}
+
 export function evaluatePeriodClosure(checks = []) {
   const normalized = checks.map((check) => ({ ...check, blocking: check.blocking !== false, passed: Boolean(check.passed) }));
   const blocking = normalized.filter((check) => check.blocking && !check.passed);
