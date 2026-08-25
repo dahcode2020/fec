@@ -20,6 +20,8 @@ import {
   updateJournalInSetup,
   calculateDocumentTotals,
   calculateFiscalResult,
+  closePeriod,
+  evaluatePeriodClosure,
   calculatePeriodResult,
   createDossier,
   createIntegratedJournal,
@@ -181,6 +183,17 @@ test('calcule le résultat d’une période à partir des comptes 6 et 7', () =>
   assert.equal(result.result, 211500);
   assert.equal(result.resultAccount, '131');
   assert.equal(result.totalDebit, result.totalCredit);
+});
+
+test('verrouille une période uniquement après les contrôles bloquants', () => {
+  const period = { id: '2025-06', status: 'OPEN' };
+  const blocked = evaluatePeriodClosure([{ id: 'journal', passed: true }, { id: 'saisie', passed: false }]);
+  assert.equal(blocked.valid, false);
+  assert.throws(() => closePeriod(period, { checks: blocked.checks }), (error) => error.code === 'PERIOD_CLOSURE_BLOCKED');
+  const ready = evaluatePeriodClosure([{ id: 'journal', passed: true }, { id: 'saisie', passed: true }]);
+  const closed = closePeriod(period, { checks: ready.checks, userId: 'user-1' });
+  assert.equal(closed.status, 'CLOSED');
+  assert.equal(closed.closedBy, 'user-1');
 });
 
 test('calcule le résultat fiscal et l’impôt sans taux implicite', () => {

@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateFiscalResult, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateFiscalResult, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, evaluatePeriodClosure, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -58,6 +58,11 @@ const appState = {
   fiscalSettings: {
     acacia: { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 }
   },
+  periods: {
+    acacia: [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }],
+    noria: [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }]
+  },
+  periodClosures: [],
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -105,7 +110,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'periodClosures', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -130,6 +135,9 @@ function hydrateAppState() {
   if (!appState.payments) appState.payments = [];
   if (!appState.fiscalSettings) appState.fiscalSettings = {};
   if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
+  if (!appState.periods) appState.periods = {};
+  if (!appState.periods[appState.activeCompany]) appState.periods[appState.activeCompany] = [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }];
+  if (!appState.periodClosures) appState.periodClosures = [];
   if (!appState.bankMovements) appState.bankMovements = [];
 }
 
@@ -584,6 +592,7 @@ function setActiveCompany(companyId, notify = true) {
   renderAutomaticTasks();
   renderAutomaticRuns();
   renderFiscalPreview();
+  renderClosure();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -898,6 +907,8 @@ function addCompany(event) {
   const newSetup = createCsrSetup({ companyId: id, regime: 'NORMAL' });
   if (fullPlanPayload) newSetup.accounts = fullPlanPayload.accounts.map((account) => ({ ...account, nature: account.nature || 'À définir', active: account.active !== false, isCustom: false }));
   appState.accountingSetups[id] = newSetup;
+  appState.periods[id] = [{ id: `${year}-01`, label: `Janvier ${year}`, start: `${year}-01-01`, end: `${year}-01-31`, status: 'OPEN' }];
+  appState.fiscalSettings[id] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
   persistAppState();
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
@@ -1927,6 +1938,63 @@ function applyAccountImport() {
   showToast(`${pendingAccountImport.imported.length} comptes ajoutés au plan.`);
 }
 
+function currentPeriod() {
+  const periods = appState.periods[appState.activeCompany] || [];
+  if (!periods.length) { appState.periods[appState.activeCompany] = [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }]; }
+  return appState.periods[appState.activeCompany][0];
+}
+
+function currentClosureChecks() {
+  const companyEntries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED);
+  const sourceEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED);
+  const companyBanks = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany);
+  const runCategories = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === '2025-06').map((run) => run.category));
+  const fiscal = currentFiscalSettings();
+  return [
+    { id: 'balance', label: 'Équilibres fondamentaux', description: 'Les écritures sources possèdent des lignes équilibrées.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Voir le journal' },
+    { id: 'entries', label: 'Saisies validées', description: `${companyEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} saisie(s) restent à contrôler.`, passed: companyEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
+    { id: 'automatic', label: 'Traitements automatiques', description: 'Amortissements, abonnements, centralisation et résultat traités.', passed: ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runCategories.has(category)), action: 'periodic', actionLabel: 'Voir les traitements' },
+    { id: 'bank', label: 'Banque et rapprochement', description: `${companyBanks.filter((movement) => movement.status !== 'RECONCILED').length} mouvement(s) bancaire(s) restent à rapprocher.`, passed: companyBanks.length > 0 && companyBanks.every((movement) => movement.status === 'RECONCILED'), action: 'bank', actionLabel: 'Ouvrir la banque' },
+    { id: 'fiscal', label: 'Résultat fiscal et impôt', description: fiscal.taxRate > 0 ? 'Taux fiscal renseigné et calcul disponible.' : 'Le taux fiscal de la société reste à valider.', passed: fiscal.taxRate > 0, action: 'periodic', actionLabel: 'Paramétrer le fiscal' },
+    { id: 'sync', label: 'Livre journal synchronisé', description: 'Les écritures actives sont présentes dans le livre journal intégré.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Vérifier le livre' }
+  ];
+}
+
+function renderClosure() {
+  const container = $('#closureChecks');
+  if (!container) return;
+  const period = currentPeriod();
+  const evaluation = evaluatePeriodClosure(currentClosureChecks());
+  container.innerHTML = evaluation.checks.map((check) => `<div class="closure-check-row ${check.passed ? 'is-passed' : 'is-blocked'}"><span class="closure-check-icon">${check.passed ? '✓' : '!'}</span><span class="closure-check-copy"><strong>${escapeHtml(check.label)}</strong><small>${escapeHtml(check.description)}</small></span>${check.passed ? '<span class="status status-green">OK</span>' : `<button class="closure-check-action" type="button" data-closure-action="${escapeHtml(check.action)}">${escapeHtml(check.actionLabel)}</button>`}</div>`).join('');
+  $('#closureProgress').textContent = `${evaluation.passedCount} / ${evaluation.totalCount} contrôles`;
+  $('#closureBlockCount').textContent = evaluation.blockingCount ? `${evaluation.blockingCount} blocage${evaluation.blockingCount > 1 ? 's' : ''}` : 'Prête à clôturer';
+  $('#closureScore strong').textContent = String(evaluation.passedCount);
+  $('#closureScore small').textContent = `sur ${evaluation.totalCount} contrôles`;
+  $('#closureSideMessage').textContent = period.status === 'CLOSED' ? 'La période est clôturée et les écritures sont verrouillées.' : evaluation.valid ? 'Tous les contrôles bloquants sont résolus.' : 'La période ne peut pas encore être clôturée.';
+  const button = $('#closePeriodButton');
+  button.disabled = period.status === 'CLOSED' || !evaluation.valid;
+  button.textContent = period.status === 'CLOSED' ? 'Période clôturée' : 'Clôturer la période';
+  const badge = $('#closePeriodBadge');
+  if (badge) { badge.innerHTML = `<i></i> ${period.status === 'CLOSED' ? 'Période clôturée' : 'Période ouverte'}`; badge.classList.toggle('is-closed', period.status === 'CLOSED'); }
+}
+
+function refreshClosure() {
+  renderClosure();
+  showToast('Les contrôles de clôture ont été actualisés.');
+}
+
+function closeCurrentPeriod() {
+  const period = currentPeriod();
+  try {
+    const closed = closePeriod(period, { checks: currentClosureChecks(), userId: 'claire-dossou' });
+    appState.periods[appState.activeCompany] = [closed];
+    appState.periodClosures.push({ companyId: appState.activeCompany, periodId: period.id, closedAt: closed.closedAt, userId: closed.closedBy });
+    persistAppState();
+    renderClosure();
+    showToast('Période clôturée. Les écritures de juin sont maintenant verrouillées.');
+  } catch (error) { showToast(error.message); }
+}
+
 function currentDossierCode(companyId = appState.activeCompany) {
   const dossier = appState.dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.status !== 'Archivé') || appState.dossiers.find((item) => item.companyId === companyId && item.status !== 'Archivé');
   return dossier?.dossier || `${appState.companies[companyId]?.code || 'DOSSIER'}-25`;
@@ -2650,6 +2718,9 @@ function bindEvents() {
     const parameterAction = event.target.closest('[data-parameter-action]');
     if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
 
+    const closureAction = event.target.closest('[data-closure-action]');
+    if (closureAction) { openView(closureAction.dataset.closureAction); return; }
+
     const bankTab = event.target.closest('.bank-tab[data-bank-view]');
     if (bankTab) { setBankView(bankTab.dataset.bankView); return; }
 
@@ -2733,6 +2804,8 @@ function bindEvents() {
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
     if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
     if (action === 'generate-fiscal-result') generateFiscalResult();
+    if (action === 'refresh-closure') refreshClosure();
+    if (action === 'close-period') closeCurrentPeriod();
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');

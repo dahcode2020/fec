@@ -440,6 +440,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 20. **Paramétrage CSR** — sections analytiques, engagements, cadres d’états, devises et droits opérationnels.
 21. **Outils CSR** — capture d’écran, calculatrice, contrôles et aides comptables.
 22. **Travaux périodiques CSR** — amortissements, abonnements, centralisations, résultat et traitements de période.
+23. **Clôture périodique CSR** — checklist, verrouillage et réouverture contrôlée.
 
 ### Règles UX
 

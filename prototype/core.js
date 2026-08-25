@@ -409,6 +409,28 @@ export function calculateFiscalResult({ accountingResult = 0, deductions = 0, re
   return { accountingResult: beforeTax, deductions: deductible, reintegrations: taxable, taxableResult, taxRate: rate, calculatedTax, minimumTax: minimum, tax, netResult: round(beforeTax - tax) };
 }
 
+export const PERIOD_STATUSES = Object.freeze({ OPEN: 'OPEN', READY: 'READY', CLOSED: 'CLOSED', REOPEN_REQUESTED: 'REOPEN_REQUESTED' });
+
+export function evaluatePeriodClosure(checks = []) {
+  const normalized = checks.map((check) => ({ ...check, blocking: check.blocking !== false, passed: Boolean(check.passed) }));
+  const blocking = normalized.filter((check) => check.blocking && !check.passed);
+  return { valid: blocking.length === 0, checks: normalized, blockingCount: blocking.length, passedCount: normalized.filter((check) => check.passed).length, totalCount: normalized.length };
+}
+
+export function closePeriod(period, { checks = [], userId = null } = {}) {
+  if (!period?.id) throw new DomainError('Période comptable invalide.', 'INVALID_PERIOD');
+  if (period.status === PERIOD_STATUSES.CLOSED) throw new DomainError('La période est déjà clôturée.', 'PERIOD_ALREADY_CLOSED');
+  const evaluation = evaluatePeriodClosure(checks);
+  if (!evaluation.valid) throw new DomainError('La période ne peut pas être clôturée : des contrôles bloquants restent à traiter.', 'PERIOD_CLOSURE_BLOCKED');
+  return { ...period, status: PERIOD_STATUSES.CLOSED, closedAt: new Date().toISOString(), closedBy: userId, closure: evaluation };
+}
+
+export function requestPeriodReopen(period, { userId = null, reason = '' } = {}) {
+  if (!period?.id || period.status !== PERIOD_STATUSES.CLOSED) throw new DomainError('Seule une période clôturée peut demander une réouverture.', 'PERIOD_NOT_CLOSED');
+  if (!reason.trim()) throw new DomainError('Le motif de réouverture est obligatoire.', 'MISSING_REOPEN_REASON');
+  return { ...period, status: PERIOD_STATUSES.REOPEN_REQUESTED, reopenRequestedAt: new Date().toISOString(), reopenRequestedBy: userId, reopenReason: reason.trim() };
+}
+
 export function centralizeEntries(entries = [], { companyId, period = null, sourceJournalIds = [] } = {}) {
   const eligible = entries.filter((entry) => entry.companyId === companyId && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && entry.status !== OPERATION_STATES.DRAFT && (!period || String(entry.date).startsWith(period)) && (!sourceJournalIds.length || sourceJournalIds.includes(entry.journalId)) && Array.isArray(entry.lines) && entry.lines.length);
   const byAccount = new Map();
