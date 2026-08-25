@@ -31,6 +31,7 @@ import {
   createDossier,
   createFecAnnualDemoEntries,
   createIntegratedJournal,
+  createZipArchive,
   createInvoiceDocument,
   documentToJournalLines,
   syncIntegratedJournal,
@@ -505,4 +506,15 @@ test('produit un jeu annuel de démonstration complet pour le système normal et
   assert.equal(smt.valid, true);
   assert.equal(smt.fields.length, 21);
   assert.ok(smt.records.every((record) => record.values['Date Règlement']));
+});
+
+test('scelle un paquet FEC ZIP avec plusieurs fichiers sans compression destructive', () => {
+  const archive = createZipArchive([
+    { name: 'FEC_3201900045612_20251231.txt', bytes: new TextEncoder().encode('CodeJournal\tLibJournal\r\n') },
+    { name: 'FEC_3201900045612_20251231.notice.txt', bytes: new TextEncoder().encode('NOTICE') }
+  ]);
+  assert.deepEqual([...archive.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.txt'));
+  assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.notice.txt'));
+  assert.throws(() => createZipArchive([{ name: '../unsafe.txt', bytes: new Uint8Array() }]), (error) => error.code === 'FEC_ARCHIVE_INVALID_NAME');
 });

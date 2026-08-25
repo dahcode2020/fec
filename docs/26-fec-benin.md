@@ -80,6 +80,23 @@ FEC_IFU_AAAAMMJJ.notice.txt
 
 Il décrit les champs, leur signification, le jeu de caractères et les séparateurs.
 
+## Paquet d’archivage et de remise
+
+Après un contrôle réussi, FEC construit un paquet ZIP contenant :
+
+- le ou les fichiers FEC ;
+- le descriptif technique ;
+- le rapport de contrôle ;
+- un manifeste des fichiers et de leurs empreintes SHA-256.
+
+Le paquet est nommé :
+
+```text
+FEC_IFU_AAAAMMJJ.zip
+```
+
+L’empreinte SHA-256 du paquet et la configuration utilisée sont conservées dans l’historique et la piste d’audit du dossier. Le paquet est marqué comme scellé ; toute modification d’un fichier est détectable en recalculant les empreintes. Cette conservation locale constitue un mécanisme de prototype et devra être remplacée par un stockage durable et contrôlé dans la version de production.
+
 ## Contrôle et modes de génération
 
 Trois modes sont prévus :

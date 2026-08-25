@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -79,6 +79,7 @@ const appState = {
   exportHistory: [],
   fecDraft: null,
   fecHistory: [],
+  fecArchives: [],
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -126,7 +127,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -170,6 +171,7 @@ function hydrateAppState() {
   if (!appState.statementMode) appState.statementMode = 'control';
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
+  if (!Array.isArray(appState.fecArchives)) appState.fecArchives = [];
   if (!Array.isArray(appState.integratedEntries)) appState.integratedEntries = [];
   if (!Array.isArray(appState.recentEntries)) appState.recentEntries = [];
   if (!Array.isArray(appState.auditEvents)) appState.auditEvents = [];
@@ -1199,7 +1201,7 @@ function buildFecPane() {
 
 function renderFecHistory(returnOnly = false) {
   const history = (appState.fecHistory || []).filter((item) => item.companyId === appState.activeCompany).slice(0, 5);
-  const html = `<section class="fec-history-panel"><div class="fec-history-heading"><div><span class="eyebrow">CONSERVATION DU DOSSIER</span><h3>Derniers FEC générés</h3></div><span>${history.length} fichier${history.length > 1 ? 's' : ''}</span></div>${history.length ? `<div class="fec-history-list">${history.map((item) => `<div class="fec-history-row"><span class="fec-history-icon">FEC</span><div><strong>FEC_${escapeHtml(item.ifu)}_${escapeHtml(fecCompactDate(item.closureDate))}.txt</strong><small>${escapeHtml(item.regime === 'SMT' ? 'SMT' : 'Système normal')} · ${escapeHtml(item.demo ? 'Jeu d’essai' : item.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'Officiel')} · ${escapeHtml(String(item.lineCount))} lignes</small></div><span class="fec-history-date">${escapeHtml(new Date(item.createdAt).toLocaleDateString('fr-FR'))}</span></div>`).join('')}</div>` : '<p class="fec-history-empty">Aucun FEC n’a encore été généré pour cette société.</p>'}</section>`;
+  const html = `<section class="fec-history-panel"><div class="fec-history-heading"><div><span class="eyebrow">CONSERVATION DU DOSSIER</span><h3>Derniers FEC générés</h3></div><span>${history.length} fichier${history.length > 1 ? 's' : ''}</span></div>${history.length ? `<div class="fec-history-list">${history.map((item) => `<div class="fec-history-row"><span class="fec-history-icon">FEC</span><div><strong>${escapeHtml(item.packageFile || `FEC_${item.ifu}_${fecCompactDate(item.closureDate)}.zip`)}</strong><small>${escapeHtml(item.regime === 'SMT' ? 'SMT' : 'Système normal')} · ${escapeHtml(item.demo ? 'Jeu d’essai' : item.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'Officiel')} · ${escapeHtml(String(item.lineCount))} lignes</small></div><span class="fec-history-seal">Scellé</span><span class="fec-history-date">${escapeHtml(new Date(item.createdAt).toLocaleDateString('fr-FR'))}</span></div>`).join('')}</div>` : '<p class="fec-history-empty">Aucun FEC n’a encore été généré pour cette société.</p>'}</section>`;
   if (returnOnly) return html;
   const panel = $('#fecHistoryPanel');
   if (panel) panel.outerHTML = html.replace('<section class="fec-history-panel">', '<section class="fec-history-panel" id="fecHistoryPanel">');
@@ -1223,7 +1225,7 @@ function renderFecAssistant() {
       <section class="fec-form-section"><div class="fec-section-heading"><span class="fec-section-number">1</span><div><h3>Définir le périmètre fiscal</h3><p>Le fichier est rattaché à un exercice et à la période soumise à vérification.</p></div><span class="fec-locked-context">Société verrouillée</span></div><div class="fec-fields-grid"><label class="field"><span>Exercice <b>*</b></span><select id="fecFiscalYear" name="fiscalYear" required>${fiscalYearOptions}</select></label><label class="field"><span>Régime comptable <b>*</b></span><select id="fecRegime" name="regime" required><option value="NORMAL" ${draft.regime === 'NORMAL' ? 'selected' : ''}>Système normal · 18 champs</option><option value="SMT" ${draft.regime === 'SMT' ? 'selected' : ''}>SMT · 21 champs</option></select></label><label class="field"><span>Début de la période contrôlée <b>*</b></span><input id="fecStartDate" name="startDate" type="date" value="${escapeHtml(draft.startDate)}" required></label><label class="field"><span>Fin de la période contrôlée <b>*</b></span><input id="fecEndDate" name="endDate" type="date" value="${escapeHtml(draft.endDate)}" required></label><label class="field"><span>Date de clôture de l’exercice <b>*</b></span><input id="fecClosureDate" name="closureDate" type="date" value="${escapeHtml(draft.closureDate)}" required><small class="field-help">Utilisée dans le nom du fichier.</small></label><label class="field"><span>Mode de préparation <b>*</b></span><select id="fecMode" name="mode" required><option value="OFFICIAL_STRICT" ${draft.mode === 'OFFICIAL_STRICT' ? 'selected' : ''}>FEC officiel strict</option><option value="OFFICIAL_REPORT" ${draft.mode === 'OFFICIAL_REPORT' ? 'selected' : ''}>FEC officiel + rapport</option><option value="DIAGNOSTIC" ${draft.mode === 'DIAGNOSTIC' ? 'selected' : ''}>Diagnostic provisoire · non transmissible</option></select></label></div></section>
       <section class="fec-form-section"><div class="fec-section-heading"><span class="fec-section-number">2</span><div><h3>Paramètres techniques de l’arrêté</h3><p>Ces paramètres seront repris dans le descriptif technique accompagnant le FEC.</p></div></div><div class="fec-fields-grid"><label class="field"><span>Séparateur des champs <b>*</b></span><select id="fecSeparator" name="separator" required><option value="TAB" ${draft.separator === 'TAB' ? 'selected' : ''}>Tabulation</option><option value="SEMICOLON" ${draft.separator === 'SEMICOLON' ? 'selected' : ''}>Point-virgule</option></select></label><label class="field"><span>Jeu de caractères <b>*</b></span><select id="fecEncoding" name="encoding" required><option value="ISO-8859-15" ${draft.encoding === 'ISO-8859-15' ? 'selected' : ''}>ISO 8859-15</option><option value="ASCII" ${draft.encoding === 'ASCII' ? 'selected' : ''}>ASCII</option><option value="EBCDIC" ${draft.encoding === 'EBCDIC' ? 'selected' : ''}>EBCDIC</option></select></label><label class="field"><span>Découpage par volume</span><input id="fecMaxRecords" name="maxRecords" type="number" min="0" step="1" value="${escapeHtml(draft.maxRecords || 0)}"><small class="field-help">0 = un fichier unique. Sinon, nombre maximal de lignes par fichier.</small></label><div class="fec-file-preview"><small>NOM PRÉVISIONNEL</small><strong id="fecPreviewFilename">FEC_${escapeHtml(company.ifu || 'IFU')}_${escapeHtml(fecCompactDate(draft.closureDate))}.txt</strong><span>Le suffixe _1, _2… est ajouté si le volume est découpé.</span></div></div><p class="fec-technical-note"><span>i</span> Les 18 premiers champs suivent exactement l’ordre de l’article 5. En SMT, les champs <b>Date Règlement</b>, <b>Mode Règlement</b> et <b>NatOp</b> sont ajoutés.</p></section>
       <div class="fec-result" id="fecResult">${result}</div>
-      <div class="fec-footer"><span><span class="fec-shield">✓</span> La génération officielle est bloquée en cas d’anomalie bloquante.</span><div class="fec-footer-actions"><button class="button button-secondary" type="button" data-action="check-fec">Contrôler le FEC</button><button class="button button-primary" id="generateFecButton" type="button" data-action="generate-fec" disabled>Générer le FEC</button></div></div>
+      <div class="fec-footer"><span><span class="fec-shield">✓</span> Le paquet inclut le FEC, sa notice, son rapport et son manifeste d’empreintes.</span><div class="fec-footer-actions"><button class="button button-secondary" type="button" data-action="check-fec">Contrôler le FEC</button><button class="button button-primary" id="generateFecButton" type="button" data-action="generate-fec" disabled>Générer le paquet</button></div></div>
     </form><div id="fecHistoryPanel">${renderFecHistory(true)}</div>`;
   if (fecPrepared) renderFecResult(fecPrepared);
 }
@@ -1427,7 +1429,7 @@ function renderFecResult(prepared, returnOnly = false) {
   const result = $('#fecResult');
   if (result) result.innerHTML = html;
   const button = $('#generateFecButton');
-  if (button) { button.disabled = !canGenerate; button.textContent = prepared.demo ? 'Exporter le jeu d’essai' : draft.mode === 'DIAGNOSTIC' ? 'Générer le diagnostic' : (draft.mode === 'OFFICIAL_REPORT' && !prepared.valid ? 'Générer le rapport' : 'Générer le FEC'); }
+  if (button) { button.disabled = !canGenerate; button.textContent = prepared.demo ? 'Exporter le jeu d’essai' : draft.mode === 'DIAGNOSTIC' ? 'Générer le diagnostic' : (draft.mode === 'OFFICIAL_REPORT' && !prepared.valid ? 'Générer le rapport' : 'Générer le paquet'); }
   return html;
 }
 
@@ -1443,7 +1445,45 @@ function downloadBytes(filename, bytes, type = 'application/octet-stream') {
   URL.revokeObjectURL(url);
 }
 
-function generateFec() {
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256Hex(bytes) {
+  if (!globalThis.crypto?.subtle) throw new Error('Le navigateur ne permet pas de calculer l’empreinte SHA-256.');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+function buildFecManifest({ base, draft, company, prepared, payloads, packageHash = '' }) {
+  const delimiter = draft.separator === 'SEMICOLON' ? 'POINT-VIRGULE' : 'TABULATION';
+  const rows = payloads.map((payload) => `${payload.name}\t${payload.sha256}\t${payload.bytes.length}`);
+  return [
+    'MANIFESTE DU PAQUET FEC',
+    `SOCIETE\t${String(company.name).replace(/[\t\r\n]/g, ' ')}`,
+    `IFU\t${company.ifu}`,
+    `EXERCICE\t${draft.fiscalYear}`,
+    `PERIODE_CONTROLEE\t${draft.startDate} — ${draft.endDate}`,
+    `DATE_CLOTURE\t${draft.closureDate}`,
+    `REGIME\t${draft.regime === 'SMT' ? 'SMT' : 'SYSTEME_NORMAL'}`,
+    `SEPARATEUR\t${delimiter}`,
+    `ENCODAGE\t${draft.encoding}`,
+    `ECRITURES\t${prepared.entryCount}`,
+    `LIGNES\t${prepared.lineCount}`,
+    `DEBIT\t${prepared.totalDebit.toFixed(2).replace('.', ',')}`,
+    `CREDIT\t${prepared.totalCredit.toFixed(2).replace('.', ',')}`,
+    `PAQUET\t${base}.zip`,
+    'EMPREINTE_PAQUET\tconsignee_dans_historique_du_dossier',
+    '',
+    'FICHIER\tSHA256\tOCTETS',
+    ...rows,
+    '',
+    'STATUT\tPAQUET SCELLE — toute modification invalide les empreintes.',
+    'Ce manifeste accompagne le FEC et ne remplace pas le procès-verbal de validation du vérificateur.'
+  ].join('\r\n') + '\r\n';
+}
+
+async function generateFec() {
   const prepared = fecPrepared || prepareFecFromForm();
   if (!prepared) return;
   const draft = prepared.fecDraft || readFecForm();
@@ -1462,22 +1502,34 @@ function generateFec() {
   }
   const maxRecords = Number(draft.maxRecords || 0);
   const chunks = maxRecords > 0 ? Array.from({ length: Math.max(1, Math.ceil(prepared.records.length / maxRecords)) }, (_, index) => prepared.records.slice(index * maxRecords, (index + 1) * maxRecords)) : [prepared.records];
-  chunks.forEach((records, index) => {
+  const payloads = chunks.map((records, index) => {
     const filePrepared = { ...prepared, records };
     const suffix = chunks.length > 1 ? `_${index + 1}` : '';
-    const content = exportFecTxt({ prepared: filePrepared, delimiter });
-    downloadBytes(`${base}${suffix}.txt`, encodeFecText(content, draft.encoding), 'text/plain');
+    const name = `${base}${suffix}.txt`;
+    return { name, bytes: encodeFecText(exportFecTxt({ prepared: filePrepared, delimiter }), draft.encoding) };
   });
+  const noticeName = `${base}.notice.txt`;
   const notice = exportFecNoticeTxt({ prepared, delimiter, encoding: draft.encoding, recordSeparator: 'CRLF' });
-  downloadBytes(`${base}.notice.txt`, encodeFecText(notice, draft.encoding), 'text/plain');
+  payloads.push({ name: noticeName, bytes: encodeFecText(notice, draft.encoding) });
+  const reportName = `${base}.rapport.txt`;
   const report = exportFecControlReportTxt({ prepared, validation: fileValidation, companyName: company.name, ifu: company.ifu, mode: draft.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'FEC officiel', fileBase: `${base}.txt` });
-  downloadBytes(`${base}.rapport.txt`, encodeFecText(report, draft.encoding), 'text/plain');
-  const history = { id: `fec-${Date.now()}`, companyId: appState.activeCompany, ifu: company.ifu, demo: Boolean(prepared.demo), exercise: draft.fiscalYear, startDate: draft.startDate, endDate: draft.endDate, closureDate: draft.closureDate, regime: draft.regime, mode: draft.mode, encoding: draft.encoding, separator: draft.separator, files: chunks.length, entryCount: prepared.entryCount, lineCount: prepared.lineCount, valid: prepared.valid, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
+  payloads.push({ name: reportName, bytes: encodeFecText(report, draft.encoding) });
+  const hashedPayloads = await Promise.all(payloads.map(async (payload) => ({ ...payload, sha256: await sha256Hex(payload.bytes) })));
+  const manifest = buildFecManifest({ base, draft, company, prepared, payloads: hashedPayloads });
+  const manifestPayload = { name: `${base}.manifest.txt`, bytes: encodeFecText(manifest, draft.encoding) };
+  manifestPayload.sha256 = await sha256Hex(manifestPayload.bytes);
+  const finalArchiveFiles = [...hashedPayloads, manifestPayload];
+  const finalZipBytes = createZipArchive(finalArchiveFiles);
+  const finalPackageHash = await sha256Hex(finalZipBytes);
+  downloadBytes(`${base}.zip`, finalZipBytes, 'application/zip');
+  const archive = { id: `fec-archive-${Date.now()}`, packageFile: `${base}.zip`, companyId: appState.activeCompany, ifu: company.ifu, exercise: draft.fiscalYear, regime: draft.regime, mode: draft.mode, sealedAt: new Date().toISOString(), immutable: true, packageSha256: finalPackageHash, files: finalArchiveFiles.map((file) => ({ name: file.name, sha256: file.sha256 || '', bytes: file.bytes.length })), entryCount: prepared.entryCount, lineCount: prepared.lineCount };
+  appState.fecArchives.unshift(archive);
+  const history = { id: `fec-${Date.now()}`, companyId: appState.activeCompany, ifu: company.ifu, demo: Boolean(prepared.demo), packageFile: archive.packageFile, packageSha256: finalPackageHash, exercise: draft.fiscalYear, startDate: draft.startDate, endDate: draft.endDate, closureDate: draft.closureDate, regime: draft.regime, mode: draft.mode, encoding: draft.encoding, separator: draft.separator, files: chunks.length, entryCount: prepared.entryCount, lineCount: prepared.lineCount, valid: prepared.valid, createdAt: archive.sealedAt, author: 'Claire Dossou' };
   appState.fecHistory.unshift(history);
-  appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'FEC_GENERATED', companyId: appState.activeCompany, label: `FEC ${company.ifu} ${draft.fiscalYear}`, metadata: history, at: history.createdAt, userId: 'claire-dossou' });
+  appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'FEC_ARCHIVE_SEALED', companyId: appState.activeCompany, label: `Paquet FEC ${company.ifu} ${draft.fiscalYear}`, metadata: archive, at: archive.sealedAt, userId: 'claire-dossou' });
   persistAppState();
   renderFecHistory();
-  showToast(`${draft.mode === 'DIAGNOSTIC' ? 'Diagnostic FEC' : 'FEC'} généré${chunks.length > 1 ? ` en ${chunks.length} fichiers` : ''}, avec son descriptif technique.`);
+  showToast(`${draft.mode === 'DIAGNOSTIC' ? 'Diagnostic FEC' : 'Paquet FEC'} scellé et téléchargé avec manifeste, notice et rapport.`);
 }
 
 function openFecAssistant() {
@@ -3783,7 +3835,7 @@ function bindEvents() {
     if (action === 'confirm-export') confirmExport();
     if (action === 'check-fec') prepareFecFromForm();
     if (action === 'run-fec-demo') runFecAnnualDemo();
-    if (action === 'generate-fec') generateFec();
+    if (action === 'generate-fec') void generateFec().catch((error) => showToast(error.message));
     if (action === 'open-fec-correction') openFecCorrection(actionTarget.dataset.fecEntryId, actionTarget.dataset.fecLine);
     if (action === 'open-fec') openFecAssistant();
     if (action === 'download-report') openExportAssistant(actionTarget.dataset.exportReport || null);

@@ -1256,3 +1256,49 @@ export function createFecAnnualDemoEntries({ companyId, fiscalYear = '2025', cli
   addEntry({ id: 'result', journalId: 'RP', date: isoMonthDate(12, 31), reference: 'RP-DEMO-0001', label: `Résultat de test — ${year}`, integrationCategory: 'RESULTAT', lines: [{ accountId: '7061', debit: 1, credit: 0 }, { accountId: '131', debit: 0, credit: 1 }] });
   return entries;
 }
+
+function zipCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipWord(value) {
+  return [value & 0xff, (value >>> 8) & 0xff];
+}
+
+function zipDword(value) {
+  return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
+}
+
+export function createZipArchive(files = []) {
+  if (!Array.isArray(files) || !files.length) throw new DomainError('Un paquet FEC doit contenir au moins un fichier.', 'FEC_ARCHIVE_EMPTY');
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  files.forEach((file) => {
+    const name = String(file?.name || '').trim();
+    const bytes = file?.bytes instanceof Uint8Array ? file.bytes : Uint8Array.from(file?.bytes || []);
+    if (!name || name.includes('/') || name.includes('\\')) throw new DomainError(`Nom de fichier d’archive invalide : ${name}`, 'FEC_ARCHIVE_INVALID_NAME');
+    const nameBytes = encoder.encode(name);
+    const crc = zipCrc32(bytes);
+    const localHeader = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...zipDword(crc), ...zipDword(bytes.length), ...zipDword(bytes.length), ...zipWord(nameBytes.length), 0, 0]);
+    const local = Uint8Array.from([...localHeader, ...nameBytes, ...bytes]);
+    localParts.push(local);
+    const centralHeader = Uint8Array.from([0x50, 0x4b, 0x01, 0x02, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...zipDword(crc), ...zipDword(bytes.length), ...zipDword(bytes.length), ...zipWord(nameBytes.length), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...zipDword(offset)]);
+    centralParts.push(Uint8Array.from([...centralHeader, ...nameBytes]));
+    offset += local.length;
+  });
+  const centralOffset = offset;
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = Uint8Array.from([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, ...zipWord(files.length), ...zipWord(files.length), ...zipDword(centralSize), ...zipDword(centralOffset), 0, 0]);
+  const totalSize = localParts.reduce((sum, part) => sum + part.length, 0) + centralSize + end.length;
+  const archive = new Uint8Array(totalSize);
+  let cursor = 0;
+  [...localParts, ...centralParts, end].forEach((part) => { archive.set(part, cursor); cursor += part.length; });
+  return archive;
+}

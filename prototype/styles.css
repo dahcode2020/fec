@@ -825,3 +825,5 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .fec-warning { flex-wrap:wrap; }
   .fec-warning > .button { margin-left:33px; }
 }
+.fec-history-seal { flex:0 0 auto; padding:4px 6px; color:#1d8064; background:var(--green-soft); border-radius:12px; font-size:7px; font-weight:800; }
+@media (max-width: 620px) { .fec-history-seal { display:none; } }
