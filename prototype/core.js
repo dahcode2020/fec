@@ -1407,9 +1407,9 @@ const ROLE_PERMISSION_SET = Object.freeze({
   READER: Object.freeze([USER_PERMISSIONS.READ, USER_PERMISSIONS.EXPORTS_CREATE])
 });
 
-export function createUser({ id, name, email, active = true } = {}) {
+export function createUser({ id, name, email, active = true, passwordHash = null, passwordSalt = null, lastLoginAt = null } = {}) {
   if (!id || !name?.trim() || !email?.trim()) throw new DomainError('Un utilisateur doit avoir un nom et une adresse e-mail.', 'INVALID_USER');
-  return { id, name: name.trim(), email: email.trim().toLowerCase(), active, createdAt: new Date().toISOString() };
+  return { id, name: name.trim(), email: email.trim().toLowerCase(), active, passwordHash, passwordSalt, lastLoginAt, createdAt: new Date().toISOString() };
 }
 
 export function createMembership({ id, userId, companyId, moduleId = 'CSR', role = USER_ROLES.READER, active = true } = {}) {

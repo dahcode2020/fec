@@ -116,7 +116,9 @@ Le bouton « Nouveau dossier » permet également de vérifier le parcours d’a
 - le mot de passe ne devra jamais être stocké en clair ;
 - la récupération du mot de passe sera traitée avec l’authentification réelle, pas dans la maquette ;
 - le prototype distingue désormais l’utilisateur courant, son rôle et ses droits par société/module ;
-- les opérations sensibles CSR refusent une action lorsque le rôle ne possède pas la permission correspondante.
+- le prototype vérifie désormais le mot de passe avec un dérivé PBKDF2 local et ne conserve pas le mot de passe en clair ;
+- les opérations sensibles CSR refusent une action lorsque le rôle ne possède pas la permission correspondante ;
+- cette authentification locale reste une étape de transition avant le serveur d’identité et SQLite/Tauri.
 
 ## Limites actuelles
 

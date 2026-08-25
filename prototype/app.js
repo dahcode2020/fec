@@ -844,6 +844,7 @@ function showDossiers() {
 
 function showLogin() {
   appState.authenticated = false;
+  try { sessionStorage.removeItem('fec.session'); } catch { /* Session locale indisponible. */ }
   $('#dossiersScreen')?.setAttribute('hidden', '');
   $('#appShell')?.setAttribute('hidden', '');
   $('#loginScreen')?.removeAttribute('hidden');
@@ -999,24 +1000,68 @@ function bindAuthForm() {
   form.dataset.authBound = 'true';
 }
 
-function authenticate(event) {
+const AUTH_DEMO_PASSWORD = 'fec-demo';
+const AUTH_ITERATIONS = 120000;
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function passwordDigest(password, salt) {
+  if (!globalThis.crypto?.subtle || !globalThis.crypto?.getRandomValues) throw new Error('Le navigateur ne permet pas de sécuriser cette session.');
+  const key = await globalThis.crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await globalThis.crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: AUTH_ITERATIONS, hash: 'SHA-256' }, key, 256);
+  return new Uint8Array(bits);
+}
+
+async function verifyOrSeedPassword(user, password) {
+  if (user.passwordHash && user.passwordSalt) {
+    const digest = await passwordDigest(password, base64ToBytes(user.passwordSalt));
+    return bytesToBase64(digest) === user.passwordHash;
+  }
+  if (password !== AUTH_DEMO_PASSWORD) return false;
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const digest = await passwordDigest(password, salt);
+  user.passwordSalt = bytesToBase64(salt);
+  user.passwordHash = bytesToBase64(digest);
+  user.passwordSeededAt = new Date().toISOString();
+  return true;
+}
+
+async function authenticate(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const email = String(formData.get('email') || '').trim().toLowerCase();
-  const user = appState.users.find((item) => item.email === email && item.active !== false);
-  if (!user) { showToast('Compte inconnu ou désactivé dans cet espace de travail.'); return; }
-  appState.currentUserId = user.id;
-  const firstAccessibleMembership = (appState.memberships || []).find((membership) => membership.userId === user.id && membership.active !== false);
-  if (!(appState.memberships || []).some((membership) => membership.userId === user.id && membership.companyId === appState.activeCompany && membership.active !== false) && firstAccessibleMembership) appState.activeCompany = firstAccessibleMembership.companyId;
-  const firstAccessibleDossier = (appState.dossiers || []).find((dossier) => dossier.companyId === appState.activeCompany && (dossier.moduleId ? companyModuleAccess(dossier.companyId, dossier.moduleId) : true) && dossier.status !== 'Archivé');
-  if (firstAccessibleDossier) appState.selectedDossier = firstAccessibleDossier.id;
-  renderCurrentUser();
-  persistAppState();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  const originalLabel = submit?.textContent;
+  if (submit) { submit.disabled = true; submit.textContent = 'Vérification…'; }
   try {
+    const formData = new FormData(form);
+    const email = String(formData.get('email') || '').trim().toLowerCase();
+    const password = String(formData.get('password') || '');
+    const user = appState.users.find((item) => item.email === email && item.active !== false);
+    if (!user || !(await verifyOrSeedPassword(user, password))) { showToast('Adresse e-mail ou mot de passe incorrect.'); return; }
+    appState.currentUserId = user.id;
+    user.lastLoginAt = new Date().toISOString();
+    const firstAccessibleMembership = (appState.memberships || []).find((membership) => membership.userId === user.id && membership.active !== false);
+    if (!(appState.memberships || []).some((membership) => membership.userId === user.id && membership.companyId === appState.activeCompany && membership.active !== false) && firstAccessibleMembership) appState.activeCompany = firstAccessibleMembership.companyId;
+    const firstAccessibleDossier = (appState.dossiers || []).find((dossier) => dossier.companyId === appState.activeCompany && (dossier.moduleId ? companyModuleAccess(dossier.companyId, dossier.moduleId) : true) && dossier.status !== 'Archivé');
+    if (firstAccessibleDossier) appState.selectedDossier = firstAccessibleDossier.id;
+    try { sessionStorage.setItem('fec.session', JSON.stringify({ userId: user.id, loggedAt: user.lastLoginAt, remember: Boolean(formData.get('remember')) })); } catch { /* Session locale indisponible, la session reste en mémoire. */ }
+    renderCurrentUser();
+    persistAppState();
     showDossiers();
   } catch (error) {
     console.error('Impossible d’ouvrir les dossiers.', error);
     recoverFromBootstrapError();
+  } finally {
+    if (submit) { submit.disabled = false; submit.textContent = originalLabel || 'Accéder à mes dossiers'; }
   }
 }
 
