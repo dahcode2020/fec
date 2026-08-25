@@ -75,6 +75,8 @@ const appState = {
   openingRuns: [],
   financialSnapshots: [],
   statementMode: 'control',
+  exportDraft: null,
+  exportHistory: [],
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -122,7 +124,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -162,6 +164,7 @@ function hydrateAppState() {
   if (!appState.openingRuns) appState.openingRuns = [];
   if (!appState.financialSnapshots) appState.financialSnapshots = [];
   if (!appState.statementMode) appState.statementMode = 'control';
+  if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!appState.bankMovements) appState.bankMovements = [];
 }
 
@@ -572,6 +575,9 @@ function setActiveCompany(companyId, notify = true) {
   const company = appState.companies[companyId];
   if (!company) return;
   appState.activeCompany = companyId;
+  appState.exportDraft = null;
+  pendingExportRows = null;
+  pendingExportReportType = null;
   persistAppState();
 
   $$('[data-company-name]').forEach((node) => { node.textContent = company.name; });
@@ -621,6 +627,7 @@ function setActiveCompany(companyId, notify = true) {
   renderFinalization();
   renderOpening();
   renderStatements();
+  renderExportAssistant();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -981,15 +988,268 @@ function handleFile(file) {
   showToast(`${file.name} est prêt à être analysé.`);
 }
 
+const EXPORT_REPORTS = Object.freeze([
+  { value: 'trial-balance', label: 'Balance générale' },
+  { value: 'general-ledger', label: 'Grand livre' },
+  { value: 'integrated-journal', label: 'Livre-journal' },
+  { value: 'customer-balance', label: 'Balance auxiliaire clients' },
+  { value: 'supplier-balance', label: 'Balance auxiliaire fournisseurs' },
+  { value: 'assets', label: 'État des immobilisations' },
+  { value: 'income-statement', label: 'Compte de résultat' },
+  { value: 'balance-sheet', label: 'Bilan' },
+  { value: 'cash-flow', label: 'Flux de trésorerie' },
+  { value: 'notes', label: 'Notes et annexes' }
+]);
+
+const EXPORT_FORMATS = Object.freeze({
+  xlsx: { label: 'Excel moderne', extension: 'xlsx', description: '.xlsx · recommandé', icon: 'X', tone: 'green' },
+  xls: { label: 'Excel compatibilité', extension: 'xls', description: '.xls · ancien format', icon: 'X', tone: 'blue' },
+  txt: { label: 'Texte comptable', extension: 'txt', description: '.txt · séparateur tabulation', icon: 'T', tone: 'purple' }
+});
+
+let pendingExportRows = null;
+let pendingExportReportType = null;
+
+function exportReportDefinition(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return EXPORT_REPORTS.find((report) => report.value === value || report.label.toLowerCase() === normalized)
+    || EXPORT_REPORTS[0];
+}
+
+function exportFileBase(value) {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '').slice(0, 90) || 'export-comptable';
+}
+
+function exportPeriodOptions(selectedId) {
+  const periods = appState.periods[appState.activeCompany] || [];
+  const year = currentFiscalYear();
+  const options = [{ value: 'YEAR', label: `${year.label} · toutes les périodes` }, ...periods.map((period) => ({ value: period.id, label: period.label }))];
+  return options.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === selectedId ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('');
+}
+
+function exportJournalOptions(selectedId) {
+  const journals = currentAccountSetup().journals || [];
+  return [`<option value="ALL" ${selectedId === 'ALL' ? 'selected' : ''}>Tous les journaux</option>`, ...journals.map((journal) => `<option value="${escapeHtml(journal.id)}" ${journal.id === selectedId ? 'selected' : ''}>${escapeHtml(journal.id)} · ${escapeHtml(journal.label)}</option>`)].join('');
+}
+
+function defaultExportDraft(reportType = null) {
+  const company = appState.companies[appState.activeCompany];
+  const period = currentPeriod();
+  const report = exportReportDefinition(reportType);
+  const extension = EXPORT_FORMATS.txt.extension;
+  return {
+    reportType: report.value,
+    periodId: period.id,
+    journalId: 'ALL',
+    statusMode: 'CONTROL',
+    format: 'txt',
+    profile: 'cabinet',
+    title: `${report.label} — ${period.label}`,
+    filename: `${exportFileBase(company.code || company.shortName)}-${period.id}-${exportFileBase(report.label)}.${extension}`,
+    recipient: '',
+    purpose: '',
+    sourcePreview: false,
+    exportReady: false
+  };
+}
+
 function buildExportPane() {
   const pane = document.createElement('div');
   pane.className = 'export-pane panel';
   pane.id = 'exportPane';
   pane.hidden = true;
-  pane.innerHTML = `<div class="panel-heading"><div><h2>Choisir l’état à exporter</h2><p>Les données de la société active seront exportées selon votre sélection.</p></div><span class="status status-green">${escapeHtml(appState.companies[appState.activeCompany].shortName)} · actif</span></div><div class="export-format-grid"><button class="export-format is-selected" type="button" data-export-format="xlsx"><span class="file-icon file-icon-green">X</span><span><strong>Excel moderne</strong><small>.xlsx · recommandé</small></span><span class="radio-check"></span></button><button class="export-format" type="button" data-export-format="xls"><span class="file-icon file-icon-blue">X</span><span><strong>Excel compatibilité</strong><small>.xls · ancien format</small></span><span class="radio-check"></span></button><button class="export-format" type="button" data-export-format="txt"><span class="file-icon file-icon-purple">T</span><span><strong>Texte comptable</strong><small>.txt · séparateur tabulation</small></span><span class="radio-check"></span></button></div><div class="export-options"><label class="field"><span>État à exporter</span><select id="exportReportType"><option>Balance générale</option><option>Grand livre</option><option>Livre-journal</option><option>Balance auxiliaire clients</option><option>Balance auxiliaire fournisseurs</option><option>État des immobilisations</option></select></label><label class="field"><span>Période</span><select><option>Juin 2025</option><option>Exercice 2025</option><option>Personnalisée…</option></select></label><label class="field"><span>Journaux</span><select><option>Tous les journaux</option><option>Ventes uniquement</option><option>Achats uniquement</option></select></label></div><div class="export-footer"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> L’export sera enregistré dans l’historique.</span><button class="button button-primary" type="button" data-action="download-report">Télécharger l’état <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg></button></div>`;
   const recent = $('.recent-imports');
   recent?.parentElement?.insertBefore(pane, recent);
+  renderExportAssistant();
   return pane;
+}
+
+function renderExportAssistant() {
+  const pane = $('#exportPane');
+  const company = appState.companies[appState.activeCompany];
+  if (!pane || !company) return;
+  const draft = appState.exportDraft || defaultExportDraft();
+  const report = exportReportDefinition(draft.reportType);
+  const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
+  const fiscalYear = currentFiscalYear();
+  const dossier = currentDossierCode(appState.activeCompany);
+  const reportOptions = EXPORT_REPORTS.map((item) => `<option value="${item.value}" ${item.value === report.value ? 'selected' : ''}>${item.label}</option>`).join('');
+  const formatOptions = Object.entries(EXPORT_FORMATS).map(([value, item]) => `<button class="export-format ${value === draft.format ? 'is-selected' : ''}" type="button" data-export-format="${value}" aria-pressed="${value === draft.format}"><span class="file-icon file-icon-${item.tone}">${item.icon}</span><span><strong>${item.label}</strong><small>${item.description}</small></span><span class="radio-check"></span></button>`).join('');
+  const reviewHidden = draft.exportReady ? '' : ' hidden';
+  const confirmDisabled = draft.exportReady ? '' : ' disabled';
+
+  pane.innerHTML = `<div class="export-assistant-heading"><div><span class="eyebrow">ASSISTANT D’EXPORTATION</span><h2>Préparer la sortie comptable</h2><p>Complétez les informations demandées, vérifiez le périmètre, puis confirmez le téléchargement.</p></div><span class="status status-green"><i></i> ${escapeHtml(company.shortName)} · société active</span></div>
+    <div class="export-progress" aria-label="Étapes de l’export"><span class="export-progress-step is-done"><b>1</b><span>Périmètre</span></span><i></i><span class="export-progress-step ${draft.exportReady ? 'is-done' : 'is-current'}"><b>2</b><span>Informations</span></span><i></i><span class="export-progress-step ${draft.exportReady ? 'is-current' : ''}"><b>3</b><span>Vérification</span></span></div>
+    <form id="exportForm" class="export-form" novalidate>
+      <section class="export-form-section"><div class="export-section-heading"><span class="export-section-number">1</span><div><h3>Définir le périmètre</h3><p>Le contexte est affiché avant toute production du fichier.</p></div><span class="export-context-lock">Société verrouillée</span></div>
+        <div class="export-context-grid"><div><small>SOCIÉTÉ ACTIVE</small><strong>${escapeHtml(company.name)}</strong><span>${escapeHtml(company.ifu || 'IFU non renseigné')} · XOF</span></div><div><small>DOSSIER</small><strong>${escapeHtml(dossier)}</strong><span>${escapeHtml(company.activity || 'Activité non renseignée')}</span></div><div><small>EXERCICE</small><strong>${escapeHtml(fiscalYear.label)}</strong><span>${escapeHtml(displayDate(company.exerciseStart))} — ${escapeHtml(displayDate(company.exerciseEnd))}</span></div></div>
+        <div class="export-fields-grid"><label class="field"><span>État à exporter <b>*</b></span><select id="exportReportType" name="reportType" required>${reportOptions}</select></label><label class="field"><span>Période <b>*</b></span><select id="exportPeriod" name="periodId" required>${exportPeriodOptions(draft.periodId)}</select></label><label class="field"><span>Journaux <b>*</b></span><select id="exportJournal" name="journalId" required>${exportJournalOptions(draft.journalId)}</select></label><label class="field"><span>Niveau de données <b>*</b></span><select id="exportStatusMode" name="statusMode" required><option value="CONTROL" ${draft.statusMode === 'CONTROL' ? 'selected' : ''}>Contrôle · brouillons et écritures en revue</option><option value="OFFICIAL" ${draft.statusMode === 'OFFICIAL' ? 'selected' : ''}>Officiel · validées ou clôturées uniquement</option></select></label></div>
+        <p class="export-field-help"><span>i</span> Une édition officielle exclut les brouillons et les écritures en revue. Pour changer de société, utilisez le sélecteur de société avant de recommencer.</p>
+      </section>
+      <section class="export-form-section"><div class="export-section-heading"><span class="export-section-number">2</span><div><h3>Compléter les informations de sortie</h3><p>Ces informations seront reprises dans le fichier et dans l’historique des échanges.</p></div><span class="export-required-note"><b>*</b> obligatoire</span></div>
+        <div class="export-fields-grid export-output-fields"><label class="field field-span-2"><span>Intitulé de l’export <b>*</b></span><input id="exportTitle" name="title" type="text" value="${escapeHtml(draft.title)}" placeholder="Ex. Balance à transmettre au cabinet" required><small class="field-help">Donnez un nom explicite à cette sortie.</small></label><label class="field field-span-2"><span>Nom du fichier <b>*</b></span><input id="exportFilename" name="filename" type="text" value="${escapeHtml(draft.filename)}" placeholder="balance-juin-2025.txt" required><small class="field-help">L’extension sera ajustée selon le format choisi.</small></label><label class="field"><span>Destinataire</span><input id="exportRecipient" name="recipient" type="text" value="${escapeHtml(draft.recipient || '')}" placeholder="Ex. Cabinet Kora"></label><label class="field"><span>Objet / remarque</span><input id="exportPurpose" name="purpose" type="text" value="${escapeHtml(draft.purpose || '')}" placeholder="Ex. Préparation de la clôture"></label></div>
+      </section>
+      <section class="export-form-section"><div class="export-section-heading"><span class="export-section-number">3</span><div><h3>Choisir le format et le profil</h3><p>Le profil standard conserve les colonnes utiles au travail du cabinet.</p></div></div><div class="export-format-grid">${formatOptions}</div><div class="export-fields-grid export-format-fields"><label class="field"><span>Profil de colonnes <b>*</b></span><select id="exportProfile" name="profile" required><option value="cabinet" ${draft.profile === 'cabinet' ? 'selected' : ''}>Cabinet · complet</option><option value="saisie" ${draft.profile === 'saisie' ? 'selected' : ''}>Saisie · import comptable</option><option value="lecture" ${draft.profile === 'lecture' ? 'selected' : ''}>Lecture · présentation</option></select></label><div class="export-format-selected"><small>FORMAT RETENU</small><strong>${format.label}</strong><span>${format.description}</span></div></div></section>
+      <div class="export-review" id="exportReview"${reviewHidden}></div>
+      <div class="export-footer"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Aucun fichier n’est créé avant votre vérification.</span><div class="export-footer-actions"><button class="button button-secondary" type="button" data-action="prepare-export">Vérifier l’export</button><button class="button button-primary" id="confirmExportButton" type="button" data-action="confirm-export"${confirmDisabled}>Télécharger le fichier <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg></button></div></div>
+    </form>`;
+  if (draft.exportReady) renderExportReview(buildExportData(draft));
+}
+
+function readExportForm() {
+  const form = $('#exportForm');
+  if (!form) return null;
+  const formData = new FormData(form);
+  const report = exportReportDefinition(formData.get('reportType'));
+  const filenameInput = String(formData.get('filename') || '').trim();
+  const filenameBase = filenameInput.replace(/\.[a-z0-9]{1,5}$/i, '') || exportFileBase(`${report.label}-${formData.get('periodId')}`);
+  return {
+    ...(appState.exportDraft || defaultExportDraft(report.value)),
+    reportType: report.value,
+    periodId: String(formData.get('periodId') || ''),
+    journalId: String(formData.get('journalId') || 'ALL'),
+    statusMode: String(formData.get('statusMode') || 'CONTROL'),
+    profile: String(formData.get('profile') || 'cabinet'),
+    title: String(formData.get('title') || '').trim(),
+    filename: filenameBase,
+    recipient: String(formData.get('recipient') || '').trim(),
+    purpose: String(formData.get('purpose') || '').trim(),
+    exportReady: false
+  };
+}
+
+function exportStatuses(draft) {
+  return draft.statusMode === 'OFFICIAL'
+    ? [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED]
+    : [OPERATION_STATES.IMPUTED, OPERATION_STATES.TO_REVIEW, OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED];
+}
+
+function buildExportData(draft) {
+  const company = appState.companies[appState.activeCompany];
+  const fiscalYear = currentFiscalYear();
+  const report = exportReportDefinition(draft.reportType);
+  const period = (appState.periods[appState.activeCompany] || []).find((item) => item.id === draft.periodId);
+  const periodFilter = draft.periodId === 'YEAR' ? String(fiscalYear.id) : draft.periodId;
+  const periodLabel = draft.periodId === 'YEAR' ? fiscalYear.label : period?.label || draft.periodId;
+  if (draft.sourcePreview && pendingExportRows && pendingExportReportType === draft.reportType) {
+    return { report, periodLabel, rows: pendingExportRows.map((row) => ({ accountId: row.ref || row.accountId || '', label: row.label || row.description || '', debit: row.debit || 0, credit: row.credit || 0 })), source: 'aperçu' };
+  }
+  const entries = appState.integratedEntries.filter((entry) => draft.journalId === 'ALL' || entry.journalId === draft.journalId);
+  const statement = buildFinancialStatements(entries, { companyId: appState.activeCompany, period: periodFilter, statuses: exportStatuses(draft) });
+  let rows = statement.trialBalance;
+  if (report.value === 'income-statement') rows = statement.incomeStatement;
+  if (report.value === 'balance-sheet') rows = statement.balanceSheet;
+  if (report.value === 'customer-balance') rows = rows.filter((line) => line.accountId.startsWith('411'));
+  if (report.value === 'supplier-balance') rows = rows.filter((line) => line.accountId.startsWith('401'));
+  if (report.value === 'assets') rows = rows.filter((line) => line.accountId.startsWith('2'));
+  if (report.value === 'cash-flow') rows = rows.filter((line) => line.accountId.startsWith('5'));
+  if (report.value === 'notes') rows = rows.filter((line) => /^[1-8]/.test(line.accountId));
+  return { report, periodLabel, rows, source: 'données comptables' };
+}
+
+function renderExportReview(data) {
+  const review = $('#exportReview');
+  const draft = appState.exportDraft;
+  if (!review || !draft || !data) return;
+  const company = appState.companies[appState.activeCompany];
+  const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
+  const statusLabel = draft.statusMode === 'OFFICIAL' ? 'Officiel · validées ou clôturées' : 'Contrôle · brouillons et revue inclus';
+  const journalLabel = draft.journalId === 'ALL' ? 'Tous les journaux' : draft.journalId;
+  const extension = format.extension;
+  review.innerHTML = `<div class="export-review-icon">✓</div><div class="export-review-copy"><strong>Vérification prête</strong><p>${escapeHtml(data.rows.length)} ligne${data.rows.length > 1 ? 's' : ''} seront exportée${data.rows.length > 1 ? 's' : ''} pour ${escapeHtml(company.name)}. Aucun téléchargement n’a encore été lancé.</p><div class="export-review-tags"><span>${escapeHtml(data.report.label)}</span><span>${escapeHtml(data.periodLabel)}</span><span>${escapeHtml(journalLabel)}</span><span>${escapeHtml(statusLabel)}</span><span>${escapeHtml(`${draft.filename}.${extension}`)}</span></div></div>`;
+  review.removeAttribute('hidden');
+  $('#confirmExportButton')?.removeAttribute('disabled');
+}
+
+function invalidateExportReview() {
+  if (!appState.exportDraft?.exportReady) return;
+  appState.exportDraft.exportReady = false;
+  $('#exportReview')?.setAttribute('hidden', '');
+  $('#confirmExportButton')?.setAttribute('disabled', '');
+  $$('.export-progress-step').forEach((step, index) => step.classList.toggle('is-current', index === 1));
+}
+
+function prepareExport() {
+  const form = $('#exportForm');
+  if (!form) return;
+  if (!form.reportValidity()) {
+    showToast('Complétez les champs obligatoires avant de vérifier l’export.');
+    return;
+  }
+  const draft = readExportForm();
+  if (!draft?.title || !draft.filename) {
+    showToast('L’intitulé et le nom du fichier sont obligatoires.');
+    return;
+  }
+  draft.exportReady = true;
+  appState.exportDraft = draft;
+  const data = buildExportData(draft);
+  renderExportReview(data);
+  $$('.export-progress-step').forEach((step, index) => step.classList.toggle('is-current', index === 2));
+  $$('.export-progress-step').forEach((step, index) => step.classList.toggle('is-done', index < 2));
+  showToast('Périmètre contrôlé. Vérifiez le récapitulatif avant le téléchargement.');
+}
+
+function exportContent(draft, data) {
+  const company = appState.companies[appState.activeCompany];
+  const dossier = currentDossierCode(appState.activeCompany);
+  const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
+  const rows = data.rows.map((line) => ({ accountId: line.accountId, label: line.label, debit: line.debit, credit: line.credit }));
+  const metadata = [
+    ['SOCIETE', company.name],
+    ['IFU', company.ifu || ''],
+    ['DOSSIER', dossier],
+    ['EXERCICE', currentFiscalYear().label],
+    ['PERIODE', data.periodLabel],
+    ['ETAT', data.report.label],
+    ['JOURNAUX', draft.journalId === 'ALL' ? 'Tous les journaux' : draft.journalId],
+    ['STATUT', draft.statusMode === 'OFFICIAL' ? 'Officiel' : 'Contrôle'],
+    ['INTITULE', draft.title],
+    ['DESTINATAIRE', draft.recipient],
+    ['OBJET', draft.purpose],
+    ['FORMAT', format.label]
+  ].map(([key, value]) => `${key}\t${String(value || '').replace(/[\t\r\n]/g, ' ')}`);
+  return [...metadata, '', exportBalanceTxt({ companyName: company.name, period: data.periodLabel, rows }).trim()].join('\r\n') + '\r\n';
+}
+
+function confirmExport() {
+  if (!appState.exportDraft?.exportReady) {
+    prepareExport();
+    return;
+  }
+  const draft = appState.exportDraft;
+  const data = buildExportData(draft);
+  const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
+  const filename = `${exportFileBase(draft.filename)}.${format.extension}`;
+  downloadText(filename, exportContent(draft, data));
+  const historyItem = { id: `export-${Date.now()}`, companyId: appState.activeCompany, dossier: currentDossierCode(appState.activeCompany), exercise: currentFiscalYear().id, period: draft.periodId, reportType: data.report.label, format: format.extension, title: draft.title, filename, recipient: draft.recipient, purpose: draft.purpose, statusMode: draft.statusMode, journalId: draft.journalId, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
+  appState.exportHistory.unshift(historyItem);
+  appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'EXPORT_CREATED', companyId: appState.activeCompany, label: draft.title, metadata: historyItem, at: historyItem.createdAt, userId: 'claire-dossou' });
+  persistAppState();
+  showToast(`${draft.title} a été exporté pour ${appState.companies[appState.activeCompany].name}.`);
+}
+
+function openExportAssistant(reportType = null, { rows = null, periodLabel = null } = {}) {
+  closeModal();
+  const defaults = defaultExportDraft(reportType);
+  appState.exportDraft = { ...defaults };
+  if (reportType) {
+    const report = exportReportDefinition(reportType);
+    appState.exportDraft.reportType = report.value;
+    appState.exportDraft.title = `${report.label} — ${currentPeriod().label}`;
+  }
+  if (periodLabel) appState.exportDraft.title = `${appState.exportDraft.title.split(' — ')[0]} — ${periodLabel}`;
+  appState.exportDraft.exportReady = false;
+  appState.exportDraft.sourcePreview = Boolean(rows);
+  pendingExportRows = rows;
+  pendingExportReportType = rows ? appState.exportDraft.reportType : null;
+  renderExportAssistant();
+  openView('imports');
+  setImportMode('export');
+  window.setTimeout(() => $('#exportTitle')?.focus(), 50);
 }
 
 function downloadText(filename, content) {
@@ -1005,20 +1265,7 @@ function downloadText(filename, content) {
 }
 
 function downloadReport() {
-  const company = appState.companies[appState.activeCompany];
-  const reportType = $('#exportReportType')?.value || 'Balance générale';
-  const filename = `${company.name.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-balance-juin.txt`;
-  const content = exportBalanceTxt({
-    companyName: company.name,
-    period: 'Juin 2025',
-    rows: [
-      { accountId: '4111', label: 'Clients', debit: 486000, credit: 0 },
-      { accountId: '5211', label: 'Banque', debit: 2340500, credit: 0 },
-      { accountId: '7061', label: 'Services vendus', debit: 0, credit: 1265000 }
-    ]
-  });
-  downloadText(filename, content);
-  showToast(`${reportType} exportée pour ${company.name}.`);
+  openExportAssistant($('#exportReportType')?.value || null);
 }
 
 function downloadTemplate() {
@@ -1034,6 +1281,7 @@ function setImportMode(mode) {
   if (mode === 'export') {
     importPane?.setAttribute('hidden', '');
     mapping?.setAttribute('hidden', '');
+    renderExportAssistant();
     exportPane?.removeAttribute('hidden');
   } else {
     importPane?.removeAttribute('hidden');
@@ -2049,13 +2297,8 @@ function renderStatements() {
 }
 
 function exportStatements() {
-  const period = currentPeriod();
-  const statuses = appState.statementMode === 'official' ? [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] : [OPERATION_STATES.IMPUTED, OPERATION_STATES.TO_REVIEW, OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED];
-  const statement = buildFinancialStatements(appState.integratedEntries, { companyId: appState.activeCompany, period: period.id, statuses });
-  const company = appState.companies[appState.activeCompany];
-  const content = exportBalanceTxt({ companyName: company.name, period: period.label, rows: statement.trialBalance.map((line) => ({ accountId: line.accountId, label: line.label, debit: line.debit, credit: line.credit })) });
-  downloadText(`${company.code || company.shortName}-etats-${period.id}.txt`, content);
-  showToast('L’état financier a été exporté selon le périmètre sélectionné.');
+  const report = currentStatementTab === 'income' ? 'Compte de résultat' : currentStatementTab === 'balance' ? 'Bilan' : currentStatementTab === 'cashflow' ? 'Flux de trésorerie' : currentStatementTab === 'notes' ? 'Notes et annexes' : 'Balance générale';
+  openExportAssistant(report);
 }
 
 function selectStatementTab(tab) {
@@ -2823,12 +3066,13 @@ function editionPreviewRows(action, title) {
 function openEditionPreview(title = 'Livre journal intégré', action = 'journal') {
   const company = appState.companies[appState.activeCompany];
   const mode = $('.edition-status-button.is-active')?.textContent?.trim() || 'Officielles';
+  const period = currentPeriod();
   const rows = editionPreviewRows(action, title);
-  appState.editionPreview = { title, action, mode, rows, companyName: company.name };
+  appState.editionPreview = { title, action, mode, rows, period: period.label, companyName: company.name };
   openModal('editionPreviewModal');
   $('#editionPreviewTitle').textContent = title;
   $('#editionPreviewCompany').textContent = company.name;
-  $('#editionPreviewPeriod').textContent = 'Juin 2025';
+  $('#editionPreviewPeriod').textContent = period.label;
   $('#editionPreviewMode').textContent = mode === 'Contrôle' ? 'Édition de contrôle' : 'Édition officielle';
   $('#editionPreviewCount').textContent = `${rows.length} ligne${rows.length > 1 ? 's' : ''}`;
   const totalDebit = rows.reduce((sum, row) => sum + Number(row.debit || 0), 0);
@@ -2840,9 +3084,10 @@ function openEditionPreview(title = 'Livre journal intégré', action = 'journal
 function exportEditionPreview() {
   const preview = appState.editionPreview;
   if (!preview) return;
-  const rows = preview.rows.map((row) => [row.date, row.ref, row.label, row.debit || 0, row.credit || 0, row.status].map((cell) => String(cell).replace(/\t/g, ' ')).join('\t'));
-  downloadText(`${preview.title.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-apercu.txt`, ['SOCIETE\t' + preview.companyName, 'EDITION\t' + preview.title, 'PERIODE\tJuin 2025', '', 'DATE\tREFERENCE\tLIBELLE\tDEBIT\tCREDIT\tETAT', ...rows].join('\r\n') + '\r\n');
-  showToast('L’aperçu a été exporté en TXT.');
+  const reportTypeByAction = { journal: 'integrated-journal', assets: 'assets', treasury: 'cash-flow', sales: 'customer-balance', purchases: 'supplier-balance' };
+  const report = exportReportDefinition(reportTypeByAction[preview.action] || preview.title);
+  const rows = preview.rows.map((row) => ({ ...row, ref: row.ref || '' }));
+  openExportAssistant(report.value, { rows, periodLabel: preview.period || 'Juin 2025' });
 }
 
 function handleEditionAction(action, title) {
@@ -3026,7 +3271,21 @@ function bindEvents() {
 
     const exportFormat = event.target.closest('[data-export-format]');
     if (exportFormat) {
-      $$('.export-format').forEach((format) => format.classList.toggle('is-selected', format === exportFormat));
+      const draft = readExportForm() || appState.exportDraft || defaultExportDraft();
+      draft.format = exportFormat.dataset.exportFormat;
+      draft.exportReady = false;
+      appState.exportDraft = draft;
+      $$('.export-format').forEach((format) => {
+        const selected = format === exportFormat;
+        format.classList.toggle('is-selected', selected);
+        format.setAttribute('aria-pressed', String(selected));
+      });
+      const selectedFormat = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
+      const selectedLabel = $('.export-format-selected strong');
+      const selectedDescription = $('.export-format-selected span');
+      if (selectedLabel) selectedLabel.textContent = selectedFormat.label;
+      if (selectedDescription) selectedDescription.textContent = selectedFormat.description;
+      invalidateExportReview();
       return;
     }
 
@@ -3117,7 +3376,9 @@ function bindEvents() {
     if (action === 'edit-suggestion') editSuggestion();
     if (action === 'generate-depreciation') generateDepreciation();
     if (action === 'validate-import') validateImport();
-    if (action === 'download-report') downloadReport();
+    if (action === 'prepare-export') prepareExport();
+    if (action === 'confirm-export') confirmExport();
+    if (action === 'download-report') openExportAssistant(actionTarget.dataset.exportReport || null);
     if (action === 'download-template') downloadTemplate();
     if (action === 'show-member-modal') showToast('L’invitation d’un membre sera disponible dans le prochain jalon.');
     if (action === 'menu-placeholder') showToast('Ce sous-menu sera paramétré dans l’étape dédiée.');
@@ -3153,6 +3414,12 @@ function bindEvents() {
   });
   $('#assetForm')?.addEventListener('submit', addAsset);
   $('#fileInput')?.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
+  document.addEventListener('input', (event) => {
+    if (event.target.closest('#exportForm')) invalidateExportReview();
+  });
+  document.addEventListener('change', (event) => {
+    if (event.target.closest('#exportForm')) invalidateExportReview();
+  });
 
   const dropZone = $('#dropZone');
   ['dragenter', 'dragover'].forEach((name) => dropZone?.addEventListener(name, (event) => { event.preventDefault(); dropZone.classList.add('is-dragging'); }));

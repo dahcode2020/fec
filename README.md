@@ -30,6 +30,7 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - propositions d’imputations comptables avant validation ;
 - calcul et génération contrôlés des amortissements ;
 - import et export des balances et livres comptables en TXT et formats tableur Excel ;
+- assistant d’exportation guidé avec périmètre, informations de sortie, vérification et historique ;
 - comptabilité générale, trésorerie et facturation comme base du futur MVP ;
 - devise de travail : FCFA/XOF ;
 - paramètres comptables et fiscaux béninois configurables et validables par un professionnel.

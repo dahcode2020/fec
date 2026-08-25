@@ -122,6 +122,22 @@ Chaque onglet présente des cartes d’édition avec leur description et leur di
 
 L’aperçu est une étape indépendante et sans effet sur les données comptables. Aucune impression ou export ne doit être déclenché automatiquement à l’ouverture d’une édition.
 
+## Assistant de sortie guidé
+
+L’export ouvre un assistant avant de créer le fichier. L’utilisateur est amené à compléter ou confirmer les champs suivants :
+
+- état, exercice, période et journaux concernés ;
+- niveau de données : contrôle ou officiel ;
+- intitulé de l’export et nom du fichier ;
+- destinataire et objet ou remarque, lorsqu’ils sont utiles au cabinet ;
+- format de sortie et profil de colonnes.
+
+La société active et le dossier sont affichés comme contexte verrouillé : ils ne peuvent pas être remplacés silencieusement depuis l’assistant. Pour exporter une autre société, l’utilisateur doit revenir au sélecteur de société et relancer l’assistant.
+
+Les champs marqués d’un astérisque sont contrôlés avant la vérification. Le téléchargement reste désactivé tant que le périmètre n’a pas été vérifié. Le récapitulatif affiche le nombre de lignes, la période, les journaux, le niveau de données et le nom final du fichier avant confirmation.
+
+Après confirmation, la configuration de l’export est conservée dans l’historique et dans la piste d’audit du dossier. Cette maquette prépare les adaptateurs TXT, CSV et tableur ; elle ne doit pas être considérée comme la génération réglementaire définitive des formats Excel tant que ces adaptateurs n’ont pas été branchés.
+
 ## Formats
 
 Les sorties prévues sont :
