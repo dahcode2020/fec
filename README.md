@@ -60,7 +60,7 @@ npm run preview
 
 Puis ouvrir `http://localhost:4173` dans un navigateur.
 
-Le premier noyau métier est décrit dans [`docs/03-socle-technique.md`](docs/03-socle-technique.md). Les tests se lancent avec :
+Le premier noyau métier est décrit dans [`docs/03-socle-technique.md`](docs/03-socle-technique.md). Le contrat SQLite/Tauri en préparation est décrit dans [`docs/27-socle-sqlite-tauri.md`](docs/27-socle-sqlite-tauri.md). Les tests se lancent avec :
 
 ```bash
 npm test
