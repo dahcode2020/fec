@@ -74,4 +74,17 @@ L’interface ne devra pas ouvrir directement le fichier SQLite. Le shell sera r
 - verrouillage définitif des snapshots et écritures validées ;
 - tests sur Windows, Linux et macOS.
 
-Le socle SQLite actuel est un adaptateur de développement. Il ne doit pas encore être présenté comme une solution de production ou comme une authentification serveur complète.
+## Moteur de synchronisation de développement
+
+[`storage/sync-engine.mjs`](../storage/sync-engine.mjs) fournit un service distant en mémoire pour tester le protocole sans dépendre d’un hébergeur. Il simule :
+
+- l’envoi des événements de l’outbox ;
+- les acquittements idempotents ;
+- la réception et l’application des événements dans l’inbox ;
+- la reprise par curseur ;
+- le passage hors ligne puis la reprise des événements `FAILED` ;
+- la détection et la conservation des conflits.
+
+Le moteur ne résout jamais silencieusement une divergence entre deux versions d’une même entité. Cette règle sera conservée lors du branchement à l’API distante.
+
+Le socle SQLite actuel et ce moteur de synchronisation sont des adaptateurs de développement. Ils ne doivent pas encore être présentés comme une solution de production ou comme une authentification serveur complète.

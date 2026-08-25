@@ -64,6 +64,28 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
       return result.changes === 1;
     },
     markSyncEventApplied(id) { db.prepare("UPDATE sync_inbox SET status='APPLIED', applied_at=? WHERE id=?").run(now(), id); },
+    applySyncEvent(event) {
+      const payload = event.payload || (typeof event.payload_json === 'string' ? JSON.parse(event.payload_json) : null);
+      if (!payload) throw new Error(`Événement ${event.id} sans contenu.`);
+      switch (event.entityType) {
+        case 'USER': this.saveUser(payload, { enqueue: false }); break;
+        case 'COMPANY': this.saveCompany(payload, { enqueue: false }); break;
+        case 'MEMBERSHIP': this.saveMembership(payload, { enqueue: false }); break;
+        case 'DOSSIER': this.saveDossier(payload, { enqueue: false }); break;
+        case 'FISCAL_YEAR': this.saveFiscalYear(payload, event.companyId, { enqueue: false }); break;
+        case 'PERIOD': this.savePeriod(payload, event.companyId, payload.fiscalYear, { enqueue: false }); break;
+        case 'JOURNAL_ENTRY':
+          if (!db.prepare('SELECT 1 AS found FROM journal_entries WHERE id=?').get(event.entityId)) this.insertJournalEntry(payload, payload.fiscalYear || null, { enqueue: false });
+          break;
+        case 'FINANCIAL_SNAPSHOT': this.saveSnapshot(payload, { enqueue: false }); break;
+        case 'FEC_ARCHIVE': this.saveFecArchive(payload, { enqueue: false }); break;
+        case 'AUDIT_EVENT':
+          if (!db.prepare('SELECT 1 AS found FROM audit_events WHERE id=?').get(event.entityId)) this.saveAuditEvent(payload, { enqueue: false });
+          break;
+        default: throw new Error(`Type d’entité non pris en charge : ${event.entityType}`);
+      }
+      this.markSyncEventApplied(event.id);
+    },
     setSyncCursor(scope, cursor) { db.prepare(`INSERT INTO sync_cursors (scope, cursor, updated_at) VALUES (?, ?, ?) ON CONFLICT(scope) DO UPDATE SET cursor=excluded.cursor, updated_at=excluded.updated_at`).run(scope, String(cursor), now()); },
     getSyncCursor(scope = 'default') { return db.prepare('SELECT cursor FROM sync_cursors WHERE scope=?').get(scope)?.cursor || null; },
     recordConflict(conflict) { db.prepare(`INSERT INTO sync_conflicts (id, outbox_id, company_id, entity_type, entity_id, local_json, remote_json, reason, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)`).run(conflict.id || `conflict-${Date.now()}`, conflict.outboxId || null, conflict.companyId || null, conflict.entityType, conflict.entityId, json(conflict.local), json(conflict.remote), conflict.reason, now()); },
@@ -118,13 +140,13 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
         if (enqueue) enqueueInternal({ companyId, entityType: 'PERIOD', entityId: period.id, payload: { ...period, fiscalYear } });
       });
     },
-    insertJournalEntry(entry, fiscalYear = null) {
+    insertJournalEntry(entry, fiscalYear = null, { enqueue = true } = {}) {
       return transaction(() => {
         db.prepare(`INSERT INTO journal_entries (id, company_id, fiscal_year, journal_id, entry_date, piece_date, reference, label, status, integration_category, validated_at, data_json, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(entry.id, entry.companyId, fiscalYear || entry.fiscalYear || null, entry.journalId, entry.date, entry.pieceDate || entry.date, entry.reference || null, entry.label || '', entry.status || 'DRAFT', entry.integrationCategory || null, entry.validatedAt || null, json(entry), entry.createdAt || now());
         const statement = db.prepare(`INSERT INTO journal_entry_lines (entry_id, line_number, account_id, label, debit, credit, data_json) VALUES (?, ?, ?, ?, ?, ?, ?)`);
         (entry.lines || []).forEach((line, index) => statement.run(entry.id, index + 1, line.accountId, line.label || '', Number(line.debit || 0), Number(line.credit || 0), json(line)));
-        enqueueInternal({ companyId: entry.companyId, entityType: 'JOURNAL_ENTRY', entityId: entry.id, payload: { ...entry, fiscalYear: fiscalYear || entry.fiscalYear || null } });
+        if (enqueue) enqueueInternal({ companyId: entry.companyId, entityType: 'JOURNAL_ENTRY', entityId: entry.id, payload: { ...entry, fiscalYear: fiscalYear || entry.fiscalYear || null } });
         return entry.id;
       });
     },
