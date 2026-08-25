@@ -1128,7 +1128,7 @@ function normalizedManualLines() {
 function renderManualLineEditor() {
   const rows = $('#multiLineRows');
   if (!rows) return;
-  rows.innerHTML = manualLineDraft.map((line, index) => `<div class="manual-line-row"><span class="manual-line-number">${index + 1}</span><input type="text" value="${escapeHtml(line.accountId || '')}" placeholder="N° compte" data-manual-line="${index}" data-manual-field="accountId"><input class="manual-line-label" type="text" value="${escapeHtml(line.label || '')}" placeholder="Libellé" data-manual-line="${index}" data-manual-field="label"><div class="manual-amount"><input type="text" value="${escapeHtml(line.debit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="debit"><span>D</span></div><div class="manual-amount manual-credit"><input type="text" value="${escapeHtml(line.credit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="credit"><span>C</span></div><button class="icon-button small" type="button" data-action="remove-manual-line" data-line-index="${index}" aria-label="Supprimer la ligne" ${manualLineDraft.length <= 2 ? 'disabled' : ''}><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>`).join('');
+  rows.innerHTML = manualLineDraft.map((line, index) => `<div class="manual-line-row"><span class="manual-line-number">${index + 1}</span><label class="manual-field"><span>Compte</span><input type="text" value="${escapeHtml(line.accountId || '')}" placeholder="N° compte" data-manual-line="${index}" data-manual-field="accountId"></label><label class="manual-field manual-field-wide"><span>Libellé</span><input class="manual-line-label" type="text" value="${escapeHtml(line.label || '')}" placeholder="Libellé" data-manual-line="${index}" data-manual-field="label"></label><label class="manual-field"><span>Débit</span><div class="manual-amount"><input type="text" value="${escapeHtml(line.debit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="debit"><span>D</span></div></label><label class="manual-field"><span>Crédit</span><div class="manual-amount manual-credit"><input type="text" value="${escapeHtml(line.credit || '')}" placeholder="0" data-manual-line="${index}" data-manual-field="credit"><span>C</span></div></label><button class="icon-button small" type="button" data-action="remove-manual-line" data-line-index="${index}" aria-label="Supprimer la ligne" ${manualLineDraft.length <= 2 ? 'disabled' : ''}><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>`).join('');
   updateManualLineSummary();
 }
 
@@ -1611,7 +1611,7 @@ function bindEvents() {
     if (calculatorButton) { calculatorKey(calculatorButton.dataset.calculatorKey); return; }
 
     const manualAdd = event.target.closest('[data-action="add-manual-line"]');
-    if (manualAdd) { manualLineDraft.push({ accountId: '', label: '', debit: 0, credit: 0 }); renderManualLineEditor(); return; }
+    if (manualAdd) { manualLineDraft.push({ accountId: '', label: '', debit: 0, credit: 0 }); renderManualLineEditor(); window.setTimeout(() => $('#multiLineRows [data-manual-line="' + (manualLineDraft.length - 1) + '"]')?.focus(), 0); return; }
 
     const manualRemove = event.target.closest('[data-action="remove-manual-line"]');
     if (manualRemove) { manualLineDraft.splice(Number(manualRemove.dataset.lineIndex), 1); renderManualLineEditor(); return; }
