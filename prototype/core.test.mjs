@@ -19,6 +19,7 @@ import {
   updateAccountInPlan,
   updateJournalInSetup,
   calculateDocumentTotals,
+  calculatePeriodResult,
   createDossier,
   createIntegratedJournal,
   createInvoiceDocument,
@@ -167,6 +168,18 @@ test('centralise les lignes sans modifier les écritures sources', () => {
   assert.equal(result.totalCredit, 125000);
   assert.deepEqual(result.sourceEntryIds, ['e1', 'e2']);
   assert.equal(entries[0].journalId, 'VE');
+});
+
+test('calcule le résultat d’une période à partir des comptes 6 et 7', () => {
+  const result = calculatePeriodResult([
+    { id: 'sale', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '7061', label: 'Ventes', debit: 0, credit: 250000 }] },
+    { id: 'expense', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '6047', label: 'Fournitures', debit: 38500, credit: 0 }] }
+  ], { companyId: 'co-a', period: '2025-06' });
+  assert.equal(result.products, 250000);
+  assert.equal(result.charges, 38500);
+  assert.equal(result.result, 211500);
+  assert.equal(result.resultAccount, '131');
+  assert.equal(result.totalDebit, result.totalCredit);
 });
 
 test('pointe et rapproche un mouvement bancaire avec une écriture', () => {

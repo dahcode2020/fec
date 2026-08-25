@@ -367,6 +367,32 @@ export function reconcileBankMovement(movement, entry) {
   return { ...movement, status: BANK_MOVEMENT_STATUS.RECONCILED, matchedEntryId: entry.id, reconciledAt: new Date().toISOString() };
 }
 
+export function calculatePeriodResult(entries = [], { companyId, period = null } = {}) {
+  const charges = new Map();
+  const products = new Map();
+  const sourceEntryIds = [];
+  entries.filter((entry) => entry.companyId === companyId && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && entry.status !== OPERATION_STATES.DRAFT && (!period || String(entry.date).startsWith(period)) && Array.isArray(entry.lines)).forEach((entry) => {
+    let contributes = false;
+    entry.lines.forEach((line) => {
+      const accountId = normalizeAccountNumber(line.accountId);
+      const debit = amount(line.debit || 0);
+      const credit = amount(line.credit || 0);
+      if (accountId.startsWith('6') && debit > 0) { charges.set(accountId, { accountId, label: line.label, amount: (charges.get(accountId)?.amount || 0) + debit }); contributes = true; }
+      if (accountId.startsWith('7') && credit > 0) { products.set(accountId, { accountId, label: line.label, amount: (products.get(accountId)?.amount || 0) + credit }); contributes = true; }
+    });
+    if (contributes) sourceEntryIds.push(entry.id);
+  });
+  const chargeLines = [...charges.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label}`, debit: 0, credit: line.amount }));
+  const productLines = [...products.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label}`, debit: line.amount, credit: 0 }));
+  const totalCharges = chargeLines.reduce((sum, line) => sum + line.credit, 0);
+  const totalProducts = productLines.reduce((sum, line) => sum + line.debit, 0);
+  const result = Math.round((totalProducts - totalCharges) * 100) / 100;
+  const resultAccount = result >= 0 ? '131' : '139';
+  const resultLines = totalCharges ? [{ accountId: resultAccount, label: result >= 0 ? 'Résultat net — charges de la période' : 'Résultat net — charges de la période', debit: totalCharges, credit: 0 }] : [];
+  if (totalProducts) resultLines.push({ accountId: resultAccount, label: result >= 0 ? 'Résultat net — produits de la période' : 'Résultat net — produits de la période', debit: 0, credit: totalProducts });
+  return { companyId, period, sourceEntryIds, sourceCount: sourceEntryIds.length, charges: totalCharges, products: totalProducts, result, resultAccount, lines: [...productLines, ...chargeLines, ...resultLines], totalDebit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.debit, 0), totalCredit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.credit, 0) };
+}
+
 export function centralizeEntries(entries = [], { companyId, period = null, sourceJournalIds = [] } = {}) {
   const eligible = entries.filter((entry) => entry.companyId === companyId && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && entry.status !== OPERATION_STATES.DRAFT && (!period || String(entry.date).startsWith(period)) && (!sourceJournalIds.length || sourceJournalIds.includes(entry.journalId)) && Array.isArray(entry.lines) && entry.lines.length);
   const byAccount = new Map();

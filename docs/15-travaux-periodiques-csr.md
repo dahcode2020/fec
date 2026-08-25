@@ -43,7 +43,7 @@ Le système peut maintenant prévisualiser les écritures sources de la période
 
 ### Résultat
 
-La page et le journal `RP` sont en place, mais la génération est bloquée tant que les comptes de résultat, les régularisations et le régime comptable ne sont pas validés.
+Le système calcule maintenant le résultat provisoire à partir des lignes validées des comptes de charges et de produits. Il prépare une écriture technique dans `RP`, en choisissant le compte de bénéfice ou de perte approprié, avec la liste des écritures sources. Cette écriture reste à contrôler et ne vaut pas arrêté définitif de l’exercice.
 
 ## Règles de sécurité
 
