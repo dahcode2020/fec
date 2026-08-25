@@ -1165,8 +1165,7 @@ function renderExportReview(data) {
 }
 
 function invalidateExportReview() {
-  if (!appState.exportDraft?.exportReady) return;
-  appState.exportDraft.exportReady = false;
+  if (appState.exportDraft) appState.exportDraft.exportReady = false;
   $('#exportReview')?.setAttribute('hidden', '');
   $('#confirmExportButton')?.setAttribute('disabled', '');
   $$('.export-progress-step').forEach((step, index) => step.classList.toggle('is-current', index === 1));
