@@ -22,7 +22,9 @@ import {
   syncIntegratedJournal,
   summarizeIntegratedJournal,
   canDeleteCorrectionCandidate,
+  createAutomaticJournalEntry,
   createCompany,
+  SYSTEM_JOURNAL_BY_CATEGORY,
   createCorrectionWindow,
   createJournalEntry,
   createLocalWorkspaceStore,
@@ -82,6 +84,14 @@ test('configure les journaux et verrouille le code utilisé', () => {
   assert.equal(setup.journals.at(-1).nextNumber, 12);
   assert.throws(() => updateJournalInSetup(setup.journals, 'VE', { id: 'VEX' }, { usedJournalIds: ['VE'] }), (error) => error.code === 'USED_JOURNAL_CODE_LOCKED');
   assert.throws(() => addJournalToSetup(setup.journals, { id: 'OD', label: 'Doublon' }), (error) => error.code === 'DUPLICATE_JOURNAL');
+});
+
+test('réserve les journaux automatiques aux traitements système', () => {
+  const lines = [{ accountId: '628000', debit: 12000, credit: 0 }, { accountId: '401000', debit: 0, credit: 12000 }];
+  const entry = createAutomaticJournalEntry({ companyId: 'co-a', integrationCategory: 'ABONNEMENTS', date: '2025-06-01', label: 'Abonnement internet', lines });
+  assert.equal(entry.journalId, SYSTEM_JOURNAL_BY_CATEGORY.ABONNEMENTS);
+  assert.equal(entry.integrationCategory, 'ABONNEMENTS');
+  assert.throws(() => createJournalEntry({ companyId: 'co-a', journalId: 'AB', date: '2025-06-01', lines }), (error) => error.code === 'SYSTEM_JOURNAL_USER_POST_FORBIDDEN');
 });
 
 test('le référentiel SYSCOHADA intégré couvre les 9 classes', () => {

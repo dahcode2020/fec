@@ -29,13 +29,12 @@ Les types de saisie sont affichés horizontalement :
 - Écriture libre ;
 - Vente ;
 - Achat ;
-- Abonnement ;
 - Encaissement ;
 - Décaissement ;
 - Transfert ;
 - Immobilisation.
 
-Le choix d’un onglet préconfigure le journal et la catégorie d’opération, mais ne remplace pas le contrôle de l’utilisateur.
+Le choix d’un onglet préconfigure le journal et la catégorie d’opération, mais ne remplace pas le contrôle de l’utilisateur. Les abonnements, amortissements, centralisations et résultats de période ne sont pas des onglets de saisie : leurs imputations sont générées par les traitements automatiques dans leurs journaux réservés.
 
 ## Mise à jour en temps réel
 

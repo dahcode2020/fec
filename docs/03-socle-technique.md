@@ -56,7 +56,7 @@ Le calcul du plan, la proposition d’écriture et sa validation restent trois �
 
 ### Livre journal intégré
 
-Le noyau sait créer et synchroniser une vue intégrée du livre journal par société. Il catégorise les écritures en opérations générales, amortissements automatiques, centralisations, abonnements et résultat de la période. Une synchronisation remplace une ligne portant le même identifiant au lieu de la dupliquer.
+Le noyau sait créer et synchroniser une vue intégrée du livre journal par société. Il catégorise les écritures en opérations générales, amortissements automatiques, centralisations, abonnements et résultat de la période. Les catégories automatiques sont routées vers les journaux système `AM`, `AB`, `CT` et `RP`; un utilisateur ne peut pas poster directement dans ces journaux. Une synchronisation remplace une ligne portant le même identifiant au lieu de la dupliquer.
 
 ### Paramétrage CSR minimal
 

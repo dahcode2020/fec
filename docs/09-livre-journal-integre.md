@@ -5,7 +5,7 @@
 
 ## Objectif
 
-Le **Livre journal intégré** est le registre transversal du module CSR. Il rassemble les écritures provenant des opérations manuelles et des traitements automatiques, puis les classe selon leur origine comptable.
+Le **Livre journal intégré** est le registre transversal du module CSR. Il rassemble les écritures provenant des opérations manuelles et des traitements automatiques, puis les classe selon leur origine comptable. Les catégories automatiques sont alimentées par des journaux système réservés, et non par une saisie libre de l’utilisateur.
 
 Il ne remplace pas les journaux Achats, Ventes, Banque, Caisse et Opérations diverses. Il en est la vue intégrée et contrôlée.
 

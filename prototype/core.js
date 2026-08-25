@@ -158,12 +158,24 @@ export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
 ]);
 
 export const DEFAULT_CSR_JOURNALS = Object.freeze([
-  Object.freeze({ id: 'VE', label: 'Ventes', type: 'VENTES', prefix: 'VE-', nextNumber: 1, active: true, isCustom: false }),
-  Object.freeze({ id: 'AC', label: 'Achats', type: 'ACHATS', prefix: 'AC-', nextNumber: 1, active: true, isCustom: false }),
-  Object.freeze({ id: 'BQ', label: 'Banque', type: 'BANQUE', prefix: 'BQ-', nextNumber: 1, active: true, isCustom: false }),
-  Object.freeze({ id: 'CA', label: 'Caisse', type: 'CAISSE', prefix: 'CA-', nextNumber: 1, active: true, isCustom: false }),
-  Object.freeze({ id: 'OD', label: 'Opérations diverses', type: 'OPERATIONS_DIVERSES', prefix: 'OD-', nextNumber: 1, active: true, isCustom: false })
+  Object.freeze({ id: 'VE', label: 'Ventes', type: 'VENTES', prefix: 'VE-', nextNumber: 1, active: true, isCustom: false, systemGenerated: false }),
+  Object.freeze({ id: 'AC', label: 'Achats', type: 'ACHATS', prefix: 'AC-', nextNumber: 1, active: true, isCustom: false, systemGenerated: false }),
+  Object.freeze({ id: 'BQ', label: 'Banque', type: 'BANQUE', prefix: 'BQ-', nextNumber: 1, active: true, isCustom: false, systemGenerated: false }),
+  Object.freeze({ id: 'CA', label: 'Caisse', type: 'CAISSE', prefix: 'CA-', nextNumber: 1, active: true, isCustom: false, systemGenerated: false }),
+  Object.freeze({ id: 'OD', label: 'Opérations diverses', type: 'OPERATIONS_DIVERSES', prefix: 'OD-', nextNumber: 1, active: true, isCustom: false, systemGenerated: false }),
+  Object.freeze({ id: 'AM', label: 'Amortissements automatiques', type: 'AMORTISSEMENTS', prefix: 'AM-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
+  Object.freeze({ id: 'AB', label: 'Abonnements', type: 'ABONNEMENTS', prefix: 'AB-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
+  Object.freeze({ id: 'CT', label: 'Centralisations', type: 'CENTRALISATIONS', prefix: 'CT-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
+  Object.freeze({ id: 'RP', label: 'Résultat de la période', type: 'RESULTAT_PERIODE', prefix: 'RP-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true })
 ]);
+
+export const SYSTEM_JOURNAL_IDS = Object.freeze(['AM', 'AB', 'CT', 'RP']);
+export const SYSTEM_JOURNAL_BY_CATEGORY = Object.freeze({
+  AMORTISSEMENTS: 'AM',
+  ABONNEMENTS: 'AB',
+  CENTRALISATION: 'CT',
+  RESULTAT: 'RP'
+});
 
 export function createCsrSetup({ companyId, regime = 'NORMAL', planVersion = 'SYSCOHADA-RÉVISÉ' } = {}) {
   if (!companyId) throw new DomainError('Le paramétrage CSR doit être rattaché à une société.', 'INVALID_CSR_SETUP');
@@ -213,6 +225,7 @@ export function updateJournalInSetup(journals, journalId, patch, { usedJournalId
   const index = journals.findIndex((journal) => String(journal.id).toUpperCase() === id);
   if (index < 0) throw new DomainError(`Journal inconnu : ${id}`, 'UNKNOWN_JOURNAL');
   const current = journals[index];
+  if (current.systemGenerated && patch.source !== 'SYSTEM') throw new DomainError('Ce journal est alimenté automatiquement par le système et ne peut pas être paramétré comme un journal de saisie.', 'SYSTEM_JOURNAL_LOCKED');
   const nextId = String(patch.id || current.id).trim().toUpperCase();
   if (!/^[A-Z0-9]{2,4}$/.test(nextId)) throw new DomainError('Le code du journal doit contenir 2 à 4 caractères alphanumériques.', 'INVALID_JOURNAL_CODE');
   if (nextId !== id && usedJournalIds.includes(id)) throw new DomainError('Le code d’un journal déjà utilisé ne peut pas être modifié.', 'USED_JOURNAL_CODE_LOCKED');
@@ -287,10 +300,11 @@ export function assertCompanyScope(entity, companyId) {
   return true;
 }
 
-export function validateJournalEntry(entry, { companyId, periodOpen = true, accountIds = [] } = {}) {
+export function validateJournalEntry(entry, { companyId, periodOpen = true, accountIds = [], source = 'USER', systemJournalIds = SYSTEM_JOURNAL_IDS } = {}) {
   if (!entry?.companyId || entry.companyId !== companyId) throw new DomainError('L’écriture n’appartient pas à la société active.', 'COMPANY_SCOPE_VIOLATION');
   if (!periodOpen) throw new DomainError('La période comptable est clôturée.', 'CLOSED_PERIOD');
   if (!entry.journalId) throw new DomainError('Le journal est obligatoire.', 'MISSING_JOURNAL');
+  if (systemJournalIds.includes(entry.journalId) && source !== 'SYSTEM') throw new DomainError(`Le journal ${entry.journalId} est alimenté automatiquement par le système.`, 'SYSTEM_JOURNAL_USER_POST_FORBIDDEN');
   if (!entry.date) throw new DomainError('La date comptable est obligatoire.', 'MISSING_DATE');
   if (!entry.lines?.length || entry.lines.length < 2) throw new DomainError('Une écriture doit comporter au moins deux lignes.', 'MISSING_LINES');
 
@@ -369,8 +383,20 @@ export function createJournalEntry({ companyId, journalId, date, reference = '',
     status: OPERATION_STATES.DRAFT,
     lines: lines.map((line) => ({ ...line, debit: amount(line.debit || 0), credit: amount(line.credit || 0) }))
   };
-  validateJournalEntry(entry, { companyId: options.activeCompanyId || companyId, periodOpen: options.periodOpen !== false, accountIds: options.accountIds || [] });
+  validateJournalEntry(entry, { companyId: options.activeCompanyId || companyId, periodOpen: options.periodOpen !== false, accountIds: options.accountIds || [], source: options.source || 'USER' });
   return entry;
+}
+
+export function createSystemJournalEntry({ companyId, journalId, date, reference = '', label, lines, integrationCategory, dossierId = null }, options = {}) {
+  if (!SYSTEM_JOURNAL_IDS.includes(journalId)) throw new DomainError(`Le journal ${journalId} n’est pas un journal automatique.`, 'INVALID_SYSTEM_JOURNAL');
+  const entry = createJournalEntry({ companyId, journalId, date, reference, label, lines }, { ...options, dossierId, source: 'SYSTEM', activeCompanyId: companyId });
+  return { ...entry, integrationCategory };
+}
+
+export function createAutomaticJournalEntry({ companyId, integrationCategory, date, reference = '', label, lines, dossierId = null }, options = {}) {
+  const journalId = SYSTEM_JOURNAL_BY_CATEGORY[integrationCategory];
+  if (!journalId) throw new DomainError(`Aucun journal automatique n’est défini pour la catégorie ${integrationCategory}.`, 'UNKNOWN_AUTOMATIC_CATEGORY');
+  return createSystemJournalEntry({ companyId, journalId, date, reference, label, lines, integrationCategory, dossierId }, options);
 }
 
 const defaultPostingRules = [
@@ -473,7 +499,7 @@ export function calculateStraightLinePlan({ assetId, companyId, cost, residualVa
 export function depreciationEntry(plan, { journalId = 'OD', date, periodOpen = true } = {}) {
   if (!plan?.lines?.length) throw new DomainError('Le plan d’amortissement est vide.', 'EMPTY_DEPRECIATION_PLAN');
   const line = plan.lines.find((item) => !date || item.period === date.slice(0, 7)) || plan.lines[0];
-  return createJournalEntry({ companyId: plan.companyId, journalId, date: date || line.date, label: `Dotation amortissement — ${line.period}`, lines: [
+  return createAutomaticJournalEntry({ companyId: plan.companyId, integrationCategory: 'AMORTISSEMENTS', date: date || line.date, label: `Dotation amortissement — ${line.period}`, lines: [
     { accountId: line.expenseAccount, debit: line.amount, credit: 0 },
     { accountId: line.accumulatedAccount, debit: 0, credit: line.amount }
   ] }, { periodOpen });

@@ -14,9 +14,15 @@ Les journaux déterminent le contexte dans lequel une écriture CSR est saisie. 
 - `AC` — Achats ;
 - `BQ` — Banque ;
 - `CA` — Caisse ;
-- `OD` — Opérations diverses.
+- `OD` — Opérations diverses ;
+- `AM` — Amortissements automatiques ;
+- `AB` — Abonnements ;
+- `CT` — Centralisations ;
+- `RP` — Résultat de la période.
 
-Ils constituent une configuration de départ. Le dossier pourra ensuite ajouter d’autres journaux adaptés à son activité.
+Les journaux `AM`, `AB`, `CT` et `RP` sont réservés aux traitements système. Ils sont visibles pour consultation et édition, mais ne sont pas proposés comme journaux de saisie manuelle.
+
+Les journaux de saisie constituent une configuration de départ. Le dossier pourra ensuite ajouter d’autres journaux adaptés à son activité, sans modifier les journaux automatiques.
 
 ## Paramètres d’un journal
 

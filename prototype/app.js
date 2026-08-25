@@ -57,10 +57,10 @@ const appState = {
   integratedEntries: [
     { id: 'sale-1', companyId: 'acacia', reference: 'VE-0008', date: '2025-06-16', journalId: 'VE', label: 'Awa Concept — FAC-2025-018', debit: 250000, credit: 250000, amount: 250000, integrationCategory: 'GENERAL', status: 'TO_REVIEW', source: 'Saisie et insertion' },
     { id: 'purchase-1', companyId: 'acacia', reference: 'AC-0007', date: '2025-06-15', journalId: 'AC', label: 'Cotonou Bureau — FA-0154', debit: 38500, credit: 38500, amount: 38500, integrationCategory: 'GENERAL', status: 'VALIDATED', source: 'Saisie et insertion' },
-    { id: 'amort-1', companyId: 'acacia', reference: 'OD-0003', date: '2025-06-30', journalId: 'OD', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
+    { id: 'amort-1', companyId: 'acacia', reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
     { id: 'central-1', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
-    { id: 'subscription-1', companyId: 'acacia', reference: 'OD-0004', date: '2025-06-01', journalId: 'OD', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
-    { id: 'result-1', companyId: 'acacia', reference: 'OD-0005', date: '2025-06-30', journalId: 'OD', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
+    { id: 'subscription-1', companyId: 'acacia', reference: 'AB-0004', date: '2025-06-01', journalId: 'AB', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
+    { id: 'result-1', companyId: 'acacia', reference: 'RP-0005', date: '2025-06-30', journalId: 'RP', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
   ],
   correctionWindows: {
     acacia: createCorrectionWindow({ id: 'correction-acacia-25', dossierId: 'ACACIA-25', companyId: 'acacia', userId: 'claire-dossou', periodId: '2025-06' })
@@ -950,12 +950,12 @@ function generateDepreciation() {
     expenseAccount: '681000',
     accumulatedAccount: '284500'
   });
-  const entry = depreciationEntry(plan, { date: '2025-06-30' });
+  const entry = depreciationEntry(plan, { journalId: 'AM', date: '2025-06-30' });
   $$('#assetRows .status-amber').forEach((status) => {
     status.textContent = 'À contrôler';
   });
   const amount = entry.lines[0].debit;
-  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: 'amort-1', companyId: appState.activeCompany, reference: 'OD-0003', date: '2025-06-30', journalId: 'OD', label: 'Dotation amortissement — juin', debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
+  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: 'amort-1', companyId: appState.activeCompany, reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
   const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
   if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
   else appState.integratedEntries.unshift(syncedEntry);
@@ -1052,7 +1052,7 @@ function renderEntryJournalOptions() {
   const select = $('#entryJournal');
   if (!select) return;
   const current = select.value;
-  const journals = currentAccountSetup().journals.filter((journal) => journal.active !== false);
+  const journals = currentAccountSetup().journals.filter((journal) => journal.active !== false && !journal.systemGenerated);
   select.innerHTML = journals.map((journal) => `<option value="${escapeHtml(journal.id)}">${escapeHtml(journal.id)} · ${escapeHtml(journal.label)}</option>`).join('');
   if (journals.some((journal) => journal.id === current)) select.value = current;
 }
@@ -1063,7 +1063,7 @@ function renderJournalSetup() {
   const setup = currentAccountSetup();
   const journals = setup.journals || [];
   const used = usedJournalIds();
-  rows.innerHTML = journals.map((journal) => `<tr><td><b class="journal-code-large">${escapeHtml(journal.id)}</b></td><td><span class="cell-title">${escapeHtml(journal.label)}</span>${used.has(journal.id) ? '<small class="cell-subtitle">Utilisé dans le dossier</small>' : ''}</td><td><span class="account-nature">${escapeHtml(JOURNAL_TYPE_LABELS[journal.type] || journal.type || 'Autre')}</span></td><td><span class="journal-prefix">${escapeHtml(journal.prefix || `${journal.id}-`)}</span></td><td><span class="journal-sequence">${String(journal.nextNumber || 1).padStart(4, '0')}</span></td><td><span class="status ${journal.active === false ? 'status-muted' : used.has(journal.id) ? 'status-green' : 'status-blue'}">${journal.active === false ? 'Inactif' : used.has(journal.id) ? 'Utilisé' : 'Actif'}</span></td><td><button class="icon-button small" type="button" data-action="edit-journal" data-journal-id="${escapeHtml(journal.id)}" aria-label="Modifier le journal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-1 5zM14 6l4 4M4 4h6"/></svg></button></td></tr>`).join('');
+  rows.innerHTML = journals.map((journal) => `<tr><td><b class="journal-code-large">${escapeHtml(journal.id)}</b></td><td><span class="cell-title">${escapeHtml(journal.label)}</span>${used.has(journal.id) ? '<small class="cell-subtitle">Utilisé dans le dossier</small>' : ''}${journal.systemGenerated ? '<small class="cell-subtitle system-generated-label">Renseigné automatiquement</small>' : ''}</td><td><span class="account-nature">${escapeHtml(JOURNAL_TYPE_LABELS[journal.type] || journal.type || 'Autre')}</span></td><td><span class="journal-prefix">${escapeHtml(journal.prefix || `${journal.id}-`)}</span></td><td><span class="journal-sequence">${String(journal.nextNumber || 1).padStart(4, '0')}</span></td><td><span class="status ${journal.systemGenerated ? 'status-purple' : journal.active === false ? 'status-muted' : used.has(journal.id) ? 'status-green' : 'status-blue'}">${journal.systemGenerated ? 'Automatique' : journal.active === false ? 'Inactif' : used.has(journal.id) ? 'Utilisé' : 'Actif'}</span></td><td>${journal.systemGenerated ? '<span class="journal-system-lock" title="Journal alimenté automatiquement">⌁</span>' : `<button class="icon-button small" type="button" data-action="edit-journal" data-journal-id="${escapeHtml(journal.id)}" aria-label="Modifier le journal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-1 5zM14 6l4 4M4 4h6"/></svg></button>`}</td></tr>`).join('');
   if (!journals.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun journal configuré.</td></tr>';
   const active = journals.filter((journal) => journal.active !== false);
   $('#activeJournalCount').textContent = String(active.length);
@@ -1366,7 +1366,7 @@ function renderIntegratedJournal() {
     const categoryId = entry.integratedCategory || classifyIntegratedEntry(entry);
     const category = INTEGRATED_JOURNAL_CATEGORIES[categoryId];
     const [label, statusClass] = statusLabel(entry.status);
-    const journalClass = entry.journalId === 'AC' ? 'journal-badge-blue' : entry.journalId === 'BQ' ? 'journal-badge-teal' : entry.journalId === 'OD' ? 'journal-badge-amber' : '';
+    const journalClass = ({ AC: 'journal-badge-blue', BQ: 'journal-badge-teal', OD: 'journal-badge-amber', AM: 'journal-badge-amber', AB: 'journal-badge-purple', CT: 'journal-badge-blue', RP: 'journal-badge-teal' })[entry.journalId] || '';
     return `<tr><td><b>${escapeHtml(entry.reference || '—')}</b></td><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span></td><td><span class="integrated-category ${categoryClass(categoryId)}">${escapeHtml(category.shortLabel)}</span></td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${escapeHtml(entry.source || 'Imputation synchronisée')}</small></td><td class="align-right">${numberLabel(entry.debit || entry.amount || 0)}</td><td class="align-right">${numberLabel(entry.credit || entry.amount || 0)}</td><td><span class="status ${statusClass}">${label}</span></td></tr>`;
   }).join('');
   if (!entries.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucune écriture dans cette catégorie.</td></tr>';
@@ -1385,7 +1385,6 @@ const ENTRY_TAB_CONFIG = {
   free: { title: 'Écriture libre', category: 'service-sale', journal: 'OD' },
   sale: { title: 'Vente', category: 'service-sale', journal: 'VE' },
   purchase: { title: 'Achat', category: 'goods-purchase', journal: 'AC' },
-  subscription: { title: 'Abonnement', category: 'subscription', journal: 'OD' },
   receipt: { title: 'Encaissement', category: 'other', journal: 'BQ' },
   payment: { title: 'Décaissement', category: 'other', journal: 'BQ' },
   transfer: { title: 'Transfert', category: 'other', journal: 'BQ' },
