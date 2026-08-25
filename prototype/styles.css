@@ -402,8 +402,8 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 }
 
 @media (min-width: 761px) {
-  .multi-line-modal { width: min(1180px, calc(100vw - 24px)); }
-  .manual-line-header, .manual-line-row { grid-template-columns: 42px 150px minmax(260px, 1fr) minmax(170px, .65fr) minmax(170px, .65fr) 34px; }
+  .multi-line-modal { width: min(1020px, calc(100vw - 24px)); }
+  .manual-line-header, .manual-line-row { grid-template-columns: 36px 130px minmax(220px, 1fr) minmax(130px, .65fr) minmax(130px, .65fr) 30px; }
   .multi-line-rows { overflow-x: hidden; }
 }
 @media (max-width: 760px) {
