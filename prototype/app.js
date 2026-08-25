@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, validateJournalDefinition, validateJournalEntry, OPERATION_STATES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, validateJournalDefinition, validateJournalEntry, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -48,6 +48,11 @@ const appState = {
     acacia: createCsrSetup({ companyId: 'acacia', regime: 'NORMAL' }),
     noria: createCsrSetup({ companyId: 'noria', regime: 'SMT' })
   },
+  automaticSchedules: [
+    { id: 'sub-internet-acacia', companyId: 'acacia', label: 'Abonnement internet', supplierName: 'Fournisseur internet', amount: 12000, expenseAccount: '6281', supplierAccount: '4011', periodicity: 'Mensuelle', active: true },
+    { id: 'sub-banque-acacia', companyId: 'acacia', label: 'Abonnement logiciel', supplierName: 'Éditeur logiciel', amount: 18500, expenseAccount: '6288', supplierAccount: '4011', periodicity: 'Mensuelle', active: true }
+  ],
+  automaticRuns: [],
   dossiers: [
     { id: 'acacia-25-csr', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'CSR', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 1, status: 'Actif', statusClass: 'status-green' },
     { id: 'acacia-25-gcsf', companyId: 'acacia', dossier: 'ACACIA-25', moduleId: 'GCSF', period: '01/01/2025 - 31/12/2025', exerciseYear: '2025', sessions: 0, status: 'Disponible', statusClass: 'status-blue' },
@@ -57,10 +62,10 @@ const appState = {
   integratedEntries: [
     { id: 'sale-1', companyId: 'acacia', reference: 'VE-0008', date: '2025-06-16', journalId: 'VE', label: 'Awa Concept — FAC-2025-018', debit: 250000, credit: 250000, amount: 250000, integrationCategory: 'GENERAL', status: 'TO_REVIEW', source: 'Saisie et insertion' },
     { id: 'purchase-1', companyId: 'acacia', reference: 'AC-0007', date: '2025-06-15', journalId: 'AC', label: 'Cotonou Bureau — FA-0154', debit: 38500, credit: 38500, amount: 38500, integrationCategory: 'GENERAL', status: 'VALIDATED', source: 'Saisie et insertion' },
-    { id: 'amort-1', companyId: 'acacia', reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
-    { id: 'central-1', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
-    { id: 'subscription-1', companyId: 'acacia', reference: 'AB-0004', date: '2025-06-01', journalId: 'AB', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
-    { id: 'result-1', companyId: 'acacia', reference: 'RP-0005', date: '2025-06-30', journalId: 'RP', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
+    { id: 'auto-amort-acacia-2025-06', companyId: 'acacia', reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
+    { id: 'auto-centralization-acacia-2025-06', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
+    { id: 'auto-sub-internet-acacia-2025-06', companyId: 'acacia', reference: 'AB-0001', date: '2025-06-01', journalId: 'AB', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
+    { id: 'auto-result-acacia-2025-06', companyId: 'acacia', reference: 'RP-0001', date: '2025-06-30', journalId: 'RP', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
   ],
   correctionWindows: {
     acacia: createCorrectionWindow({ id: 'correction-acacia-25', dossierId: 'ACACIA-25', companyId: 'acacia', userId: 'claire-dossou', periodId: '2025-06' })
@@ -74,7 +79,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -94,6 +99,8 @@ function hydrateAppState() {
   });
   if (!appState.correctionWindows) appState.correctionWindows = {};
   if (!appState.recentEntries) appState.recentEntries = [];
+  if (!appState.automaticSchedules) appState.automaticSchedules = [];
+  if (!appState.automaticRuns) appState.automaticRuns = [];
 }
 
 async function loadFullSyscohadaPlan() {
@@ -137,6 +144,13 @@ const MODULES = {
   GP: { ...MODULE_DEFINITIONS.GP, color: 'purple' },
   GCSF: { ...MODULE_DEFINITIONS.GCSF, color: 'blue' },
   GC: { ...MODULE_DEFINITIONS.GC, color: 'amber' }
+};
+
+const AUTOMATIC_DEFINITIONS = {
+  AMORTISSEMENTS: { label: 'Amortissements automatiques', journalId: 'AM', description: 'Calculer les dotations des immobilisations en service.', tone: 'amber', symbol: '◴' },
+  ABONNEMENTS: { label: 'Abonnements', journalId: 'AB', description: 'Générer les écritures des abonnements récurrents.', tone: 'purple', symbol: '↻' },
+  CENTRALISATION: { label: 'Centralisations', journalId: 'CT', description: 'Regrouper les écritures selon le paramétrage du dossier.', tone: 'blue', symbol: '◎' },
+  RESULTAT: { label: 'Résultat de la période', journalId: 'RP', description: 'Calculer le résultat avant clôture de la période.', tone: 'green', symbol: '≋' }
 };
 
 const FICHIER_GROUPS = {
@@ -523,6 +537,8 @@ function setActiveCompany(companyId, notify = true) {
   renderCorrectionWindow();
   renderAccountPlan();
   renderJournalSetup();
+  renderAutomaticTasks();
+  renderAutomaticRuns();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -939,6 +955,92 @@ function setImportMode(mode) {
   }
 }
 
+function automaticPreview(category) {
+  const companyId = appState.activeCompany;
+  const dossierId = currentDossierCode(companyId);
+  if (category === 'AMORTISSEMENTS') {
+    const plan = calculateStraightLinePlan({ assetId: 'IMM-2025-001', companyId, cost: 850000, serviceDate: '2025-01-01', usefulLifeMonths: 36, prorata: false, expenseAccount: '6813', accumulatedAccount: '2844' });
+    const entry = depreciationEntry(plan, { journalId: 'AM', date: '2025-06-30' });
+    return { ready: true, entries: [{ ...entry, id: `auto-amort-${companyId}-2025-06`, dossierId, reference: 'AM-0003', source: 'Traitement automatique des amortissements', integrationCategory: category, amount: entry.lines[0].debit, debit: entry.lines[0].debit, credit: entry.lines[1].credit, status: OPERATION_STATES.TO_REVIEW }] };
+  }
+  if (category === 'ABONNEMENTS') {
+    const schedules = appState.automaticSchedules.filter((schedule) => schedule.companyId === companyId && schedule.active !== false);
+    const entries = schedules.map((schedule) => {
+      const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: `AB-${String(schedules.indexOf(schedule) + 1).padStart(4, '0')}`, label: `${schedule.label} — juin 2025`, dossierId, lines: [{ accountId: schedule.expenseAccount || '6281', debit: schedule.amount, credit: 0 }, { accountId: schedule.supplierAccount || '4011', debit: 0, credit: schedule.amount }] });
+      return { ...entry, id: `auto-${schedule.id}-2025-06`, source: 'Abonnement périodique', amount: schedule.amount, debit: schedule.amount, credit: schedule.amount, status: OPERATION_STATES.TO_REVIEW };
+    });
+    return { ready: entries.length > 0, entries, reason: entries.length ? '' : 'Aucun abonnement actif n’est paramétré pour cette société.' };
+  }
+  if (category === 'CENTRALISATION') return { ready: false, entries: [], reason: 'Les journaux sources et la règle de centralisation doivent être paramétrés avant génération.' };
+  return { ready: false, entries: [], reason: 'Les comptes de résultat et la règle de clôture doivent être contrôlés avant génération.' };
+}
+
+function automaticRunFor(category) {
+  return appState.automaticRuns.find((run) => run.companyId === appState.activeCompany && run.category === category && run.period === '2025-06');
+}
+
+function renderAutomaticRuns() {
+  const rows = $('#automaticRunsRows');
+  if (!rows) return;
+  const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany);
+  rows.innerHTML = runs.map((run) => {
+    const definition = AUTOMATIC_DEFINITIONS[run.category];
+    return `<tr><td><span class="cell-title">${escapeHtml(definition?.label || run.category)}</span></td><td><span class="journal-badge ${run.category === 'ABONNEMENTS' ? 'journal-badge-purple' : run.category === 'AMORTISSEMENTS' ? 'journal-badge-amber' : 'journal-badge-blue'}">${escapeHtml(definition?.journalId || '—')}</span></td><td>${escapeHtml(run.period)}</td><td>${escapeHtml(run.count)}</td><td>${escapeHtml(new Date(run.at).toLocaleString('fr-FR'))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
+  }).join('');
+  if (!runs.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun traitement exécuté pour cette société.</td></tr>';
+}
+
+function renderAutomaticTasks() {
+  const container = $('#periodicTasks');
+  if (!container) return;
+  container.innerHTML = Object.entries(AUTOMATIC_DEFINITIONS).map(([category, definition]) => {
+    const preview = automaticPreview(category);
+    const run = automaticRunFor(category);
+    const systemReady = preview.ready;
+    const status = run ? 'Généré · à contrôler' : systemReady ? 'Prêt à générer' : 'Paramétrage requis';
+    const statusClass = run ? 'status-purple' : systemReady ? 'status-green' : 'status-amber';
+    const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : 'Voir le détail';
+    return `<article class="periodic-task periodic-task-${definition.tone} ${systemReady ? '' : 'is-not-ready'}"><div class="periodic-task-top"><span class="periodic-task-icon">${definition.symbol}</span><span class="status ${statusClass}">${status}</span></div><h2>${definition.label}</h2><p>${definition.description}</p><div class="periodic-task-foot"><span><b>Journal ${definition.journalId}</b><small>${run ? `${run.count} écriture${run.count > 1 ? 's' : ''} · ${new Date(run.at).toLocaleDateString('fr-FR')}` : 'Juin 2025'}</small></span><button class="button ${systemReady ? 'button-primary' : 'button-secondary'} button-small" type="button" data-action="preview-automatic" data-automatic-category="${category}">${buttonLabel}</button></div></article>`;
+  }).join('');
+}
+
+function openAutomaticPreview(category) {
+  const definition = AUTOMATIC_DEFINITIONS[category];
+  const preview = automaticPreview(category);
+  appState.pendingAutomaticCategory = category;
+  $('#automaticPreviewTitle').textContent = `Prévisualiser ${definition.label.toLowerCase()}`;
+  $('#automaticPreviewCategory').textContent = definition.label;
+  $('#automaticPreviewJournal').textContent = `Journal ${definition.journalId}`;
+  const content = $('#automaticPreviewContent');
+  const total = preview.entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  $('#automaticPreviewSummary').innerHTML = `<span><small>ÉCRITURES À GÉNÉRER</small><strong>${preview.entries.length}</strong></span><span><small>MONTANT TOTAL</small><strong>${numberLabel(total)} <em>FCFA</em></strong></span><span><small>JOURNAL</small><strong>${definition.journalId}</strong></span>`;
+  if (preview.entries.length) {
+    content.innerHTML = `<div class="automatic-preview-table-wrap"><table class="automatic-preview-table"><thead><tr><th>RÉFÉRENCE</th><th>LIBELLÉ</th><th>IMPUTATION GÉNÉRÉE</th><th class="align-right">MONTANT</th></tr></thead><tbody>${preview.entries.map((entry) => `<tr><td><b>${escapeHtml(entry.reference)}</b></td><td>${escapeHtml(entry.label)}</td><td>${escapeHtml(entry.lines.map((line) => `${line.accountId} ${line.debit > 0 ? 'D' : 'C'}`).join(' · '))}</td><td class="align-right">${numberLabel(entry.amount)} FCFA</td></tr>`).join('')}</tbody></table></div>`;
+  } else content.innerHTML = `<div class="automatic-preview-empty"><span>⌁</span><strong>Aucune écriture ne sera générée</strong><p>${escapeHtml(preview.reason)}</p></div>`;
+  const button = $('#runAutomaticButton');
+  button.disabled = !preview.ready;
+  button.textContent = preview.ready ? 'Générer les écritures' : 'Paramétrage requis';
+  openModal('automaticPreviewModal');
+}
+
+function runAutomaticProcess(category) {
+  const preview = automaticPreview(category);
+  if (!preview.ready) { showToast(preview.reason || 'Ce traitement n’est pas prêt.'); return; }
+  preview.entries.forEach((entry) => {
+    const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), entry).entries[0];
+    const index = appState.integratedEntries.findIndex((item) => item.id === synced.id && item.companyId === synced.companyId);
+    if (index >= 0) appState.integratedEntries[index] = synced;
+    else appState.integratedEntries.unshift(synced);
+  });
+  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === category && run.period === '2025-06'));
+  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category, period: '2025-06', count: preview.entries.length, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  persistAppState();
+  closeModal();
+  renderAutomaticTasks();
+  renderIntegratedJournal();
+  showToast(`${preview.entries.length} écriture${preview.entries.length > 1 ? 's' : ''} générée${preview.entries.length > 1 ? 's' : ''} dans le journal automatique.`);
+}
+
 function generateDepreciation() {
   const plan = calculateStraightLinePlan({
     assetId: 'IMM-2025-001',
@@ -955,7 +1057,7 @@ function generateDepreciation() {
     status.textContent = 'À contrôler';
   });
   const amount = entry.lines[0].debit;
-  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: 'amort-1', companyId: appState.activeCompany, reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
+  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: `auto-amort-${appState.activeCompany}-2025-06`, companyId: appState.activeCompany, reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
   const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
   if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
   else appState.integratedEntries.unshift(syncedEntry);
@@ -1974,6 +2076,9 @@ function bindEvents() {
     if (action === 'apply-manual-lines') applyManualLines();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
+    if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
+    if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
+    if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');
