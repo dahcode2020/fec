@@ -95,7 +95,7 @@ Le paquet est nommé :
 FEC_IFU_AAAAMMJJ.zip
 ```
 
-L’empreinte SHA-256 du paquet et la configuration utilisée sont conservées dans l’historique et la piste d’audit du dossier. Le paquet est marqué comme scellé ; toute modification d’un fichier est détectable en recalculant les empreintes. Cette conservation locale constitue un mécanisme de prototype et devra être remplacée par un stockage durable et contrôlé dans la version de production.
+L’empreinte SHA-256 du paquet et la configuration utilisée sont conservées dans l’historique et la piste d’audit du dossier. Le paquet est marqué comme scellé ; toute modification d’un fichier est détectable en recalculant les empreintes. L’écran permet aussi de recharger un ZIP et de vérifier son manifeste, la présence des fichiers, leur taille, leurs empreintes et l’empreinte du paquet conservée localement. Cette conservation locale constitue un mécanisme de prototype et devra être remplacée par un stockage durable et contrôlé dans la version de production.
 
 ## Contrôle et modes de génération
 

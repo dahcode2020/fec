@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, deleteCorrectionCandidate, extractZipArchive, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -1199,6 +1199,52 @@ function buildFecPane() {
   return pane;
 }
 
+function renderFecArchiveVerification(result) {
+  const container = $('#fecArchiveVerificationResult');
+  if (!container) return;
+  const issueList = [...result.errors.map((message) => `<li class="fec-archive-error"><span>×</span>${escapeHtml(message)}</li>`), ...result.warnings.map((message) => `<li class="fec-archive-warning"><span>!</span>${escapeHtml(message)}</li>`)].join('');
+  container.innerHTML = `<div class="fec-archive-result ${result.valid ? 'is-valid' : 'is-invalid'}"><div class="fec-archive-result-heading"><span class="fec-archive-result-icon">${result.valid ? '✓' : '×'}</span><div><strong>${result.valid ? 'Paquet intègre' : 'Paquet à contrôler'}</strong><p>${result.valid ? 'Les fichiers décrits dans le manifeste correspondent aux empreintes recalculées.' : 'Le paquet ne doit pas être remis avant résolution des anomalies.'}</p></div><span class="fec-archive-hash" title="${escapeHtml(result.packageHash)}">SHA-256 · ${escapeHtml(result.packageHash.slice(0, 16))}…</span></div><div class="fec-archive-stats"><span><small>FICHIERS</small><strong>${result.fileCount}</strong></span><span><small>FICHIERS VÉRIFIÉS</small><strong>${result.checkedCount}</strong></span><span><small>ERREURS</small><strong>${result.errors.length}</strong></span><span><small>AVERTISSEMENTS</small><strong>${result.warnings.length}</strong></span></div>${issueList ? `<ul class="fec-archive-issues">${issueList}</ul>` : '<div class="fec-archive-clean">✓ Toutes les empreintes correspondent.</div>'}</div>`;
+  container.removeAttribute('hidden');
+}
+
+async function verifyFecArchiveFile(file) {
+  if (!file) return;
+  const container = $('#fecArchiveVerificationResult');
+  if (container) { container.removeAttribute('hidden'); container.innerHTML = '<div class="fec-archive-loading">Vérification du paquet en cours…</div>'; }
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const files = extractZipArchive(bytes);
+    const fileMap = new Map(files.map((item) => [item.name, item.bytes]));
+    const manifestEntry = files.find((item) => item.name.endsWith('.manifest.txt'));
+    const errors = [];
+    const warnings = [];
+    if (!manifestEntry) throw new Error('Le manifeste d’empreintes est absent du paquet.');
+    const manifestText = new TextDecoder().decode(manifestEntry.bytes);
+    const manifestLines = manifestText.split(/\r\n|\n|\r/);
+    const headerIndex = manifestLines.findIndex((line) => line === 'FICHIER\tSHA256\tOCTETS');
+    if (headerIndex < 0) throw new Error('Le manifeste ne contient pas la table des empreintes attendue.');
+    const expected = manifestLines.slice(headerIndex + 1).filter((line) => line && !line.startsWith('STATUT\t')).map((line) => line.split('\t')).filter((row) => row.length >= 3 && /^[a-f0-9]{64}$/i.test(row[1])).map(([name, sha256, size]) => ({ name, sha256: sha256.toLowerCase(), size: Number(size) }));
+    if (!expected.length) errors.push('Aucun fichier n’est décrit dans le manifeste.');
+    const checked = await Promise.all(expected.map(async (item) => {
+      const stored = fileMap.get(item.name);
+      if (!stored) { errors.push(`Fichier manquant dans le paquet : ${item.name}.`); return false; }
+      const actualHash = await sha256Hex(stored);
+      if (actualHash !== item.sha256) { errors.push(`Empreinte incorrecte pour ${item.name}.`); return false; }
+      if (stored.length !== item.size) { errors.push(`Taille incorrecte pour ${item.name}.`); return false; }
+      return true;
+    }));
+    const packageHash = await sha256Hex(bytes);
+    const localArchive = (appState.fecArchives || []).find((archive) => archive.packageFile === file.name || archive.packageSha256 === packageHash);
+    if (localArchive && localArchive.packageSha256 !== packageHash) errors.push('L’empreinte du paquet ne correspond pas à celle conservée dans le dossier.');
+    if (!localArchive) warnings.push('Ce paquet ne correspond pas à une archive scellée conservée dans ce navigateur.');
+    const fecFile = files.find((item) => /^FEC_.*\.txt$/i.test(item.name) && !item.name.endsWith('.notice.txt') && !item.name.endsWith('.rapport.txt') && !item.name.endsWith('.manifest.txt'));
+    if (!fecFile) errors.push('Aucun fichier FEC principal n’a été trouvé.');
+    renderFecArchiveVerification({ valid: errors.length === 0, errors, warnings, packageHash, fileCount: files.length, checkedCount: checked.filter(Boolean).length });
+  } catch (error) {
+    renderFecArchiveVerification({ valid: false, errors: [error.message || 'Le paquet ne peut pas être vérifié.'], warnings: [], packageHash: '', fileCount: 0, checkedCount: 0 });
+  }
+}
+
 function renderFecHistory(returnOnly = false) {
   const history = (appState.fecHistory || []).filter((item) => item.companyId === appState.activeCompany).slice(0, 5);
   const html = `<section class="fec-history-panel"><div class="fec-history-heading"><div><span class="eyebrow">CONSERVATION DU DOSSIER</span><h3>Derniers FEC générés</h3></div><span>${history.length} fichier${history.length > 1 ? 's' : ''}</span></div>${history.length ? `<div class="fec-history-list">${history.map((item) => `<div class="fec-history-row"><span class="fec-history-icon">FEC</span><div><strong>${escapeHtml(item.packageFile || `FEC_${item.ifu}_${fecCompactDate(item.closureDate)}.zip`)}</strong><small>${escapeHtml(item.regime === 'SMT' ? 'SMT' : 'Système normal')} · ${escapeHtml(item.demo ? 'Jeu d’essai' : item.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'Officiel')} · ${escapeHtml(String(item.lineCount))} lignes</small></div><span class="fec-history-seal">Scellé</span><span class="fec-history-date">${escapeHtml(new Date(item.createdAt).toLocaleDateString('fr-FR'))}</span></div>`).join('')}</div>` : '<p class="fec-history-empty">Aucun FEC n’a encore été généré pour cette société.</p>'}</section>`;
@@ -1226,7 +1272,7 @@ function renderFecAssistant() {
       <section class="fec-form-section"><div class="fec-section-heading"><span class="fec-section-number">2</span><div><h3>Paramètres techniques de l’arrêté</h3><p>Ces paramètres seront repris dans le descriptif technique accompagnant le FEC.</p></div></div><div class="fec-fields-grid"><label class="field"><span>Séparateur des champs <b>*</b></span><select id="fecSeparator" name="separator" required><option value="TAB" ${draft.separator === 'TAB' ? 'selected' : ''}>Tabulation</option><option value="SEMICOLON" ${draft.separator === 'SEMICOLON' ? 'selected' : ''}>Point-virgule</option></select></label><label class="field"><span>Jeu de caractères <b>*</b></span><select id="fecEncoding" name="encoding" required><option value="ISO-8859-15" ${draft.encoding === 'ISO-8859-15' ? 'selected' : ''}>ISO 8859-15</option><option value="ASCII" ${draft.encoding === 'ASCII' ? 'selected' : ''}>ASCII</option><option value="EBCDIC" ${draft.encoding === 'EBCDIC' ? 'selected' : ''}>EBCDIC</option></select></label><label class="field"><span>Découpage par volume</span><input id="fecMaxRecords" name="maxRecords" type="number" min="0" step="1" value="${escapeHtml(draft.maxRecords || 0)}"><small class="field-help">0 = un fichier unique. Sinon, nombre maximal de lignes par fichier.</small></label><div class="fec-file-preview"><small>NOM PRÉVISIONNEL</small><strong id="fecPreviewFilename">FEC_${escapeHtml(company.ifu || 'IFU')}_${escapeHtml(fecCompactDate(draft.closureDate))}.txt</strong><span>Le suffixe _1, _2… est ajouté si le volume est découpé.</span></div></div><p class="fec-technical-note"><span>i</span> Les 18 premiers champs suivent exactement l’ordre de l’article 5. En SMT, les champs <b>Date Règlement</b>, <b>Mode Règlement</b> et <b>NatOp</b> sont ajoutés.</p></section>
       <div class="fec-result" id="fecResult">${result}</div>
       <div class="fec-footer"><span><span class="fec-shield">✓</span> Le paquet inclut le FEC, sa notice, son rapport et son manifeste d’empreintes.</span><div class="fec-footer-actions"><button class="button button-secondary" type="button" data-action="check-fec">Contrôler le FEC</button><button class="button button-primary" id="generateFecButton" type="button" data-action="generate-fec" disabled>Générer le paquet</button></div></div>
-    </form><div id="fecHistoryPanel">${renderFecHistory(true)}</div>`;
+    </form><div class="fec-archive-verify"><div class="fec-archive-verify-heading"><div><span class="eyebrow">VÉRIFICATION D’UNE REMISE</span><h3>Contrôler un paquet FEC archivé</h3><p>Sélectionnez un paquet ZIP pour recalculer les empreintes de ses fichiers avant de le remettre.</p></div><input id="fecArchiveFile" type="file" accept=".zip" hidden><label class="button button-secondary button-small" for="fecArchiveFile">Choisir un paquet ZIP</label></div><div id="fecArchiveVerificationResult" hidden></div></div><div id="fecHistoryPanel">${renderFecHistory(true)}</div>`;
   if (fecPrepared) renderFecResult(fecPrepared);
 }
 
@@ -3874,6 +3920,7 @@ function bindEvents() {
   });
   $('#assetForm')?.addEventListener('submit', addAsset);
   $('#fecCorrectionForm')?.addEventListener('submit', saveFecCorrection);
+  $('#fecArchiveFile')?.addEventListener('change', (event) => verifyFecArchiveFile(event.target.files?.[0]));
   $('#fileInput')?.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
   document.addEventListener('input', (event) => {
     if (event.target.closest('#exportForm')) invalidateExportReview();

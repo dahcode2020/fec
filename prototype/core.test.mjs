@@ -59,6 +59,7 @@ import {
   exportFecControlReportTxt,
   exportFecNoticeTxt,
   exportFecTxt,
+  extractZipArchive,
   fecFieldDefinitions,
   importAccountPlanRows,
   makeDossierCode,
@@ -514,6 +515,9 @@ test('scelle un paquet FEC ZIP avec plusieurs fichiers sans compression destruct
     { name: 'FEC_3201900045612_20251231.notice.txt', bytes: new TextEncoder().encode('NOTICE') }
   ]);
   assert.deepEqual([...archive.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  const extracted = extractZipArchive(archive);
+  assert.deepEqual(extracted.map((file) => file.name), ['FEC_3201900045612_20251231.txt', 'FEC_3201900045612_20251231.notice.txt']);
+  assert.equal(new TextDecoder().decode(extracted[0].bytes), 'CodeJournal\tLibJournal\r\n');
   assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.txt'));
   assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.notice.txt'));
   assert.throws(() => createZipArchive([{ name: '../unsafe.txt', bytes: new Uint8Array() }]), (error) => error.code === 'FEC_ARCHIVE_INVALID_NAME');

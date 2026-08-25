@@ -1302,3 +1302,32 @@ export function createZipArchive(files = []) {
   [...localParts, ...centralParts, end].forEach((part) => { archive.set(part, cursor); cursor += part.length; });
   return archive;
 }
+
+export function extractZipArchive(bytes) {
+  const source = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes || []);
+  const view = new DataView(source.buffer, source.byteOffset, source.byteLength);
+  const decoder = new TextDecoder();
+  const files = [];
+  let offset = 0;
+  while (offset + 4 <= source.length) {
+    const signature = view.getUint32(offset, true);
+    if (signature === 0x04034b50) {
+      if (offset + 30 > source.length) throw new DomainError('En-tête ZIP tronqué.', 'FEC_ARCHIVE_TRUNCATED');
+      const method = view.getUint16(offset + 8, true);
+      const compressedSize = view.getUint32(offset + 18, true);
+      const nameLength = view.getUint16(offset + 26, true);
+      const extraLength = view.getUint16(offset + 28, true);
+      const nameStart = offset + 30;
+      const dataStart = nameStart + nameLength + extraLength;
+      const dataEnd = dataStart + compressedSize;
+      if (method !== 0) throw new DomainError('Le paquet ZIP utilise une compression non prise en charge par le vérificateur.', 'FEC_ARCHIVE_COMPRESSION_UNSUPPORTED');
+      if (dataEnd > source.length) throw new DomainError('Données ZIP tronquées.', 'FEC_ARCHIVE_TRUNCATED');
+      const name = decoder.decode(source.slice(nameStart, nameStart + nameLength));
+      files.push({ name, bytes: source.slice(dataStart, dataEnd) });
+      offset = dataEnd;
+    } else if (signature === 0x02014b50 || signature === 0x06054b50) break;
+    else throw new DomainError('Structure ZIP invalide.', 'FEC_ARCHIVE_INVALID_STRUCTURE');
+  }
+  if (!files.length) throw new DomainError('Le paquet ZIP ne contient aucun fichier lisible.', 'FEC_ARCHIVE_EMPTY');
+  return files;
+}
