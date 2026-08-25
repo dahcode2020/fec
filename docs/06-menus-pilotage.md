@@ -39,6 +39,7 @@ Les fonctions Dossiers, Sauvegardes et Restaurer de la structure précédente so
 #### Échanges comptables
 
 - Exportation de Fichiers Comptables ;
+- Exportation FEC pour la DGID, selon l’arrêté béninois ;
 - Importation de Fichiers Comptables ;
 - Importation d’une Balance Générale.
 

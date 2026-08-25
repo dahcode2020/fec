@@ -868,3 +868,250 @@ export function exportBalanceTxt({ companyName, period, rows = [], delimiter = '
   const lines = rows.map((row) => [row.accountId, row.label, row.debit ?? 0, row.credit ?? 0].map(textCell).join(delimiter));
   return [header, periodLine, '', columns.join(delimiter), ...lines].join('\r\n') + '\r\n';
 }
+
+/* FEC DGID Bénin — arrêté du 23 avril 2020 */
+export const FEC_FIELD_DEFINITIONS = Object.freeze([
+  Object.freeze({ order: 1, name: 'CodeJournal', description: 'Code du journal de l’écriture comptable', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 2, name: 'LibJournal', description: 'Libellé du journal de l’écriture comptable', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 3, name: 'NumEcriture', description: 'Numéro séquentiel continu de l’écriture comptable', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 4, name: 'DateEcriture', description: 'Date de comptabilisation de l’écriture comptable', type: 'Date', required: true, format: 'AAAAMMJJ' }),
+  Object.freeze({ order: 5, name: 'NumCompte', description: 'Numéro du compte de l’écriture comptable', type: 'Alphanumérique', required: true, format: 'Plan comptable SYSCOHADA' }),
+  Object.freeze({ order: 6, name: 'LibCompte', description: 'Libellé du compte de l’écriture comptable', type: 'Alphanumérique', required: true, format: 'Nomenclature SYSCOHADA' }),
+  Object.freeze({ order: 7, name: 'NumCompteAux', description: 'Numéro du compte auxiliaire de l’écriture comptable', type: 'Alphanumérique', required: false, format: '' }),
+  Object.freeze({ order: 8, name: 'LibCompteAux', description: 'Libellé du compte auxiliaire de l’écriture comptable', type: 'Alphanumérique', required: false, format: '' }),
+  Object.freeze({ order: 9, name: 'RefPiece', description: 'Référence de la pièce justificative de l’écriture comptable', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 10, name: 'DatePiece', description: 'Date de la pièce justificative de l’écriture comptable', type: 'Date', required: true, format: 'AAAAMMJJ' }),
+  Object.freeze({ order: 11, name: 'LibEcriture', description: 'Libellé de l’écriture comptable', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 12, name: 'MontDebit', description: 'Montant au débit de l’écriture comptable', type: 'Numérique', required: true, format: 'Décimal, virgule, sans séparateur de milliers' }),
+  Object.freeze({ order: 13, name: 'MontCredit', description: 'Montant au crédit de l’écriture comptable', type: 'Numérique', required: true, format: 'Décimal, virgule, sans séparateur de milliers' }),
+  Object.freeze({ order: 14, name: 'LetEcriture', description: 'Lettrage de l’écriture comptable', type: 'Alphanumérique', required: false, format: '' }),
+  Object.freeze({ order: 15, name: 'DateLetEcriture', description: 'Date de lettrage de l’écriture comptable', type: 'Date', required: false, format: 'AAAAMMJJ' }),
+  Object.freeze({ order: 16, name: 'DateValid', description: 'Date de validation de l’écriture comptable', type: 'Date', required: true, format: 'AAAAMMJJ' }),
+  Object.freeze({ order: 17, name: 'MontDevise', description: 'Montant en devise de l’écriture comptable', type: 'Numérique', required: false, format: 'Décimal, virgule, sans séparateur de milliers' }),
+  Object.freeze({ order: 18, name: 'CodeDevise', description: 'Code de la devise du montant de l’écriture comptable', type: 'Alphanumérique', required: false, format: '' })
+]);
+
+export const FEC_SMT_FIELD_DEFINITIONS = Object.freeze([
+  ...FEC_FIELD_DEFINITIONS,
+  Object.freeze({ order: 19, name: 'Date Règlement', description: 'Date de règlement', type: 'Date', required: true, format: 'AAAAMMJJ' }),
+  Object.freeze({ order: 20, name: 'Mode Règlement', description: 'Mode de règlement', type: 'Alphanumérique', required: true, format: '' }),
+  Object.freeze({ order: 21, name: 'NatOp', description: 'Nature de l’opération', type: 'Alphanumérique', required: false, format: '' })
+]);
+
+export function fecFieldDefinitions({ regime = 'NORMAL' } = {}) {
+  return regime === 'SMT' ? FEC_SMT_FIELD_DEFINITIONS : FEC_FIELD_DEFINITIONS;
+}
+
+function fecDate(value) {
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (/^\d{8}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}${match[2]}${match[3]}`;
+  const parsed = new Date(`${raw.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) throw new DomainError(`Date FEC invalide : ${value}`, 'FEC_INVALID_DATE');
+  return parsed.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function fecAmount(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  const numeric = amount(value);
+  if (!Number.isFinite(numeric)) throw new DomainError(`Montant FEC invalide : ${value}`, 'FEC_INVALID_AMOUNT');
+  return numeric.toFixed(2).replace('.', ',');
+}
+
+function fecText(value) {
+  return String(value ?? '').replace(/[\t;\r\n]/g, ' ').trim();
+}
+
+function fecReportEntry(entry) {
+  const category = String(entry?.integrationCategory || entry?.categoryId || '').toUpperCase();
+  const label = String(entry?.label || '').toUpperCase();
+  return category === 'REPORTS_A_NOUVEAU' || entry?.journalId === 'AN' || label.includes('REPORT') || label.includes('À-NOUVEAU') || label.includes('A-NOUVEAU');
+}
+
+function fecEntryValidationDate(entry) {
+  return entry?.dateValid || entry?.validationDate || entry?.validatedAt || entry?.statusChangedAt || '';
+}
+
+function fecEntrySortValue(entry) {
+  return fecEntryValidationDate(entry) || entry?.date || '9999-12-31';
+}
+
+function fecIssue(list, issue) {
+  list.push({ severity: issue.severity || 'ERROR', ...issue });
+}
+
+function fecDateInScope(value, startDate, endDate) {
+  if (!value) return false;
+  const date = String(value).slice(0, 10);
+  return (!startDate || date >= String(startDate).slice(0, 10)) && (!endDate || date <= String(endDate).slice(0, 10));
+}
+
+export function prepareFecExport({ entries = [], companyId, fiscalYear = null, startDate = null, endDate = null, regime = 'NORMAL', journals = [], accounts = [], thirdParties = [], payments = [], statuses = [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED], diagnostic = false } = {}) {
+  const fields = fecFieldDefinitions({ regime });
+  const errors = [];
+  const warnings = [];
+  const excludedEntries = [];
+  const accountMap = new Map(accounts.map((account) => [normalizeAccountNumber(account.id), account]));
+  const journalMap = new Map(journals.map((journal) => [String(journal.id), journal]));
+  const thirdPartyMap = new Map(thirdParties.map((party) => [String(party.id), party]));
+  const paymentMap = new Map(payments.filter((payment) => payment.journalEntryId).map((payment) => [String(payment.journalEntryId), payment]));
+  const scopeStart = startDate || (fiscalYear ? `${fiscalYear}-01-01` : null);
+  const scopeEnd = endDate || (fiscalYear ? `${fiscalYear}-12-31` : null);
+  const eligible = entries.filter((entry) => {
+    if (entry.companyId !== companyId) return false;
+    if (entry.status === OPERATION_STATES.CANCELLED || !statuses.includes(entry.status)) return false;
+    if (!fecDateInScope(entry.date, scopeStart, scopeEnd)) return false;
+    const category = String(entry.integrationCategory || entry.categoryId || '').toUpperCase();
+    if (category === 'CENTRALISATION' || category === 'CENTRALIZATION' || entry.journalId === 'CT') { excludedEntries.push({ entryId: entry.id, reason: 'CENTRALISATION' }); return false; }
+    if (category === 'RESULTAT' || entry.journalId === 'RP') { excludedEntries.push({ entryId: entry.id, reason: 'SOLDE_RESULTAT' }); return false; }
+    if (entry.technicalOnly) { excludedEntries.push({ entryId: entry.id, reason: 'ECRITURE_TECHNIQUE' }); return false; }
+    return true;
+  }).sort((left, right) => {
+    const reportOrder = Number(fecReportEntry(right)) - Number(fecReportEntry(left));
+    if (reportOrder) return reportOrder;
+    return `${fecEntrySortValue(left)}|${left.journalId || ''}|${left.reference || ''}|${left.id || ''}`.localeCompare(`${fecEntrySortValue(right)}|${right.journalId || ''}|${right.reference || ''}|${right.id || ''}`, 'fr', { numeric: true });
+  });
+  const pendingCount = entries.filter((entry) => {
+    if (entry.companyId !== companyId || entry.status === OPERATION_STATES.CANCELLED || statuses.includes(entry.status) || !fecDateInScope(entry.date, scopeStart, scopeEnd)) return false;
+    const category = String(entry.integrationCategory || entry.categoryId || '').toUpperCase();
+    return category !== 'CENTRALISATION' && category !== 'CENTRALIZATION' && entry.journalId !== 'CT' && category !== 'RESULTAT' && entry.journalId !== 'RP' && !entry.technicalOnly;
+  }).length;
+  const records = [];
+  let totalDebit = 0;
+  let totalCredit = 0;
+  eligible.forEach((entry, entryIndex) => {
+    const journal = journalMap.get(String(entry.journalId));
+    const lines = Array.isArray(entry.lines) ? entry.lines : [];
+    const validationDate = fecEntryValidationDate(entry);
+    const payment = paymentMap.get(String(entry.id));
+    const entryDebit = lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+    const entryCredit = lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+    if (!lines.length) fecIssue(errors, { code: 'FEC_NO_LINES', entryId: entry.id, message: `L’écriture ${entry.reference || entry.id} ne contient aucune ligne.` });
+    if (Math.abs(entryDebit - entryCredit) > 0.005) fecIssue(errors, { code: 'FEC_UNBALANCED_ENTRY', entryId: entry.id, message: `L’écriture ${entry.reference || entry.id} est déséquilibrée.` });
+    if (!journal) fecIssue(errors, { code: 'FEC_UNKNOWN_JOURNAL', entryId: entry.id, message: `Journal inconnu : ${entry.journalId || 'vide'}.` });
+    if (!entry.reference) fecIssue(errors, { code: 'FEC_MISSING_PIECE_REF', entryId: entry.id, message: `Référence de pièce absente pour ${entry.id}.` });
+    if (!entry.date) fecIssue(errors, { code: 'FEC_MISSING_ENTRY_DATE', entryId: entry.id, message: `Date d’écriture absente pour ${entry.id}.` });
+    if (!validationDate) {
+      if (diagnostic && entry.date) { fecIssue(warnings, { code: 'FEC_VALID_DATE_FALLBACK', entryId: entry.id, message: `Date de validation absente : la date d’écriture sera utilisée dans le diagnostic.` }); }
+      else fecIssue(errors, { code: 'FEC_MISSING_VALID_DATE', entryId: entry.id, message: `Date de validation absente pour ${entry.reference || entry.id}.` });
+    }
+    const entryNumber = String(entryIndex + 1);
+    lines.forEach((line, lineIndex) => {
+      const rawAccountId = normalizeAccountNumber(line.accountId);
+      const account = accountMap.get(rawAccountId);
+      const thirdParty = (line.thirdPartyId && thirdPartyMap.get(String(line.thirdPartyId))) || thirdParties.find((party) => party.auxiliaryAccountId === rawAccountId || party.code === line.thirdPartyCode);
+      const auxiliaryAccountId = line.auxiliaryAccountId || line.accountAuxiliaryId || thirdParty?.auxiliaryAccountId || '';
+      const auxiliaryLabel = line.auxiliaryLabel || thirdParty?.name || '';
+      const accountLabel = account?.label || line.accountLabel || line.label || '';
+      const debit = Number(line.debit || 0);
+      const credit = Number(line.credit || 0);
+      const lineDate = entry.date;
+      const pieceDate = entry.pieceDate || entry.datePiece || line.pieceDate || lineDate;
+      const letDate = line.dateLetEcriture || line.lettrageDate || entry.dateLetEcriture || entry.lettrageDate || '';
+      const settlementDate = line.settlementDate || line.dateReglement || entry.settlementDate || entry.dateReglement || payment?.date || (entry.journalId === 'BQ' ? entry.date : '');
+      const settlementMode = line.settlementMode || line.modeReglement || entry.settlementMode || entry.modeReglement || payment?.method || '';
+      if (!rawAccountId) fecIssue(errors, { code: 'FEC_MISSING_ACCOUNT', entryId: entry.id, line: lineIndex + 1, message: `Compte absent sur ${entry.reference || entry.id}, ligne ${lineIndex + 1}.` });
+      else if (!account) fecIssue(errors, { code: 'FEC_UNKNOWN_ACCOUNT', entryId: entry.id, line: lineIndex + 1, message: `Compte ${rawAccountId} absent du plan SYSCOHADA actif.` });
+      if (!/^\d{3}/.test(rawAccountId)) fecIssue(errors, { code: 'FEC_INVALID_ACCOUNT_PREFIX', entryId: entry.id, line: lineIndex + 1, message: `Les trois premiers caractères du compte ${rawAccountId || '(vide)'} doivent respecter le SYSCOHADA.` });
+      if (!accountLabel) fecIssue(errors, { code: 'FEC_MISSING_ACCOUNT_LABEL', entryId: entry.id, line: lineIndex + 1, message: `Libellé de compte absent pour ${rawAccountId || '(vide)'}.` });
+      if (!pieceDate) fecIssue(errors, { code: 'FEC_MISSING_PIECE_DATE', entryId: entry.id, line: lineIndex + 1, message: `Date de pièce absente pour ${entry.reference || entry.id}.` });
+      if (!line.label && !entry.label) fecIssue(errors, { code: 'FEC_MISSING_ENTRY_LABEL', entryId: entry.id, line: lineIndex + 1, message: `Libellé d’écriture absent pour ${entry.reference || entry.id}.` });
+      if (debit === 0 && credit === 0) fecIssue(errors, { code: 'FEC_ZERO_LINE', entryId: entry.id, line: lineIndex + 1, message: `La ligne ${lineIndex + 1} de ${entry.reference || entry.id} est sans montant.` });
+      if (regime === 'SMT') {
+        if (!settlementDate) fecIssue(errors, { code: 'FEC_MISSING_SETTLEMENT_DATE', entryId: entry.id, line: lineIndex + 1, message: `Date de règlement absente pour ${entry.reference || entry.id}.` });
+        if (!settlementMode) fecIssue(errors, { code: 'FEC_MISSING_SETTLEMENT_MODE', entryId: entry.id, line: lineIndex + 1, message: `Mode de règlement absent pour ${entry.reference || entry.id}.` });
+      }
+      const values = {
+        CodeJournal: fecText(entry.journalId),
+        LibJournal: fecText(journal?.label || ''),
+        NumEcriture: entryNumber,
+        DateEcriture: fecDate(lineDate),
+        NumCompte: rawAccountId,
+        LibCompte: fecText(accountLabel),
+        NumCompteAux: fecText(auxiliaryAccountId),
+        LibCompteAux: fecText(auxiliaryLabel),
+        RefPiece: fecText(entry.reference || line.pieceRef || ''),
+        DatePiece: fecDate(pieceDate),
+        LibEcriture: fecText(fecReportEntry(entry) ? 'REPORT' : (line.entryLabel || entry.label || line.label || '')),
+        MontDebit: fecAmount(debit),
+        MontCredit: fecAmount(credit),
+        LetEcriture: fecText(line.letEcriture || line.lettering || entry.letEcriture || ''),
+        DateLetEcriture: fecDate(letDate),
+        DateValid: fecDate(validationDate || (diagnostic ? lineDate : '')),
+        MontDevise: fecAmount(line.montDevise ?? line.foreignAmount ?? entry.montDevise ?? ''),
+        CodeDevise: fecText(line.codeDevise || line.currency || entry.codeDevise || (entry.currency && entry.currency !== 'XOF' ? entry.currency : '')),
+        'Date Règlement': fecDate(settlementDate),
+        'Mode Règlement': fecText(settlementMode),
+        NatOp: fecText(line.natOp || line.natureOperation || entry.natOp || entry.natureOperation || '')
+      };
+      records.push({ entryId: entry.id, line: lineIndex + 1, isReport: fecReportEntry(entry), values });
+      totalDebit += debit;
+      totalCredit += credit;
+    });
+  });
+  return { valid: errors.length === 0, fields, records, errors, warnings, excludedEntries, pendingCount, entryCount: eligible.length, lineCount: records.length, totalDebit: round(totalDebit), totalCredit: round(totalCredit), scope: { companyId, fiscalYear, startDate: scopeStart, endDate: scopeEnd }, generatedAt: new Date().toISOString() };
+}
+
+export function exportFecTxt({ prepared, delimiter = '\t' } = {}) {
+  if (!prepared?.fields) throw new DomainError('Préparation FEC absente.', 'FEC_PREPARATION_REQUIRED');
+  const header = prepared.fields.map((field) => field.name).join(delimiter);
+  const rows = prepared.records.map((record) => prepared.fields.map((field) => fecText(record.values[field.name])).join(delimiter));
+  return [header, ...rows].join('\r\n') + '\r\n';
+}
+
+export function exportFecNoticeTxt({ prepared, delimiter = '\t', encoding = 'ISO-8859-15', recordSeparator = 'CRLF' } = {}) {
+  if (!prepared?.fields) throw new DomainError('Préparation FEC absente.', 'FEC_PREPARATION_REQUIRED');
+  const lines = [
+    'DESCRIPTIF TECHNIQUE DU FEC',
+    `STRUCTURE${delimiter}Fichier plat séquentiel`,
+    `SEPARATEUR_CHAMPS${delimiter}${delimiter === '\t' ? 'TABULATION' : 'POINT-VIRGULE'}`,
+    `SEPARATEUR_ENREGISTREMENTS${delimiter}${recordSeparator}`,
+    `JEU_DE_CARACTERES${delimiter}${encoding}`,
+    '',
+    ['ORDRE', 'NOM DU CHAMP', 'DESCRIPTION', 'TYPE', 'OBLIGATOIRE', 'FORMAT'].join(delimiter),
+    ...prepared.fields.map((field) => [field.order, field.name, field.description, field.type, field.required ? 'OUI' : 'NON', field.format].map(fecText).join(delimiter))
+  ];
+  return lines.join('\r\n') + '\r\n';
+}
+
+function asciiCharacter(value) {
+  const normalized = String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return normalized === 'œ' || normalized === 'Œ' ? (normalized === 'œ' ? 'oe' : 'OE') : normalized;
+}
+
+export function encodeFecText(text, encoding = 'ISO-8859-15') {
+  const source = String(text ?? '');
+  if (encoding === 'EBCDIC') {
+    const punctuation = { ' ': 0x40, '\t': 0x05, '\r': 0x0d, '\n': 0x25, '-': 0x60, '/': 0x61, ',': 0x6b, '.': 0x4b, ';': 0x5e, ':': 0x7a, '_': 0x6d, '+': 0x4e, '=': 0x7e, '?': 0x6f, '!': 0x5a, '@': 0x7c, '#': 0x7b, '$': 0x5b, '%': 0x6c, '&': 0x50, '*': 0x5c, '(': 0x4d, ')': 0x5d, '<': 0x4c, '>': 0x6e, "'": 0x7d, '"': 0x7f };
+    const bytes = [];
+    for (const original of source) {
+      const character = asciiCharacter(original);
+      for (const unit of character) {
+        const code = unit.charCodeAt(0);
+        if (punctuation[unit] !== undefined) bytes.push(punctuation[unit]);
+        else if (code >= 0x41 && code <= 0x49) bytes.push(0xc1 + code - 0x41);
+        else if (code >= 0x4a && code <= 0x52) bytes.push(0xd1 + code - 0x4a);
+        else if (code >= 0x53 && code <= 0x5a) bytes.push(0xe2 + code - 0x53);
+        else if (code >= 0x61 && code <= 0x69) bytes.push(0x81 + code - 0x61);
+        else if (code >= 0x6a && code <= 0x72) bytes.push(0x91 + code - 0x6a);
+        else if (code >= 0x73 && code <= 0x7a) bytes.push(0xa2 + code - 0x73);
+        else if (code >= 0x30 && code <= 0x39) bytes.push(0xf0 + code - 0x30);
+        else bytes.push(0x6f);
+      }
+    }
+    return Uint8Array.from(bytes);
+  }
+  const isoMap = { '€': 0xa4, 'Š': 0xa6, 'š': 0xa8, 'Ž': 0xb4, 'ž': 0xb8, 'Œ': 0xbc, 'œ': 0xbd, 'Ÿ': 0xbe };
+  const bytes = [];
+  for (const original of source) {
+    const character = encoding === 'ASCII' ? asciiCharacter(original) : original;
+    for (const unit of character) {
+      if (isoMap[unit] !== undefined && encoding !== 'ASCII') bytes.push(isoMap[unit]);
+      else if (unit.charCodeAt(0) <= 0x7f || (encoding !== 'ASCII' && unit.charCodeAt(0) <= 0xff)) bytes.push(unit.charCodeAt(0));
+      else bytes.push(0x3f);
+    }
+  }
+  return Uint8Array.from(bytes);
+}

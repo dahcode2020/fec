@@ -689,3 +689,110 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 }
 .export-format.is-unavailable { opacity:.55; cursor:not-allowed; }
 .export-format.is-unavailable:hover { border-color:var(--line); background:#fff; transform:none; }
+
+/* FEC fiscal DGID Bénin */
+.fec-pane { margin-bottom:17px; }
+.fec-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.fec-heading h2 { margin:7px 0 5px; font-size:19px; }
+.fec-heading p { margin:0; color:#9aa4b2; font-size:10px; line-height:1.45; }
+.fec-law-badge { flex:0 0 auto; padding:7px 9px; color:#8a6422; background:var(--amber-soft); border-radius:20px; font-size:8px; font-weight:800; white-space:nowrap; }
+.fec-warning { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; margin-bottom:16px; border:1px solid #f1dfb9; background:#fffaf0; border-radius:10px; }
+.fec-warning-icon { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:23px; height:23px; color:#a1721e; border-radius:50%; background:#f8e9c5; font-size:12px; font-weight:850; }
+.fec-warning strong, .fec-warning p { display:block; }
+.fec-warning strong { color:#856628; font-size:10px; }
+.fec-warning p { margin:4px 0 0; color:#a08a5e; font-size:9px; line-height:1.45; }
+.fec-context-grid { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:9px; margin-bottom:16px; }
+.fec-context-grid > div { min-width:0; padding:11px 12px; border:1px solid #edf0f3; border-radius:9px; background:#fafbfc; }
+.fec-context-grid small, .fec-context-grid strong, .fec-context-grid span { display:block; }
+.fec-context-grid small { color:#a1aab7; font-size:7px; letter-spacing:.07em; font-weight:800; }
+.fec-context-grid strong { overflow:hidden; color:#596579; font-size:10px; text-overflow:ellipsis; white-space:nowrap; margin-top:5px; }
+.fec-context-grid span { overflow:hidden; color:#9ba5b3; font-size:8px; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; }
+.fec-form { display:flex; flex-direction:column; gap:14px; }
+.fec-form-section { padding:19px; border:1px solid #edf0f3; border-radius:12px; background:#fff; }
+.fec-section-heading { display:flex; align-items:flex-start; gap:10px; margin-bottom:16px; }
+.fec-section-heading h3 { margin:2px 0 4px; color:var(--ink); font-size:12px; }
+.fec-section-heading p { margin:0; color:#9ca5b3; font-size:9px; line-height:1.4; }
+.fec-section-number { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:25px; height:25px; color:#a1721e; background:var(--amber-soft); border-radius:8px; font-size:11px; font-weight:850; }
+.fec-locked-context { margin-left:auto; padding:5px 7px; color:#8d98a7; background:#f4f6f8; border-radius:12px; font-size:8px; font-weight:750; white-space:nowrap; }
+.fec-fields-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+.fec-fields-grid .field-help { margin-top:4px; }
+.fec-file-preview { min-height:36px; padding:10px 12px; border:1px solid #e5e9ee; background:#fafbfc; border-radius:9px; }
+.fec-file-preview small, .fec-file-preview strong, .fec-file-preview span { display:block; }
+.fec-file-preview small { color:#a1aab7; font-size:7px; letter-spacing:.07em; font-weight:800; }
+.fec-file-preview strong { overflow:hidden; color:#596579; font-size:10px; margin-top:4px; text-overflow:ellipsis; white-space:nowrap; }
+.fec-file-preview span { color:#9ba4b3; font-size:8px; margin-top:3px; }
+.fec-technical-note { display:flex; align-items:flex-start; gap:7px; margin:14px 0 0; padding:10px 11px; color:#758c9d; background:#f7fafc; border:1px solid #e5edf2; border-radius:8px; font-size:8px; line-height:1.45; }
+.fec-technical-note > span { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:15px; height:15px; color:#6f8ca0; border:1px solid #cbdbe5; border-radius:50%; font-size:9px; font-weight:800; }
+.fec-result:empty { display:none; }
+.fec-control-result { padding:17px; border:1px solid #edf0f3; border-radius:11px; background:#fbfcfd; }
+.fec-result-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.fec-result-heading h3 { margin:6px 0 4px; color:var(--ink); font-size:14px; }
+.fec-result-heading p { margin:0; color:#9ca5b3; font-size:9px; line-height:1.4; }
+.fec-result-status { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; padding:6px 8px; border-radius:20px; color:#a16f1b; background:var(--amber-soft); font-size:8px; font-weight:800; white-space:nowrap; }
+.fec-result-status i { width:5px; height:5px; border-radius:50%; background:var(--amber); }
+.fec-result-status.is-valid { color:var(--green); background:var(--green-soft); }
+.fec-result-status.is-valid i { background:var(--green); }
+.fec-result-status.is-invalid { color:#a35757; background:#fff0f0; }
+.fec-result-status.is-invalid i { background:#d66b6b; }
+.fec-summary { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin:15px 0; }
+.fec-summary > span { padding:10px; border:1px solid #edf0f3; border-radius:8px; background:#fff; }
+.fec-summary small, .fec-summary strong, .fec-summary em { display:block; }
+.fec-summary small { color:#a1aab7; font-size:7px; letter-spacing:.06em; font-weight:800; }
+.fec-summary strong { color:var(--ink); font-size:15px; margin-top:5px; }
+.fec-summary em { color:#9ba4b3; font-size:8px; font-style:normal; margin-top:2px; }
+.fec-issues { padding:11px 12px; border:1px solid #f0dddd; background:#fffafa; border-radius:8px; }
+.fec-issues > strong { color:#985858; font-size:9px; }
+.fec-issues ul { list-style:none; padding:0; margin:7px 0 0; max-height:165px; overflow:auto; }
+.fec-issues li { display:flex; align-items:flex-start; gap:6px; padding:5px 0; border-top:1px solid #f5e8e8; color:#856a6a; font-size:8px; line-height:1.35; }
+.fec-issues li > span:first-child { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:15px; height:15px; border-radius:50%; color:#fff; background:#ca6c6c; font-weight:850; }
+.fec-issues .fec-issue-warning { color:#8d753e; }
+.fec-issues .fec-issue-warning > span:first-child { color:#a1721e; background:var(--amber-soft); }
+.fec-clean { display:flex; align-items:center; gap:8px; padding:10px 11px; color:#2b765f; background:#f2fbf7; border:1px solid #d8f1e9; border-radius:8px; font-size:9px; }
+.fec-clean > span { display:flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; color:var(--green); background:var(--green-soft); font-weight:850; }
+.fec-preview-table { margin-top:13px; border:1px solid #edf0f3; border-radius:8px; background:#fff; overflow:hidden; }
+.fec-preview-table-heading { display:flex; justify-content:space-between; gap:10px; padding:10px 11px; border-bottom:1px solid #edf0f3; }
+.fec-preview-table-heading strong { color:#596579; font-size:9px; }
+.fec-preview-table-heading span { color:#9ba4b3; font-size:8px; }
+.fec-preview-table table { min-width:720px; }
+.fec-preview-table td { padding-top:8px; padding-bottom:8px; font-size:8px; }
+.fec-empty { padding:18px !important; text-align:center; color:#9ba4b3; }
+.fec-footer { display:flex; align-items:center; justify-content:space-between; gap:15px; padding-top:15px; border-top:1px solid #edf0f3; }
+.fec-footer > span { display:flex; align-items:center; gap:6px; color:#8c99a9; font-size:9px; }
+.fec-shield { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; color:var(--green); background:var(--green-soft); border-radius:50%; font-size:10px; font-weight:850; }
+.fec-footer-actions { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.fec-footer-actions .button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+
+@media (max-width: 920px) {
+  .fec-context-grid { grid-template-columns:1fr 1fr; }
+  .fec-context-grid > div:first-child { grid-column:span 2; }
+  .fec-summary { grid-template-columns:repeat(2, 1fr); }
+}
+@media (max-width: 620px) {
+  .fec-heading { flex-direction:column; }
+  .fec-law-badge { align-self:flex-start; }
+  .fec-context-grid, .fec-fields-grid, .fec-summary { grid-template-columns:1fr; }
+  .fec-context-grid > div:first-child { grid-column:auto; }
+  .fec-section-heading { flex-wrap:wrap; }
+  .fec-locked-context { margin-left:35px; }
+  .fec-result-heading { align-items:flex-start; flex-direction:column; }
+  .fec-footer { align-items:flex-start; flex-direction:column; }
+  .fec-footer-actions { width:100%; flex-direction:column-reverse; }
+  .fec-footer-actions .button { width:100%; }
+}
+
+.fec-history-panel { margin-top:14px; padding:15px 17px; border:1px solid #edf0f3; border-radius:11px; background:#fff; }
+.fec-history-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.fec-history-heading h3 { margin:5px 0 0; color:var(--ink); font-size:11px; }
+.fec-history-heading > span { color:#9ba4b3; font-size:8px; }
+.fec-history-list { border-top:1px solid #f0f2f5; }
+.fec-history-row { display:flex; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid #f0f2f5; }
+.fec-history-row:last-child { border-bottom:0; }
+.fec-history-icon { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:29px; height:25px; color:var(--green); background:var(--green-soft); border-radius:7px; font-size:7px; font-weight:850; }
+.fec-history-row > div { min-width:0; flex:1; }
+.fec-history-row strong, .fec-history-row small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fec-history-row strong { color:#596579; font-size:9px; }
+.fec-history-row small { color:#9ba4b3; font-size:8px; margin-top:3px; }
+.fec-history-date { color:#9ba4b3; font-size:8px; white-space:nowrap; }
+.fec-history-empty { margin:0; color:#9ba4b3; font-size:9px; }
+.fec-issues > .text-button { margin-top:8px; font-size:8px; }
+.fec-issues > .text-button .icon { width:11px; }

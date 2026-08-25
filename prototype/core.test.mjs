@@ -52,12 +52,17 @@ import {
   createBankMovement,
   reconcileBankMovement,
   createPayment,
+  encodeFecText,
+  exportFecNoticeTxt,
+  exportFecTxt,
+  fecFieldDefinitions,
   importAccountPlanRows,
   makeDossierCode,
   nextAuxiliaryAccountId,
   mapImportedRows,
   parseDelimited,
   suggestPosting,
+  prepareFecExport,
   validateImportedBalance
 } from './core.js';
 
@@ -395,4 +400,55 @@ test('importe une balance TXT délimitée et contrôle son équilibre', () => {
   assert.equal(result.debit, 250000);
   assert.equal(result.credit, 250000);
   assert.match(exportBalanceTxt({ companyName: 'Acacia Conseil', period: 'Juin 2025', rows }), /Acacia Conseil/);
+});
+
+test('prépare le FEC béninois normal avec ses 18 champs et exclut les écritures interdites', () => {
+  const journals = [
+    { id: 'AN', label: 'À-nouveaux' },
+    { id: 'VE', label: 'Ventes' },
+    { id: 'CT', label: 'Centralisations' },
+    { id: 'RP', label: 'Résultat de la période' }
+  ];
+  const accounts = [
+    { id: '4111', label: 'Clients' },
+    { id: '7061', label: 'Services vendus' },
+    { id: '131', label: 'Résultat net' }
+  ];
+  const entries = [
+    { id: 'report', companyId: 'co-a', journalId: 'AN', reference: 'AN-0001', date: '2025-01-01', validatedAt: '2025-01-02', label: 'Report des soldes', integrationCategory: 'REPORTS_A_NOUVEAU', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 1000, credit: 0 }, { accountId: '131', debit: 0, credit: 1000 }] },
+    { id: 'sale', companyId: 'co-a', journalId: 'VE', reference: 'FAC-001', date: '2025-01-03', validatedAt: '2025-01-04', label: 'Vente client', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 1000, credit: 0 }, { accountId: '7061', debit: 0, credit: 1000 }] },
+    { id: 'central', companyId: 'co-a', journalId: 'CT', reference: 'CT-0001', date: '2025-01-05', validatedAt: '2025-01-05', label: 'Centralisation', integrationCategory: 'CENTRALISATION', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 100, credit: 100 }] },
+    { id: 'result', companyId: 'co-a', journalId: 'RP', reference: 'RP-0001', date: '2025-01-06', validatedAt: '2025-01-06', label: 'Solde des comptes 6 et 7', integrationCategory: 'RESULTAT', status: 'VALIDATED', lines: [{ accountId: '131', debit: 100, credit: 100 }] }
+  ];
+  const prepared = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'NORMAL', journals, accounts, startDate: '2025-01-01', endDate: '2025-12-31' });
+  assert.equal(prepared.valid, true);
+  assert.equal(prepared.fields.length, 18);
+  assert.equal(prepared.records.length, 4);
+  assert.equal(prepared.records[0].values.NumEcriture, '1');
+  assert.equal(prepared.records[0].values.LibEcriture, 'REPORT');
+  assert.equal(prepared.records[1].values.NumEcriture, '1');
+  assert.equal(prepared.records[2].values.NumEcriture, '2');
+  assert.equal(prepared.excludedEntries.length, 2);
+  const content = exportFecTxt({ prepared });
+  assert.match(content.split('\r\n')[0], /^CodeJournal\tLibJournal\tNumEcriture\tDateEcriture/);
+  assert.match(content, /1000,00/);
+  assert.equal(content.split('\r\n')[0].split('\t').length, 18);
+  assert.match(exportFecNoticeTxt({ prepared }), /SEPARATEUR_CHAMPS\tTABULATION/);
+});
+
+test('ajoute les trois champs du SMT et bloque le FEC officiel si la date de validation manque', () => {
+  const entry = { id: 'receipt', companyId: 'co-a', journalId: 'BQ', reference: 'BQ-0001', date: '2025-02-01', label: 'Encaissement client', status: 'VALIDATED', lines: [{ accountId: '5211', debit: 5000, credit: 0, settlementDate: '2025-02-01', settlementMode: 'Virement' }] };
+  const prepared = prepareFecExport({ entries: [entry], companyId: 'co-a', fiscalYear: '2025', regime: 'SMT', journals: [{ id: 'BQ', label: 'Banque' }], accounts: [{ id: '5211', label: 'Banque locale' }], startDate: '2025-01-01', endDate: '2025-12-31' });
+  assert.equal(prepared.valid, false);
+  assert.equal(prepared.fields.length, 21);
+  assert.ok(prepared.errors.some((issue) => issue.code === 'FEC_MISSING_VALID_DATE'));
+  assert.equal(prepared.records[0].values['Date Règlement'], '20250201');
+  assert.equal(prepared.records[0].values['Mode Règlement'], 'Virement');
+  assert.equal(exportFecTxt({ prepared }).split('\r\n')[0].split('\t').length, 21);
+});
+
+test('encode le FEC dans les jeux de caractères prévus', () => {
+  assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ASCII')], [0x41, 0x09, 0x45, 0x0d, 0x0a]);
+  assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ISO-8859-15')], [0x41, 0x09, 0xc9, 0x0d, 0x0a]);
+  assert.deepEqual([...encodeFecText('A1\t', 'EBCDIC')], [0xc1, 0xf1, 0x05]);
 });

@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, deleteCorrectionCandidate, evaluatePeriodClosure, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, deleteCorrectionCandidate, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -77,6 +77,8 @@ const appState = {
   statementMode: 'control',
   exportDraft: null,
   exportHistory: [],
+  fecDraft: null,
+  fecHistory: [],
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -124,7 +126,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -165,6 +167,7 @@ function hydrateAppState() {
   if (!appState.financialSnapshots) appState.financialSnapshots = [];
   if (!appState.statementMode) appState.statementMode = 'control';
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
+  if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
   if (!appState.bankMovements) appState.bankMovements = [];
 }
 
@@ -235,6 +238,7 @@ const FICHIER_GROUPS = {
     description: 'Échangez vos balances et livres comptables avec votre cabinet ou une autre solution.',
     actions: [
       { label: 'Exportation de Fichiers Comptables', description: 'Exporter une balance ou un livre', symbol: '↑', tone: 'green', action: 'export' },
+      { label: 'Exportation FEC pour la DGID', description: 'Produire le Fichier des Écritures Comptables selon l’arrêté béninois', symbol: '⚖', tone: 'red', action: 'fec' },
       { label: 'Importation de Fichiers Comptables', description: 'Importer un fichier TXT ou Excel', symbol: '↓', tone: 'blue', action: 'import' },
       { label: 'Importation d’une Balance Générale', description: 'Reprendre les soldes d’un exercice', symbol: '▤', tone: 'purple', action: 'balance' }
     ]
@@ -576,8 +580,10 @@ function setActiveCompany(companyId, notify = true) {
   if (!company) return;
   appState.activeCompany = companyId;
   appState.exportDraft = null;
+  appState.fecDraft = null;
   pendingExportRows = null;
   pendingExportReportType = null;
+  fecPrepared = null;
   persistAppState();
 
   $$('[data-company-name]').forEach((node) => { node.textContent = company.name; });
@@ -628,6 +634,7 @@ function setActiveCompany(companyId, notify = true) {
   renderOpening();
   renderStatements();
   renderExportAssistant();
+  renderFecAssistant();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -1009,6 +1016,7 @@ const EXPORT_FORMATS = Object.freeze({
 
 let pendingExportRows = null;
 let pendingExportReportType = null;
+let fecPrepared = null;
 
 function exportReportDefinition(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -1097,6 +1105,221 @@ function renderExportAssistant() {
       <div class="export-footer"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Aucun fichier n’est créé avant votre vérification.</span><div class="export-footer-actions"><button class="button button-secondary" type="button" data-action="prepare-export">Vérifier l’export</button><button class="button button-primary" id="confirmExportButton" type="button" data-action="confirm-export"${confirmDisabled}>Télécharger le fichier <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg></button></div></div>
     </form>`;
   if (draft.exportReady) renderExportReview(buildExportData(draft));
+}
+
+function fecCompactDate(value) {
+  return String(value || '').slice(0, 10).replace(/-/g, '');
+}
+
+function fecFileBase(company, draft) {
+  const ifu = String(company.ifu || '').trim().replace(/[^A-Za-z0-9]/g, '');
+  return `FEC_${ifu}_${fecCompactDate(draft.closureDate)}`;
+}
+
+function defaultFecDraft() {
+  const company = appState.companies[appState.activeCompany];
+  const year = currentFiscalYear();
+  const setup = currentAccountSetup();
+  return {
+    fiscalYear: String(year.id),
+    regime: setup.regime === 'SMT' ? 'SMT' : 'NORMAL',
+    mode: 'OFFICIAL_REPORT',
+    startDate: company.exerciseStart || `${year.id}-01-01`,
+    endDate: company.exerciseEnd || `${year.id}-12-31`,
+    closureDate: company.exerciseEnd || `${year.id}-12-31`,
+    separator: 'TAB',
+    encoding: 'ISO-8859-15',
+    maxRecords: 0
+  };
+}
+
+function buildFecPane() {
+  const pane = document.createElement('div');
+  pane.className = 'fec-pane panel';
+  pane.id = 'fecPane';
+  pane.hidden = true;
+  const recent = $('.recent-imports');
+  recent?.parentElement?.insertBefore(pane, recent);
+  renderFecAssistant();
+  return pane;
+}
+
+function renderFecHistory(returnOnly = false) {
+  const history = (appState.fecHistory || []).filter((item) => item.companyId === appState.activeCompany).slice(0, 5);
+  const html = `<section class="fec-history-panel"><div class="fec-history-heading"><div><span class="eyebrow">CONSERVATION DU DOSSIER</span><h3>Derniers FEC générés</h3></div><span>${history.length} fichier${history.length > 1 ? 's' : ''}</span></div>${history.length ? `<div class="fec-history-list">${history.map((item) => `<div class="fec-history-row"><span class="fec-history-icon">FEC</span><div><strong>FEC_${escapeHtml(item.ifu)}_${escapeHtml(fecCompactDate(item.closureDate))}.txt</strong><small>${escapeHtml(item.regime === 'SMT' ? 'SMT' : 'Système normal')} · ${escapeHtml(item.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : 'Officiel')} · ${escapeHtml(String(item.lineCount))} lignes</small></div><span class="fec-history-date">${escapeHtml(new Date(item.createdAt).toLocaleDateString('fr-FR'))}</span></div>`).join('')}</div>` : '<p class="fec-history-empty">Aucun FEC n’a encore été généré pour cette société.</p>'}</section>`;
+  if (returnOnly) return html;
+  const panel = $('#fecHistoryPanel');
+  if (panel) panel.outerHTML = html.replace('<section class="fec-history-panel">', '<section class="fec-history-panel" id="fecHistoryPanel">');
+  return html;
+}
+
+function renderFecAssistant() {
+  const pane = $('#fecPane');
+  const company = appState.companies[appState.activeCompany];
+  if (!pane || !company) return;
+  const draft = appState.fecDraft || defaultFecDraft();
+  const year = currentFiscalYear();
+  const sourceType = draft.mode === 'DIAGNOSTIC' ? 'Diagnostic provisoire' : draft.mode === 'OFFICIAL_STRICT' ? 'FEC officiel strict' : 'FEC officiel + rapport';
+  const fieldCount = draft.regime === 'SMT' ? 21 : 18;
+  const result = fecPrepared ? renderFecResult(fecPrepared, true) : '';
+  const fiscalYearOptions = Object.values(appState.fiscalYears || {}).filter((item) => item && item.id).map((item) => `<option value="${escapeHtml(item.id)}" ${String(item.id) === String(draft.fiscalYear) ? 'selected' : ''}>${escapeHtml(item.label || `Exercice ${item.id}`)}</option>`).join('') || `<option value="${escapeHtml(year.id)}">${escapeHtml(year.label)}</option>`;
+  pane.innerHTML = `<div class="fec-heading"><div><span class="eyebrow">EXPORT FISCAL DGID · BÉNIN</span><h2>Fichier des Écritures Comptables</h2><p>Préparez le FEC selon l’arrêté ministériel du 23 avril 2020, puis contrôlez-le avant toute remise.</p></div><span class="fec-law-badge">Arrêté FEC béninois</span></div>
+    <div class="fec-warning"><span class="fec-warning-icon">!</span><div><strong>Une sortie fiscale, pas une simple balance</strong><p>Le FEC reprend les écritures validées, les reports à nouveau et les opérations détaillées. Les centralisations et les soldes des comptes de charges et de produits sont exclus.</p></div></div>
+    <div class="fec-context-grid"><div><small>SOCIÉTÉ ACTIVE</small><strong>${escapeHtml(company.name)}</strong><span>IFU · ${escapeHtml(company.ifu || 'À renseigner')}</span></div><div><small>EXERCICE</small><strong>${escapeHtml(year.label)}</strong><span>${escapeHtml(displayDate(company.exerciseStart))} — ${escapeHtml(displayDate(company.exerciseEnd))}</span></div><div><small>STRUCTURE</small><strong>Fichier plat TXT</strong><span>${fieldCount} champs · ${escapeHtml(sourceType)}</span></div></div>
+    <form id="fecForm" class="fec-form" novalidate>
+      <section class="fec-form-section"><div class="fec-section-heading"><span class="fec-section-number">1</span><div><h3>Définir le périmètre fiscal</h3><p>Le fichier est rattaché à un exercice et à la période soumise à vérification.</p></div><span class="fec-locked-context">Société verrouillée</span></div><div class="fec-fields-grid"><label class="field"><span>Exercice <b>*</b></span><select id="fecFiscalYear" name="fiscalYear" required>${fiscalYearOptions}</select></label><label class="field"><span>Régime comptable <b>*</b></span><select id="fecRegime" name="regime" required><option value="NORMAL" ${draft.regime === 'NORMAL' ? 'selected' : ''}>Système normal · 18 champs</option><option value="SMT" ${draft.regime === 'SMT' ? 'selected' : ''}>SMT · 21 champs</option></select></label><label class="field"><span>Début de la période contrôlée <b>*</b></span><input id="fecStartDate" name="startDate" type="date" value="${escapeHtml(draft.startDate)}" required></label><label class="field"><span>Fin de la période contrôlée <b>*</b></span><input id="fecEndDate" name="endDate" type="date" value="${escapeHtml(draft.endDate)}" required></label><label class="field"><span>Date de clôture de l’exercice <b>*</b></span><input id="fecClosureDate" name="closureDate" type="date" value="${escapeHtml(draft.closureDate)}" required><small class="field-help">Utilisée dans le nom du fichier.</small></label><label class="field"><span>Mode de préparation <b>*</b></span><select id="fecMode" name="mode" required><option value="OFFICIAL_STRICT" ${draft.mode === 'OFFICIAL_STRICT' ? 'selected' : ''}>FEC officiel strict</option><option value="OFFICIAL_REPORT" ${draft.mode === 'OFFICIAL_REPORT' ? 'selected' : ''}>FEC officiel + rapport</option><option value="DIAGNOSTIC" ${draft.mode === 'DIAGNOSTIC' ? 'selected' : ''}>Diagnostic provisoire · non transmissible</option></select></label></div></section>
+      <section class="fec-form-section"><div class="fec-section-heading"><span class="fec-section-number">2</span><div><h3>Paramètres techniques de l’arrêté</h3><p>Ces paramètres seront repris dans le descriptif technique accompagnant le FEC.</p></div></div><div class="fec-fields-grid"><label class="field"><span>Séparateur des champs <b>*</b></span><select id="fecSeparator" name="separator" required><option value="TAB" ${draft.separator === 'TAB' ? 'selected' : ''}>Tabulation</option><option value="SEMICOLON" ${draft.separator === 'SEMICOLON' ? 'selected' : ''}>Point-virgule</option></select></label><label class="field"><span>Jeu de caractères <b>*</b></span><select id="fecEncoding" name="encoding" required><option value="ISO-8859-15" ${draft.encoding === 'ISO-8859-15' ? 'selected' : ''}>ISO 8859-15</option><option value="ASCII" ${draft.encoding === 'ASCII' ? 'selected' : ''}>ASCII</option><option value="EBCDIC" ${draft.encoding === 'EBCDIC' ? 'selected' : ''}>EBCDIC</option></select></label><label class="field"><span>Découpage par volume</span><input id="fecMaxRecords" name="maxRecords" type="number" min="0" step="1" value="${escapeHtml(draft.maxRecords || 0)}"><small class="field-help">0 = un fichier unique. Sinon, nombre maximal de lignes par fichier.</small></label><div class="fec-file-preview"><small>NOM PRÉVISIONNEL</small><strong id="fecPreviewFilename">FEC_${escapeHtml(company.ifu || 'IFU')}_${escapeHtml(fecCompactDate(draft.closureDate))}.txt</strong><span>Le suffixe _1, _2… est ajouté si le volume est découpé.</span></div></div><p class="fec-technical-note"><span>i</span> Les 18 premiers champs suivent exactement l’ordre de l’article 5. En SMT, les champs <b>Date Règlement</b>, <b>Mode Règlement</b> et <b>NatOp</b> sont ajoutés.</p></section>
+      <div class="fec-result" id="fecResult">${result}</div>
+      <div class="fec-footer"><span><span class="fec-shield">✓</span> La génération officielle est bloquée en cas d’anomalie bloquante.</span><div class="fec-footer-actions"><button class="button button-secondary" type="button" data-action="check-fec">Contrôler le FEC</button><button class="button button-primary" id="generateFecButton" type="button" data-action="generate-fec" disabled>Générer le FEC</button></div></div>
+    </form><div id="fecHistoryPanel">${renderFecHistory(true)}</div>`;
+  if (fecPrepared) renderFecResult(fecPrepared);
+}
+
+function invalidateFecPreview() {
+  fecPrepared = null;
+  $('#fecResult').textContent = '';
+  $('#generateFecButton')?.setAttribute('disabled', '');
+  const company = appState.companies[appState.activeCompany];
+  const closureDate = $('#fecClosureDate')?.value;
+  const preview = $('#fecPreviewFilename');
+  if (preview && company) preview.textContent = `FEC_${String(company.ifu || 'IFU').replace(/[^A-Za-z0-9]/g, '')}_${fecCompactDate(closureDate)}.txt`;
+}
+
+function readFecForm() {
+  const form = $('#fecForm');
+  if (!form) return null;
+  const data = new FormData(form);
+  return {
+    ...(appState.fecDraft || defaultFecDraft()),
+    fiscalYear: String(data.get('fiscalYear') || currentFiscalYear().id),
+    regime: String(data.get('regime') || 'NORMAL'),
+    mode: String(data.get('mode') || 'OFFICIAL_REPORT'),
+    startDate: String(data.get('startDate') || ''),
+    endDate: String(data.get('endDate') || ''),
+    closureDate: String(data.get('closureDate') || ''),
+    separator: String(data.get('separator') || 'TAB'),
+    encoding: String(data.get('encoding') || 'ISO-8859-15'),
+    maxRecords: Math.max(0, Number(data.get('maxRecords') || 0))
+  };
+}
+
+function fecStatusesForMode(mode) {
+  return mode === 'DIAGNOSTIC'
+    ? [OPERATION_STATES.IMPUTED, OPERATION_STATES.TO_REVIEW, OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED]
+    : [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED];
+}
+
+function appendFecIssue(prepared, issue) {
+  const target = issue.severity === 'WARNING' ? prepared.warnings : prepared.errors;
+  target.push(issue);
+  prepared.valid = prepared.errors.length === 0;
+}
+
+function prepareFecFromForm() {
+  const form = $('#fecForm');
+  if (!form) return null;
+  if (!form.reportValidity()) {
+    showToast('Complétez les paramètres du FEC avant le contrôle.');
+    return null;
+  }
+  const draft = readFecForm();
+  const company = appState.companies[appState.activeCompany];
+  const setup = currentAccountSetup();
+  const year = appState.fiscalYears[appState.activeCompany] || currentFiscalYear();
+  const selectedYear = String(draft.fiscalYear || year.id);
+  if (!company.ifu?.trim()) {
+    showToast('L’IFU de la société est obligatoire pour nommer le FEC.');
+    return null;
+  }
+  if (draft.startDate > draft.endDate) {
+    showToast('La fin de la période contrôlée doit être postérieure au début.');
+    return null;
+  }
+  const prepared = prepareFecExport({ entries: appState.integratedEntries, companyId: appState.activeCompany, fiscalYear: draft.fiscalYear, startDate: draft.startDate, endDate: draft.endDate, regime: draft.regime, journals: setup.journals, accounts: setup.accounts, thirdParties: currentThirdParties(), payments: appState.payments, statuses: fecStatusesForMode(draft.mode), diagnostic: draft.mode === 'DIAGNOSTIC' });
+  if (draft.startDate < `${selectedYear}-01-01` || draft.endDate > `${selectedYear}-12-31`) appendFecIssue(prepared, { code: 'FEC_PERIOD_SCOPE', severity: 'ERROR', message: 'La période contrôlée doit rester comprise dans l’exercice sélectionné.' });
+  if (draft.mode !== 'DIAGNOSTIC' && prepared.pendingCount > 0) appendFecIssue(prepared, { code: 'FEC_PENDING_ENTRIES', severity: 'ERROR', message: `${prepared.pendingCount} écriture(s) de la période ne sont pas encore validées et ne peuvent pas être remises dans un FEC officiel.` });
+  if (draft.closureDate < draft.startDate || draft.closureDate > `${selectedYear}-12-31` || draft.closureDate < `${selectedYear}-01-01`) appendFecIssue(prepared, { code: 'FEC_CLOSURE_DATE_SCOPE', severity: 'ERROR', message: 'La date de clôture doit correspondre à l’exercice sélectionné.' });
+  prepared.fecDraft = draft;
+  prepared.companyName = company.name;
+  prepared.ifu = company.ifu;
+  prepared.mode = draft.mode;
+  appState.fecDraft = draft;
+  fecPrepared = prepared;
+  renderFecResult(prepared);
+  persistAppState();
+  return prepared;
+}
+
+function fecIssueLabel(issue) {
+  return `${issue.severity === 'WARNING' ? 'Avertissement' : 'Blocage'} · ${issue.message}`;
+}
+
+function renderFecResult(prepared, returnOnly = false) {
+  if (!prepared) return '';
+  const draft = prepared.fecDraft || appState.fecDraft || defaultFecDraft();
+  const official = draft.mode !== 'DIAGNOSTIC';
+  const canGenerate = prepared.valid || !official;
+  const issueItems = [...prepared.errors, ...prepared.warnings].slice(0, 60).map((issue) => `<li class="fec-issue-${issue.severity === 'WARNING' ? 'warning' : 'error'}"><span>${issue.severity === 'WARNING' ? '!' : '×'}</span><span>${escapeHtml(fecIssueLabel(issue))}</span></li>`).join('');
+  const previewRows = prepared.records.slice(0, 8).map((record) => `<tr><td>${escapeHtml(record.values.CodeJournal)}</td><td>${escapeHtml(record.values.NumEcriture)}</td><td>${escapeHtml(record.values.DateEcriture)}</td><td><b>${escapeHtml(record.values.NumCompte)}</b></td><td>${escapeHtml(record.values.RefPiece)}</td><td class="align-right">${escapeHtml(record.values.MontDebit)}</td><td class="align-right">${escapeHtml(record.values.MontCredit)}</td></tr>`).join('');
+  const html = `<section class="fec-control-result"><div class="fec-result-heading"><div><span class="eyebrow">RÉSULTAT DU PRÉCONTRÔLE</span><h3>${prepared.valid ? 'FEC contrôlé' : 'Corrections nécessaires avant remise'}</h3><p>${official ? 'Le mode officiel ne produit aucun fichier tant qu’un blocage subsiste.' : 'Ce diagnostic peut être généré pour préparer les corrections, mais reste non transmissible.'}</p></div><span class="fec-result-status ${prepared.valid ? 'is-valid' : 'is-invalid'}"><i></i>${prepared.valid ? 'Aucune erreur bloquante' : `${prepared.errors.length} blocage${prepared.errors.length > 1 ? 's' : ''}`}</span></div><div class="fec-summary"><span><small>ÉCRITURES</small><strong>${prepared.entryCount}</strong><em>retenues</em></span><span><small>LIGNES</small><strong>${prepared.lineCount}</strong><em>enregistrements</em></span><span><small>EXCLUES</small><strong>${prepared.excludedEntries.length}</strong><em>centralisation / résultat</em></span><span><small>EN ATTENTE</small><strong>${prepared.pendingCount}</strong><em>non validées</em></span></div>${issueItems ? `<div class="fec-issues"><strong>Anomalies et avertissements</strong><ul>${issueItems}</ul><button class="text-button" type="button" data-action="open-view" data-view="entry">Compléter les écritures sources <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>` : '<div class="fec-clean"><span>✓</span><strong>Le périmètre ne présente aucune anomalie bloquante.</strong></div>'}<div class="fec-preview-table"><div class="fec-preview-table-heading"><strong>Premières lignes du fichier</strong><span>${prepared.lineCount} ligne${prepared.lineCount > 1 ? 's' : ''} · ${prepared.totalDebit.toFixed(2).replace('.', ',')} débit / ${prepared.totalCredit.toFixed(2).replace('.', ',')} crédit</span></div><div class="table-wrap"><table><thead><tr><th>JOURNAL</th><th>N° ÉCRITURE</th><th>DATE</th><th>COMPTE</th><th>PIÈCE</th><th class="align-right">DÉBIT</th><th class="align-right">CRÉDIT</th></tr></thead><tbody>${previewRows || '<tr><td colspan="7" class="fec-empty">Aucune ligne dans la période sélectionnée.</td></tr>'}</tbody></table></div></div></section>`;
+  if (returnOnly) return html;
+  const result = $('#fecResult');
+  if (result) result.innerHTML = html;
+  const button = $('#generateFecButton');
+  if (button) { button.disabled = !canGenerate; button.textContent = draft.mode === 'DIAGNOSTIC' ? 'Générer le diagnostic' : 'Générer le FEC'; }
+  return html;
+}
+
+function downloadBytes(filename, bytes, type = 'application/octet-stream') {
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function generateFec() {
+  const prepared = fecPrepared || prepareFecFromForm();
+  if (!prepared) return;
+  const draft = prepared.fecDraft || readFecForm();
+  const official = draft.mode !== 'DIAGNOSTIC';
+  if (official && !prepared.valid) {
+    showToast('Génération bloquée : corrigez les anomalies du FEC officiel.');
+    return;
+  }
+  const company = appState.companies[appState.activeCompany];
+  const delimiter = draft.separator === 'SEMICOLON' ? ';' : '\t';
+  const base = fecFileBase(company, draft);
+  const maxRecords = Number(draft.maxRecords || 0);
+  const chunks = maxRecords > 0 ? Array.from({ length: Math.max(1, Math.ceil(prepared.records.length / maxRecords)) }, (_, index) => prepared.records.slice(index * maxRecords, (index + 1) * maxRecords)) : [prepared.records];
+  chunks.forEach((records, index) => {
+    const filePrepared = { ...prepared, records };
+    const suffix = chunks.length > 1 ? `_${index + 1}` : '';
+    const content = exportFecTxt({ prepared: filePrepared, delimiter });
+    downloadBytes(`${base}${suffix}.txt`, encodeFecText(content, draft.encoding), 'text/plain');
+  });
+  const notice = exportFecNoticeTxt({ prepared, delimiter, encoding: draft.encoding, recordSeparator: 'CRLF' });
+  downloadBytes(`${base}.notice.txt`, encodeFecText(notice, draft.encoding), 'text/plain');
+  const history = { id: `fec-${Date.now()}`, companyId: appState.activeCompany, ifu: company.ifu, exercise: draft.fiscalYear, startDate: draft.startDate, endDate: draft.endDate, closureDate: draft.closureDate, regime: draft.regime, mode: draft.mode, encoding: draft.encoding, separator: draft.separator, files: chunks.length, entryCount: prepared.entryCount, lineCount: prepared.lineCount, valid: prepared.valid, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
+  appState.fecHistory.unshift(history);
+  appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'FEC_GENERATED', companyId: appState.activeCompany, label: `FEC ${company.ifu} ${draft.fiscalYear}`, metadata: history, at: history.createdAt, userId: 'claire-dossou' });
+  persistAppState();
+  renderFecHistory();
+  showToast(`${draft.mode === 'DIAGNOSTIC' ? 'Diagnostic FEC' : 'FEC'} généré${chunks.length > 1 ? ` en ${chunks.length} fichiers` : ''}, avec son descriptif technique.`);
+}
+
+function openFecAssistant() {
+  closeModal();
+  appState.fecDraft = defaultFecDraft();
+  fecPrepared = null;
+  renderFecAssistant();
+  openView('imports');
+  setImportMode('fec');
+  window.setTimeout(() => $('#fecStartDate')?.focus(), 50);
 }
 
 function readExportForm() {
@@ -1279,14 +1502,23 @@ function setImportMode(mode) {
   const importPane = $('#importPane');
   const mapping = $('#mappingPanel');
   const exportPane = $('#exportPane');
+  const fecPane = $('#fecPane');
   if (mode === 'export') {
     importPane?.setAttribute('hidden', '');
     mapping?.setAttribute('hidden', '');
+    fecPane?.setAttribute('hidden', '');
     renderExportAssistant();
     exportPane?.removeAttribute('hidden');
+  } else if (mode === 'fec') {
+    importPane?.setAttribute('hidden', '');
+    mapping?.setAttribute('hidden', '');
+    exportPane?.setAttribute('hidden', '');
+    renderFecAssistant();
+    fecPane?.removeAttribute('hidden');
   } else {
     importPane?.removeAttribute('hidden');
     exportPane?.setAttribute('hidden', '');
+    fecPane?.setAttribute('hidden', '');
   }
 }
 
@@ -2827,6 +3059,7 @@ function handleFichierAction(action) {
   if (action === 'restore') showToast('Choisissez une sauvegarde FEC à restaurer.');
   if (action === 'import' || action === 'balance') { openView('imports'); setImportMode('import'); }
   if (action === 'export') { openView('imports'); setImportMode('export'); }
+  if (action === 'fec') openFecAssistant();
   if (action === 'help') showToast('Le tutoriel d’utilisation sera ajouté dans l’étape dédiée.');
   if (action === 'placeholder') showToast('Cette opération sera paramétrée dans l’étape dédiée.');
   if (action === 'close') showLogin();
@@ -3379,6 +3612,9 @@ function bindEvents() {
     if (action === 'validate-import') validateImport();
     if (action === 'prepare-export') prepareExport();
     if (action === 'confirm-export') confirmExport();
+    if (action === 'check-fec') prepareFecFromForm();
+    if (action === 'generate-fec') generateFec();
+    if (action === 'open-fec') openFecAssistant();
     if (action === 'download-report') openExportAssistant(actionTarget.dataset.exportReport || null);
     if (action === 'download-template') downloadTemplate();
     if (action === 'show-member-modal') showToast('L’invitation d’un membre sera disponible dans le prochain jalon.');
@@ -3420,6 +3656,10 @@ function bindEvents() {
   });
   document.addEventListener('change', (event) => {
     if (event.target.closest('#exportForm')) invalidateExportReview();
+    if (event.target.closest('#fecForm')) invalidateFecPreview();
+  });
+  document.addEventListener('input', (event) => {
+    if (event.target.closest('#fecForm')) invalidateFecPreview();
   });
 
   const dropZone = $('#dropZone');
@@ -3442,6 +3682,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCompanyMenu();
   setActiveCompany(appState.activeCompany, false);
   buildExportPane();
+  buildFecPane();
   bindEvents();
   toggleOtherLegalForm();
   updateDossierPreview();
