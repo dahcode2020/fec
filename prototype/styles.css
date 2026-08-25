@@ -401,9 +401,14 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .tools-footnote .text-button { margin-left: 37px; }
 }
 
+@media (min-width: 761px) {
+  .multi-line-modal { width: min(1180px, calc(100vw - 24px)); }
+  .manual-line-header, .manual-line-row { grid-template-columns: 42px 150px minmax(260px, 1fr) minmax(170px, .65fr) minmax(170px, .65fr) 34px; }
+  .multi-line-rows { overflow-x: hidden; }
+}
 @media (max-width: 760px) {
   .manual-line-header { display: none; }
-  .manual-line-row { grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 11px 9px; }
+  .manual-line-row { grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 11px 9px; min-width: 0; }
   .manual-field > span { display: block; }
   .manual-line-row .manual-field:nth-of-type(2) { grid-column: 2 / -1; }
   .manual-line-row .manual-field:nth-of-type(3), .manual-line-row .manual-field:nth-of-type(4) { grid-column: span 1; }

@@ -70,7 +70,7 @@ Crédit  445700 — TVA collectée                   50 000
 
 Le moteur accepte un nombre quelconque de lignes tant que chaque ligne possède un seul côté, que les comptes existent dans le référentiel et que le total débit égale le total crédit.
 
-L’écran de modification affiche explicitement les colonnes **Compte**, **Libellé**, **Débit** et **Crédit**. Sur petit écran, ces champs restent visibles les uns sous les autres au lieu d’être masqués derrière un défilement horizontal. L’ordre naturel des champs permet de passer de Compte à Libellé, Débit, Crédit puis à la ligne suivante avec la touche `Tab`.
+L’écran de modification affiche explicitement les colonnes **Compte**, **Libellé**, **Débit** et **Crédit**. Sur ordinateur, la fenêtre est suffisamment large pour afficher toutes les colonnes simultanément, sans barre de défilement horizontale. Sur petit écran, les champs restent visibles les uns sous les autres. L’ordre naturel des champs permet de passer de Compte à Libellé, Débit, Crédit puis à la ligne suivante avec la touche `Tab`.
 
 ## Fenêtre fixe de correction
 
