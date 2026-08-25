@@ -14,7 +14,8 @@ Chaque exercice CSR est découpé en douze périodes mensuelles. La période act
 - chaque période possède un début, une fin et un état ;
 - une seule période est active pour la saisie courante ;
 - une période clôturée reste consultable mais refuse toute nouvelle écriture ;
-- l’exercice ne peut être arrêté que lorsque toutes ses périodes sont clôturées.
+- l’exercice ne peut être arrêté que lorsque les douze périodes existent et que les contrôles annuels sont satisfaits ;
+- l’arrêté annuel verrouille ensuite toutes les périodes ; les clôtures mensuelles restent facultatives.
 
 ## États
 

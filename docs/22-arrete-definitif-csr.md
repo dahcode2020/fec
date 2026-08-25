@@ -9,7 +9,8 @@ L’arrêté définitif verrouille l’exercice après la clôture de toutes ses
 
 ## Contrôles bloquants
 
-- toutes les périodes de l’exercice sont clôturées ;
+- les douze périodes de l’exercice existent ;
+- les clôtures mensuelles sont traitées lorsqu’elles sont activées ;
 - aucune saisie reste à contrôler ;
 - les traitements automatiques sont exécutés ;
 - les ajustements fiscaux et l’impôt sont préparés ;
@@ -32,4 +33,4 @@ L’arrêté définitif verrouille l’exercice après la clôture de toutes ses
 - l’événement est conservé dans l’audit ;
 - une réouverture doit être autorisée et motivée.
 
-Dans la maquette actuelle, un seul mois de démonstration est présent : l’arrêté annuel reste donc bloqué tant que les douze périodes ne sont pas créées et clôturées.
+Dans la maquette, l’arrêté annuel exige la présence des douze périodes et la résolution des contrôles bloquants. Les clôtures mensuelles restent facultatives ; l’arrêté annuel verrouille l’exercice et ses périodes.

@@ -208,10 +208,11 @@ test('génère les 12 périodes mensuelles avec des bornes correctes', () => {
   assert.equal(periods[11].end, '2025-12-31');
 });
 
-test('arrête un exercice uniquement après clôture de toutes ses périodes', () => {
+test('permet un arrêté annuel sans exiger la clôture de chaque mois', () => {
   const year = { id: '2025', status: 'OPEN' };
-  assert.throws(() => finalizeFiscalYear(year, { periods: [{ id: '2025-06', status: 'OPEN' }], checks: [{ passed: true }] }), (error) => error.code === 'FISCAL_YEAR_PERIODS_OPEN');
-  const finalized = finalizeFiscalYear(year, { periods: [{ id: '2025-06', status: 'CLOSED' }], checks: [{ passed: true }], userId: 'user-1' });
+  const periods = createMonthlyPeriods(2025);
+  assert.throws(() => finalizeFiscalYear(year, { periods: periods.slice(0, 11), checks: [{ passed: true }] }), (error) => error.code === 'FISCAL_YEAR_PERIODS_MISSING');
+  const finalized = finalizeFiscalYear(year, { periods, checks: [{ passed: true }], userId: 'user-1' });
   assert.equal(finalized.status, 'FINALIZED');
   assert.equal(finalized.finalizedBy, 'user-1');
 });

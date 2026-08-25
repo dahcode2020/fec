@@ -443,7 +443,7 @@ export function closePeriod(period, { checks = [], userId = null } = {}) {
 export function finalizeFiscalYear(year, { periods = [], checks = [], userId = null } = {}) {
   if (!year?.id) throw new DomainError('Exercice comptable invalide.', 'INVALID_FISCAL_YEAR');
   if (year.status === 'FINALIZED') throw new DomainError('L’exercice est déjà arrêté.', 'FISCAL_YEAR_ALREADY_FINALIZED');
-  if (!periods.length || periods.some((period) => period.status !== PERIOD_STATUSES.CLOSED)) throw new DomainError('Toutes les périodes doivent être clôturées avant l’arrêté.', 'FISCAL_YEAR_PERIODS_OPEN');
+  if (periods.length !== 12) throw new DomainError('Les douze périodes de l’exercice doivent être créées avant l’arrêté.', 'FISCAL_YEAR_PERIODS_MISSING');
   const evaluation = evaluatePeriodClosure(checks);
   if (!evaluation.valid) throw new DomainError('L’exercice ne peut pas être arrêté : des contrôles restent à traiter.', 'FISCAL_YEAR_CLOSURE_BLOCKED');
   return { ...year, status: 'FINALIZED', finalizedAt: new Date().toISOString(), finalizedBy: userId, closure: evaluation };

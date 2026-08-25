@@ -2047,14 +2047,15 @@ function currentFiscalYear() {
 function currentFinalizationChecks() {
   const periods = appState.periods[appState.activeCompany] || [];
   const activeEntries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED);
+  const sourceEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED);
   const runs = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === currentPeriod().id).map((run) => run.category));
   const fiscal = currentFiscalSettings();
   return [
-    { id: 'periods', label: 'Périodes de l’exercice clôturées', description: `${periods.filter((period) => period.status === 'CLOSED').length} période(s) clôturée(s) sur les 12 attendues.`, passed: periods.length === 12 && periods.every((period) => period.status === 'CLOSED'), action: 'closing', actionLabel: 'Voir la clôture' },
+    { id: 'periods', label: 'Calendrier de l’exercice complet', description: `${periods.filter((period) => period.status === 'CLOSED').length} période(s) verrouillée(s) sur les 12 ; la clôture mensuelle reste facultative.`, passed: periods.length === 12, action: 'periods', actionLabel: 'Voir les périodes' },
     { id: 'entries', label: 'Aucune saisie en attente', description: `${activeEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} écriture(s) nécessitent encore un contrôle.`, passed: activeEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
     { id: 'automatic', label: 'Traitements automatiques terminés', description: 'Amortissements, abonnements, centralisation et résultat doivent être traités.', passed: ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runs.has(category)), action: 'periodic', actionLabel: 'Voir les traitements' },
     { id: 'fiscal', label: 'Résultat fiscal préparé', description: fiscal.taxRate > 0 ? 'Le taux fiscal et le calcul de l’impôt sont disponibles.' : 'Le taux d’impôt doit être validé pour l’exercice.', passed: fiscal.taxRate > 0, action: 'periodic', actionLabel: 'Voir le résultat fiscal' },
-    { id: 'reports', label: 'États financiers prêts à archiver', description: 'La balance, le résultat, le bilan et les annexes seront figés dans un instantané.', passed: false, action: 'editions', actionLabel: 'Prévisualiser les états' }
+    { id: 'reports', label: 'États financiers prêts à archiver', description: 'La balance, le résultat, le bilan et les annexes seront figés dans un instantané.', passed: sourceEntries.length > 0, action: 'editions', actionLabel: 'Prévisualiser les états' }
   ];
 }
 
@@ -2084,6 +2085,7 @@ function finalizeCurrentYear() {
   try {
     const finalized = finalizeFiscalYear(year, { periods: appState.periods[appState.activeCompany] || [], checks: currentFinalizationChecks(), userId: 'claire-dossou' });
     appState.fiscalYears[appState.activeCompany] = finalized;
+    appState.periods[appState.activeCompany] = (appState.periods[appState.activeCompany] || []).map((period) => ({ ...period, status: 'CLOSED', closedAt: finalized.finalizedAt, closedBy: finalized.finalizedBy }));
     appState.fiscalYearFinalizations.push({ companyId: appState.activeCompany, fiscalYear: year.id, finalizedAt: finalized.finalizedAt, userId: finalized.finalizedBy });
     persistAppState();
     renderFinalization();
