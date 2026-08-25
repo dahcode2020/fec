@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, validateJournalEntry, OPERATION_STATES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, validateJournalDefinition, validateJournalEntry, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -88,7 +88,8 @@ function hydrateAppState() {
     if (!existing) appState.accountingSetups[companyId] = defaults;
     else {
       existing.accounts = Array.from(new Map([...defaults.accounts, ...(existing.accounts || [])].map((account) => [account.id, account])).values());
-      existing.journals = existing.journals?.length ? existing.journals : defaults.journals;
+      const defaultJournals = new Map(defaults.journals.map((journal) => [journal.id, journal]));
+      existing.journals = (existing.journals?.length ? existing.journals : defaults.journals).map((journal) => ({ ...(defaultJournals.get(journal.id) || {}), ...journal, prefix: journal.prefix || `${journal.id}-`, nextNumber: journal.nextNumber || 1, active: journal.active !== false }));
     }
   });
   if (!appState.correctionWindows) appState.correctionWindows = {};
@@ -226,8 +227,8 @@ const CONFIG_GROUPS = {
     label: 'Journaux',
     description: 'Définissez vos journaux, leurs séquences et leurs comptes par défaut.',
     actions: [
-      { label: 'Journaux comptables', description: 'Achats, ventes, banque, caisse et opérations diverses', symbol: '≡', tone: 'blue', action: 'journal' },
-      { label: 'Ajouter un journal', description: 'Créer un journal adapté à votre activité', symbol: '+', tone: 'green', action: 'placeholder' },
+      { label: 'Journaux comptables', description: 'Achats, ventes, banque, caisse et opérations diverses', symbol: '≡', tone: 'blue', action: 'journals-config' },
+      { label: 'Ajouter un journal', description: 'Créer un journal adapté à votre activité', symbol: '+', tone: 'green', action: 'add-journal' },
       { label: 'Numérotation des pièces', description: 'Configurer les séquences par journal et exercice', symbol: '#', tone: 'purple', action: 'placeholder' }
     ]
   },
@@ -521,6 +522,7 @@ function setActiveCompany(companyId, notify = true) {
   renderEntryQueue();
   renderCorrectionWindow();
   renderAccountPlan();
+  renderJournalSetup();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -997,6 +999,7 @@ function validateImport() {
 
 let accountShowInactive = false;
 let editingAccountId = null;
+let editingJournalId = null;
 let pendingAccountImport = null;
 
 function currentAccountSetup() {
@@ -1037,6 +1040,100 @@ function renderAccountPlan(query = $('#accountSearch')?.value || '') {
   $('#usedAccountCount').textContent = String(used);
   $('#accountPlanVersion').textContent = setup.planVersion || 'SYSCOHADA Révisé';
   $('#accountListSubtitle').textContent = `${accounts.length} comptes · recherchez, complétez ou adaptez vos comptes`;
+}
+
+const JOURNAL_TYPE_LABELS = { VENTES: 'Ventes', ACHATS: 'Achats', BANQUE: 'Banque', CAISSE: 'Caisse', OPERATIONS_DIVERSES: 'Opérations diverses', AUTRE: 'Autre' };
+
+function usedJournalIds() {
+  return new Set([...appState.integratedEntries, ...appState.recentEntries].filter((entry) => entry.companyId === appState.activeCompany).map((entry) => entry.journalId));
+}
+
+function renderEntryJournalOptions() {
+  const select = $('#entryJournal');
+  if (!select) return;
+  const current = select.value;
+  const journals = currentAccountSetup().journals.filter((journal) => journal.active !== false);
+  select.innerHTML = journals.map((journal) => `<option value="${escapeHtml(journal.id)}">${escapeHtml(journal.id)} · ${escapeHtml(journal.label)}</option>`).join('');
+  if (journals.some((journal) => journal.id === current)) select.value = current;
+}
+
+function renderJournalSetup() {
+  const rows = $('#journalSetupRows');
+  if (!rows) return;
+  const setup = currentAccountSetup();
+  const journals = setup.journals || [];
+  const used = usedJournalIds();
+  rows.innerHTML = journals.map((journal) => `<tr><td><b class="journal-code-large">${escapeHtml(journal.id)}</b></td><td><span class="cell-title">${escapeHtml(journal.label)}</span>${used.has(journal.id) ? '<small class="cell-subtitle">Utilisé dans le dossier</small>' : ''}</td><td><span class="account-nature">${escapeHtml(JOURNAL_TYPE_LABELS[journal.type] || journal.type || 'Autre')}</span></td><td><span class="journal-prefix">${escapeHtml(journal.prefix || `${journal.id}-`)}</span></td><td><span class="journal-sequence">${String(journal.nextNumber || 1).padStart(4, '0')}</span></td><td><span class="status ${journal.active === false ? 'status-muted' : used.has(journal.id) ? 'status-green' : 'status-blue'}">${journal.active === false ? 'Inactif' : used.has(journal.id) ? 'Utilisé' : 'Actif'}</span></td><td><button class="icon-button small" type="button" data-action="edit-journal" data-journal-id="${escapeHtml(journal.id)}" aria-label="Modifier le journal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-1 5zM14 6l4 4M4 4h6"/></svg></button></td></tr>`).join('');
+  if (!journals.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun journal configuré.</td></tr>';
+  const active = journals.filter((journal) => journal.active !== false);
+  $('#activeJournalCount').textContent = String(active.length);
+  $('#customJournalCount').textContent = String(journals.filter((journal) => journal.isCustom).length);
+  $('#mainJournalLabel').textContent = journals.find((journal) => journal.id === 'OD')?.id || active[0]?.id || '—';
+  $('#journalSetupSubtitle').textContent = `${journals.length} journaux · prêts pour la saisie`;
+  renderEntryJournalOptions();
+}
+
+function openJournalModal(journalId = null) {
+  editingJournalId = journalId;
+  const title = $('#journalModalTitle');
+  const submit = $('#journalSubmitButton');
+  const idField = $('#journalId');
+  const original = $('#journalOriginalId');
+  const label = $('#journalLabel');
+  const type = $('#journalType');
+  const prefix = $('#journalPrefix');
+  const next = $('#journalNextNumber');
+  if (journalId) {
+    const journal = currentAccountSetup().journals.find((item) => item.id === journalId);
+    if (!journal) return;
+    title.textContent = 'Modifier un journal';
+    submit.textContent = 'Enregistrer les modifications';
+    idField.value = journal.id;
+    idField.disabled = usedJournalIds().has(journal.id);
+    $('#journalCodeHelp').textContent = idField.disabled ? 'Code verrouillé : ce journal est déjà utilisé dans le dossier.' : 'Le code peut encore être adapté avant utilisation.';
+    original.value = journal.id;
+    label.value = journal.label;
+    type.value = journal.type || 'AUTRE';
+    prefix.value = journal.prefix || `${journal.id}-`;
+    next.value = journal.nextNumber || 1;
+  } else {
+    title.textContent = 'Ajouter un journal';
+    submit.textContent = 'Ajouter le journal';
+    idField.disabled = false;
+    $('#journalCodeHelp').textContent = '2 à 4 caractères, par exemple VE, AC, BQ.';
+    original.value = '';
+    idField.value = '';
+    label.value = '';
+    type.value = 'OPERATIONS_DIVERSES';
+    prefix.value = '';
+    next.value = 1;
+  }
+  openModal('journalModal');
+}
+
+function saveJournal(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const setup = currentAccountSetup();
+  const journal = { id: formData.get('journalId'), label: formData.get('journalLabel'), type: formData.get('journalType'), prefix: formData.get('journalPrefix'), nextNumber: formData.get('journalNextNumber'), active: true, isCustom: true };
+  try {
+    if (editingJournalId) setup.journals = updateJournalInSetup(setup.journals, editingJournalId, journal, { usedJournalIds: [...usedJournalIds()] });
+    else setup.journals = addJournalToSetup(setup.journals, journal);
+    appState.accountingSetups[appState.activeCompany] = setup;
+    appState.auditEvents.push({ type: editingJournalId ? 'JOURNAL_UPDATED' : 'JOURNAL_CREATED', companyId: appState.activeCompany, journalId: journal.id, at: new Date().toISOString() });
+    persistAppState();
+    closeModal();
+    renderJournalSetup();
+    showToast(editingJournalId ? 'Journal mis à jour dans le dossier.' : 'Journal ajouté au dossier.');
+  } catch (error) { showToast(error.message); }
+}
+
+function exportJournalConfig() {
+  const setup = currentAccountSetup();
+  const company = appState.companies[appState.activeCompany];
+  const content = ['SOCIETE;'+company.name, 'JOURNAL;LIBELLE;NATURE;PREFIXE;PROCHAINE_PIECE;ETAT', ...setup.journals.map((journal) => [journal.id, journal.label, JOURNAL_TYPE_LABELS[journal.type] || journal.type, journal.prefix, journal.nextNumber || 1, journal.active === false ? 'Inactif' : 'Actif'].join(';'))].join('\r\n') + '\r\n';
+  downloadText(`${company.code || company.shortName}-journaux.txt`, content);
+  showToast('La configuration des journaux a été exportée.');
 }
 
 function openAccountModal(accountId = null) {
@@ -1505,6 +1602,8 @@ function handleConfigurationAction(action) {
   if (action === 'companies') openView('companies');
   if (action === 'accounts') openView('accounts');
   if (action === 'add-account') openAccountModal();
+  if (action === 'journals-config') openView('journals-config');
+  if (action === 'add-journal') openJournalModal();
   if (action === 'import-accounts') openAccountImportModal();
   if (action === 'sales') openView('sales');
   if (action === 'purchases') openView('purchases');
@@ -1902,6 +2001,9 @@ function bindEvents() {
     if (action === 'show-company-modal') openModal('companyModal');
     if (action === 'show-account-modal') openAccountModal();
     if (action === 'edit-account') openAccountModal(actionTarget.dataset.accountId);
+    if (action === 'show-journal-modal') openJournalModal();
+    if (action === 'edit-journal') openJournalModal(actionTarget.dataset.journalId);
+    if (action === 'export-journal-config') exportJournalConfig();
     if (action === 'export-account-plan') exportAccountPlan();
     if (action === 'show-account-import') openAccountImportModal();
     if (action === 'apply-account-import') applyAccountImport();
@@ -1943,6 +2045,7 @@ function bindEvents() {
   $('#modalBackdrop')?.addEventListener('click', closeModal);
   $('#companyForm')?.addEventListener('submit', addCompany);
   $('#accountForm')?.addEventListener('submit', saveAccount);
+  $('#journalForm')?.addEventListener('submit', saveJournal);
   $('#accountImportFile')?.addEventListener('change', (event) => parseAccountImportFile(event.target.files?.[0]));
   $('#companyForm')?.addEventListener('input', updateDossierPreview);
   $('#companyForm')?.addEventListener('change', (event) => {

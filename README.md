@@ -39,7 +39,7 @@ La structure des menus **Fichier** et **Configuration** du module CSR est décri
 
 Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-insertion-csr.md`](docs/08-saisie-insertion-csr.md). Le menu **Paramétrage** est décrit dans [`docs/11-parametrage-operationnel.md`](docs/11-parametrage-operationnel.md). Le menu **Outils** est décrit dans [`docs/12-outils-csr.md`](docs/12-outils-csr.md).
 
-L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
+L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). L’écran **Configuration → Journaux** est décrit dans [`docs/14-journaux-csr.md`](docs/14-journaux-csr.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
 
 La section **Éditions** du module CSR est décrite dans [`docs/10-editions-csr.md`](docs/10-editions-csr.md).
 

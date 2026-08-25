@@ -158,11 +158,11 @@ export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
 ]);
 
 export const DEFAULT_CSR_JOURNALS = Object.freeze([
-  Object.freeze({ id: 'VE', label: 'Ventes' }),
-  Object.freeze({ id: 'AC', label: 'Achats' }),
-  Object.freeze({ id: 'BQ', label: 'Banque' }),
-  Object.freeze({ id: 'CA', label: 'Caisse' }),
-  Object.freeze({ id: 'OD', label: 'Opérations diverses' })
+  Object.freeze({ id: 'VE', label: 'Ventes', type: 'VENTES', prefix: 'VE-', nextNumber: 1, active: true, isCustom: false }),
+  Object.freeze({ id: 'AC', label: 'Achats', type: 'ACHATS', prefix: 'AC-', nextNumber: 1, active: true, isCustom: false }),
+  Object.freeze({ id: 'BQ', label: 'Banque', type: 'BANQUE', prefix: 'BQ-', nextNumber: 1, active: true, isCustom: false }),
+  Object.freeze({ id: 'CA', label: 'Caisse', type: 'CAISSE', prefix: 'CA-', nextNumber: 1, active: true, isCustom: false }),
+  Object.freeze({ id: 'OD', label: 'Opérations diverses', type: 'OPERATIONS_DIVERSES', prefix: 'OD-', nextNumber: 1, active: true, isCustom: false })
 ]);
 
 export function createCsrSetup({ companyId, regime = 'NORMAL', planVersion = 'SYSCOHADA-RÉVISÉ' } = {}) {
@@ -190,6 +190,35 @@ export function validateAccountDefinition(account, { existingAccounts = [] } = {
 export function addAccountToPlan(accounts, account) {
   const normalized = validateAccountDefinition(account, { existingAccounts: accounts });
   return [...accounts, normalized];
+}
+
+export function validateJournalDefinition(journal, { existingJournals = [] } = {}) {
+  const id = String(journal?.id || '').trim().toUpperCase();
+  const label = String(journal?.label || '').trim();
+  const prefix = String(journal?.prefix || `${id}-`).trim();
+  const nextNumber = Number(journal?.nextNumber || 1);
+  if (!/^[A-Z0-9]{2,4}$/.test(id)) throw new DomainError('Le code du journal doit contenir 2 à 4 caractères alphanumériques.', 'INVALID_JOURNAL_CODE');
+  if (!label) throw new DomainError('Le libellé du journal est obligatoire.', 'INVALID_JOURNAL_LABEL');
+  if (!Number.isInteger(nextNumber) || nextNumber < 1) throw new DomainError('Le numéro de la prochaine pièce est invalide.', 'INVALID_JOURNAL_SEQUENCE');
+  if (existingJournals.some((item) => String(item.id).toUpperCase() === id)) throw new DomainError(`Le journal ${id} existe déjà.`, 'DUPLICATE_JOURNAL');
+  return { id, label, type: journal.type || 'AUTRE', prefix, nextNumber, active: journal.active !== false, isCustom: journal.isCustom !== false };
+}
+
+export function addJournalToSetup(journals, journal) {
+  return [...journals, validateJournalDefinition(journal, { existingJournals: journals })];
+}
+
+export function updateJournalInSetup(journals, journalId, patch, { usedJournalIds = [] } = {}) {
+  const id = String(journalId || '').trim().toUpperCase();
+  const index = journals.findIndex((journal) => String(journal.id).toUpperCase() === id);
+  if (index < 0) throw new DomainError(`Journal inconnu : ${id}`, 'UNKNOWN_JOURNAL');
+  const current = journals[index];
+  const nextId = String(patch.id || current.id).trim().toUpperCase();
+  if (!/^[A-Z0-9]{2,4}$/.test(nextId)) throw new DomainError('Le code du journal doit contenir 2 à 4 caractères alphanumériques.', 'INVALID_JOURNAL_CODE');
+  if (nextId !== id && usedJournalIds.includes(id)) throw new DomainError('Le code d’un journal déjà utilisé ne peut pas être modifié.', 'USED_JOURNAL_CODE_LOCKED');
+  if (nextId !== id && journals.some((journal, journalIndex) => journalIndex !== index && String(journal.id).toUpperCase() === nextId)) throw new DomainError(`Le journal ${nextId} existe déjà.`, 'DUPLICATE_JOURNAL');
+  const updated = { ...current, ...patch, id: nextId, label: String(patch.label ?? current.label).trim(), prefix: String(patch.prefix ?? current.prefix).trim(), nextNumber: Number(patch.nextNumber ?? current.nextNumber) };
+  return journals.map((journal, journalIndex) => journalIndex === index ? updated : journal);
 }
 
 export function updateAccountInPlan(accounts, accountId, patch, { usedAccountIds = [] } = {}) {

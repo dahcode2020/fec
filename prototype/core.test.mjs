@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   DomainError,
   addAccountToPlan,
+  addJournalToSetup,
   addCompany,
   calculateStraightLinePlan,
   companiesFor,
@@ -15,6 +16,7 @@ import {
   OPERATION_STATES,
   transitionOperation,
   updateAccountInPlan,
+  updateJournalInSetup,
   createDossier,
   createIntegratedJournal,
   syncIntegratedJournal,
@@ -70,6 +72,16 @@ test('prépare un paramétrage CSR avec comptes et journaux', () => {
   assert.equal(setup.regime, 'SMT');
   assert.ok(setup.accounts.some((account) => account.id === '411000'));
   assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
+});
+
+test('configure les journaux et verrouille le code utilisé', () => {
+  const setup = createCsrSetup({ companyId: 'co-a' });
+  setup.journals = addJournalToSetup(setup.journals, { id: 'OD2', label: 'Opérations diverses 2', type: 'OPERATIONS_DIVERSES', prefix: 'OD2-', nextNumber: 1 });
+  assert.equal(setup.journals.at(-1).id, 'OD2');
+  setup.journals = updateJournalInSetup(setup.journals, 'OD2', { label: 'OD complémentaires', nextNumber: 12 });
+  assert.equal(setup.journals.at(-1).nextNumber, 12);
+  assert.throws(() => updateJournalInSetup(setup.journals, 'VE', { id: 'VEX' }, { usedJournalIds: ['VE'] }), (error) => error.code === 'USED_JOURNAL_CODE_LOCKED');
+  assert.throws(() => addJournalToSetup(setup.journals, { id: 'OD', label: 'Doublon' }), (error) => error.code === 'DUPLICATE_JOURNAL');
 });
 
 test('le référentiel SYSCOHADA intégré couvre les 9 classes', () => {
