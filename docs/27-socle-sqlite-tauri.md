@@ -28,6 +28,15 @@ Il prévoit notamment :
 
 Les relations utilisateur-société-module et les clés étrangères sont garanties par SQLite. Les index couvrent les recherches par société, exercice, période et date d’écriture.
 
+Le schéma comprend aussi les tables de fiabilité :
+
+- `schema_migrations` pour versionner le schéma ;
+- `sync_outbox` pour les changements locaux non encore envoyés ;
+- `sync_inbox` pour dédupliquer les changements reçus ;
+- `sync_cursors` pour reprendre une synchronisation interrompue ;
+- `sync_conflicts` pour empêcher la résolution silencieuse d’un conflit ;
+- `data_snapshots` et `backup_manifests` pour vérifier les copies.
+
 ## Adaptateur de développement
 
 [`storage/sqlite-store.mjs`](../storage/sqlite-store.mjs) utilise `node:sqlite` pour tester le contrat de persistance sans dépendre de Tauri. Il permet de :

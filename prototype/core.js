@@ -595,18 +595,58 @@ export function companiesFor(workspace, { includeArchived = false } = {}) {
  * Il sera remplacé par SQLite dans le shell desktop sans changer le contrat.
  */
 export function createLocalWorkspaceStore({ storage = globalThis.localStorage, key = 'fec.workspace.v1' } = {}) {
+  const pointerKey = `${key}.pointer`;
+  const slotKeys = [`${key}.a`, `${key}.b`];
+  const parseSlot = (slotKey) => {
+    if (!storage) return null;
+    try {
+      const value = storage.getItem(slotKey);
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  };
+  const currentSlot = () => {
+    const pointer = storage?.getItem(pointerKey);
+    return pointer === 'b' ? 1 : 0;
+  };
   return {
     load() {
       if (!storage) return null;
+      const preferred = parseSlot(slotKeys[currentSlot()]);
+      const fallback = parseSlot(slotKeys[currentSlot() === 0 ? 1 : 0]);
+      if (preferred && typeof preferred === 'object') return preferred;
+      if (fallback && typeof fallback === 'object') return fallback;
+      // Compatibilité avec les versions précédentes du prototype.
       try { return JSON.parse(storage.getItem(key) || 'null'); } catch { return null; }
     },
     save(workspace) {
       if (!storage) throw new DomainError('Aucun stockage local disponible.', 'STORAGE_UNAVAILABLE');
-      storage.setItem(key, JSON.stringify(workspace));
+      const target = currentSlot() === 0 ? 1 : 0;
+      const serialized = JSON.stringify(workspace);
+      // La nouvelle version est écrite dans le slot inactif avant de déplacer le pointeur.
+      // Une interruption laisse donc toujours un slot complet récupérable.
+      storage.setItem(slotKeys[target], serialized);
+      storage.setItem(pointerKey, target === 0 ? 'a' : 'b');
       return workspace;
+    },
+    backup() {
+      const workspace = this.load();
+      if (!workspace) return null;
+      return JSON.stringify({ format: 'fec-local-backup-v1', exportedAt: new Date().toISOString(), workspace });
+    },
+    restore(backup) {
+      if (!storage) throw new DomainError('Aucun stockage local disponible.', 'STORAGE_UNAVAILABLE');
+      let payload;
+      try { payload = typeof backup === 'string' ? JSON.parse(backup) : backup; } catch { throw new DomainError('Sauvegarde locale illisible.', 'INVALID_BACKUP'); }
+      const workspace = payload?.workspace || payload;
+      if (!workspace || typeof workspace !== 'object') throw new DomainError('Sauvegarde locale invalide.', 'INVALID_BACKUP');
+      return this.save(workspace);
     },
     clear() {
       storage?.removeItem(key);
+      storage?.removeItem(pointerKey);
+      slotKeys.forEach((slotKey) => storage?.removeItem(slotKey));
     }
   };
 }

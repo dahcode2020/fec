@@ -151,3 +151,90 @@ CREATE INDEX IF NOT EXISTS idx_periods_company_year ON periods(company_id, fisca
 CREATE INDEX IF NOT EXISTS idx_entries_company_date ON journal_entries(company_id, entry_date, status);
 CREATE INDEX IF NOT EXISTS idx_entry_lines_entry ON journal_entry_lines(entry_id, line_number);
 CREATE INDEX IF NOT EXISTS idx_audit_company_date ON audit_events(company_id, occurred_at);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  last_seen_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_outbox (
+  id TEXT PRIMARY KEY,
+  company_id TEXT,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  acknowledged_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sync_inbox (
+  id TEXT PRIMARY KEY,
+  device_id TEXT,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'RECEIVED',
+  applied_at TEXT,
+  error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sync_cursors (
+  scope TEXT PRIMARY KEY,
+  cursor TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_conflicts (
+  id TEXT PRIMARY KEY,
+  outbox_id TEXT,
+  company_id TEXT,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  local_json TEXT NOT NULL,
+  remote_json TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS data_snapshots (
+  id TEXT PRIMARY KEY,
+  company_id TEXT,
+  kind TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS backup_manifests (
+  id TEXT PRIMARY KEY,
+  backup_file TEXT NOT NULL,
+  database_hash TEXT NOT NULL,
+  schema_version INTEGER NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_status ON sync_outbox(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_company ON sync_outbox(company_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inbox_status ON sync_inbox(status, received_at);
+CREATE INDEX IF NOT EXISTS idx_conflicts_status ON sync_conflicts(status, created_at);
