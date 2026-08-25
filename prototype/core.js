@@ -367,6 +367,23 @@ export function reconcileBankMovement(movement, entry) {
   return { ...movement, status: BANK_MOVEMENT_STATUS.RECONCILED, matchedEntryId: entry.id, reconciledAt: new Date().toISOString() };
 }
 
+export function centralizeEntries(entries = [], { companyId, period = null, sourceJournalIds = [] } = {}) {
+  const eligible = entries.filter((entry) => entry.companyId === companyId && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && entry.status !== OPERATION_STATES.DRAFT && (!period || String(entry.date).startsWith(period)) && (!sourceJournalIds.length || sourceJournalIds.includes(entry.journalId)) && Array.isArray(entry.lines) && entry.lines.length);
+  const byAccount = new Map();
+  eligible.forEach((entry) => entry.lines.forEach((line) => {
+    const current = byAccount.get(line.accountId) || { accountId: line.accountId, label: line.label, debit: 0, credit: 0 };
+    current.debit += Number(line.debit || 0);
+    current.credit += Number(line.credit || 0);
+    byAccount.set(line.accountId, current);
+  }));
+  const lines = [...byAccount.values()].flatMap((line) => {
+    const debit = Math.round(line.debit * 100) / 100;
+    const credit = Math.round(line.credit * 100) / 100;
+    return [debit ? { ...line, debit, credit: 0 } : null, credit ? { ...line, debit: 0, credit } : null].filter(Boolean);
+  });
+  return { companyId, period, sourceEntryIds: eligible.map((entry) => entry.id), sourceCount: eligible.length, lines, totalDebit: lines.reduce((sum, line) => sum + line.debit, 0), totalCredit: lines.reduce((sum, line) => sum + line.credit, 0) };
+}
+
 export function calculateDocumentTotals(lines = [], taxRate = 0) {
   const normalizedTaxRate = Number(taxRate) || 0;
   const normalizedLines = lines.map((line, index) => {

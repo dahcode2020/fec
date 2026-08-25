@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -83,10 +83,10 @@ const appState = {
   ],
   integratedJournal: createIntegratedJournal({ id: 'lj-acacia-2025', companyId: 'acacia', fiscalYear: '2025' }),
   integratedEntries: [
-    { id: 'sale-1', companyId: 'acacia', reference: 'VE-0008', date: '2025-06-16', journalId: 'VE', label: 'Awa Concept — FAC-2025-018', debit: 250000, credit: 250000, amount: 250000, integrationCategory: 'GENERAL', status: 'TO_REVIEW', source: 'Saisie et insertion' },
-    { id: 'purchase-1', companyId: 'acacia', reference: 'AC-0007', date: '2025-06-15', journalId: 'AC', label: 'Cotonou Bureau — FA-0154', debit: 38500, credit: 38500, amount: 38500, integrationCategory: 'GENERAL', status: 'VALIDATED', source: 'Saisie et insertion' },
+    { id: 'sale-1', companyId: 'acacia', reference: 'VE-0008', date: '2025-06-16', journalId: 'VE', label: 'Awa Concept — FAC-2025-018', debit: 250000, credit: 250000, amount: 250000, lines: [{ accountId: '4111', label: 'Awa Concept', debit: 250000, credit: 0 }, { accountId: '7061', label: 'Services vendus', debit: 0, credit: 250000 }], integrationCategory: 'GENERAL', status: 'TO_REVIEW', source: 'Saisie et insertion' },
+    { id: 'purchase-1', companyId: 'acacia', reference: 'AC-0007', date: '2025-06-15', journalId: 'AC', label: 'Cotonou Bureau — FA-0154', debit: 38500, credit: 38500, amount: 38500, lines: [{ accountId: '6047', label: 'Fournitures de bureau', debit: 38500, credit: 0 }, { accountId: '4011', label: 'Cotonou Bureau', debit: 0, credit: 38500 }], integrationCategory: 'GENERAL', status: 'VALIDATED', source: 'Saisie et insertion' },
     { id: 'auto-amort-acacia-2025-06', companyId: 'acacia', reference: 'AM-0003', date: '2025-06-30', journalId: 'AM', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, amount: 23667, integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW', source: 'Amortissement automatique' },
-    { id: 'auto-centralization-acacia-2025-06', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'OD', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
+    { id: 'auto-centralization-acacia-2025-06', companyId: 'acacia', reference: 'CT-0001', date: '2025-06-30', journalId: 'CT', label: 'Centralisation des journaux — juin', debit: 125000, credit: 125000, amount: 125000, integrationCategory: 'CENTRALISATION', status: 'VALIDATED', source: 'Centralisation' },
     { id: 'auto-sub-internet-acacia-2025-06', companyId: 'acacia', reference: 'AB-0001', date: '2025-06-01', journalId: 'AB', label: 'Abonnement internet — juin', debit: 12000, credit: 12000, amount: 12000, integrationCategory: 'ABONNEMENTS', status: 'VALIDATED', source: 'Abonnement périodique' },
     { id: 'auto-result-acacia-2025-06', companyId: 'acacia', reference: 'RP-0001', date: '2025-06-30', journalId: 'RP', label: 'Résultat de la période — juin', debit: 548000, credit: 548000, amount: 548000, integrationCategory: 'RESULTAT', status: 'TO_REVIEW', source: 'Résultat de la période' }
   ],
@@ -1010,7 +1010,12 @@ function automaticPreview(category) {
     });
     return { ready: entries.length > 0, entries, reason: entries.length ? '' : 'Aucun abonnement actif n’est paramétré pour cette société.' };
   }
-  if (category === 'CENTRALISATION') return { ready: false, entries: [], reason: 'Les journaux sources et la règle de centralisation doivent être paramétrés avant génération.' };
+  if (category === 'CENTRALISATION') {
+    const source = centralizeEntries(appState.integratedEntries, { companyId, period: '2025-06', sourceJournalIds: ['VE', 'AC', 'BQ', 'CA', 'OD'] });
+    if (!source.sourceCount || !source.lines.length) return { ready: false, entries: [], reason: 'Aucune écriture source validée n’est disponible pour cette période.' };
+    const entry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: '2025-06-30', reference: 'CT-0001', label: 'Centralisation des journaux — juin 2025', dossierId, lines: source.lines });
+    return { ready: true, entries: [{ ...entry, id: `auto-centralization-${companyId}-2025-06`, amount: source.totalDebit, debit: source.totalDebit, credit: source.totalCredit, source: `Centralisation de ${source.sourceCount} écriture${source.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: source.sourceEntryIds, technicalOnly: true, status: OPERATION_STATES.TO_REVIEW }] };
+  }
   return { ready: false, entries: [], reason: 'Les comptes de résultat et la règle de clôture doivent être contrôlés avant génération.' };
 }
 

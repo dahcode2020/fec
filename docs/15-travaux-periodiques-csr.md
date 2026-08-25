@@ -39,7 +39,7 @@ Les abonnements actifs de la société, définis comme modèles récurrents, gé
 
 ### Centralisations
 
-La page et le journal `CT` sont en place, mais la génération est bloquée tant que les journaux sources et les règles de centralisation ne sont pas validés.
+Le système peut maintenant prévisualiser les écritures sources de la période, les regrouper par compte et préparer une écriture technique dans `CT`. Cette écriture porte les références des sources et ne doit pas être ajoutée une seconde fois aux états de synthèse. Les règles de centralisation détaillées du dossier pourront compléter ce premier traitement.
 
 ### Résultat
 

@@ -39,6 +39,7 @@ import {
   exportAccountPlanTxt,
   exportBalanceTxt,
   applyPaymentAllocations,
+  centralizeEntries,
   createBankMovement,
   reconcileBankMovement,
   createPayment,
@@ -153,6 +154,19 @@ test('affecte un encaissement à une facture et met à jour son solde', () => {
   assert.equal(result.documents[0].outstanding, 100000);
   assert.equal(result.documents[0].status, 'PARTIAL');
   assert.equal(result.documents[0].lettered, false);
+});
+
+test('centralise les lignes sans modifier les écritures sources', () => {
+  const entries = [
+    { id: 'e1', companyId: 'co-a', journalId: 'VE', date: '2025-06-15', status: 'VALIDATED', lines: [{ accountId: '4111', label: 'Client', debit: 100000, credit: 0 }, { accountId: '7061', label: 'Vente', debit: 0, credit: 100000 }] },
+    { id: 'e2', companyId: 'co-a', journalId: 'AC', date: '2025-06-16', status: 'TO_REVIEW', lines: [{ accountId: '6047', label: 'Fournitures', debit: 25000, credit: 0 }, { accountId: '4011', label: 'Fournisseur', debit: 0, credit: 25000 }] }
+  ];
+  const result = centralizeEntries(entries, { companyId: 'co-a', period: '2025-06' });
+  assert.equal(result.sourceCount, 2);
+  assert.equal(result.totalDebit, 125000);
+  assert.equal(result.totalCredit, 125000);
+  assert.deepEqual(result.sourceEntryIds, ['e1', 'e2']);
+  assert.equal(entries[0].journalId, 'VE');
 });
 
 test('pointe et rapproche un mouvement bancaire avec une écriture', () => {
