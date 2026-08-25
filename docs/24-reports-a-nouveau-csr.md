@@ -21,9 +21,11 @@ Préparer les soldes d’ouverture d’un nouvel exercice à partir des comptes 
 
 1. arrêter définitivement l’exercice source ;
 2. ouvrir **Reports à nouveau** ;
-3. consulter les soldes proposés ;
+3. consulter les soldes proposés depuis l’instantané officiel ;
 4. vérifier les totaux débit/crédit ;
 5. générer les reports dans `AN` ;
-6. ouvrir l’exercice suivant.
+6. valider l’écriture automatique ;
+7. ouvrir l’exercice suivant ;
+8. travailler dans les douze périodes nouvellement créées.
 
-La génération est bloquée tant que l’exercice source n’est pas `FINALIZED`. Le prototype prévisualise déjà les soldes de bilan mais conserve cette règle de sécurité.
+La génération est bloquée tant que l’exercice source n’est pas `FINALIZED`. L’ouverture de l’exercice suivant est séparée de la génération : les reports sont d’abord contrôlés, puis l’exercice cible est créé avec son dossier, ses périodes et sa période active de janvier.

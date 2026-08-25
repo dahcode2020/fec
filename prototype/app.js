@@ -80,6 +80,8 @@ const appState = {
   fecDraft: null,
   fecHistory: [],
   fecArchives: [],
+  pendingFiscalYears: {},
+  pendingPeriods: {},
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -127,7 +129,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -172,6 +174,8 @@ function hydrateAppState() {
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
   if (!Array.isArray(appState.fecArchives)) appState.fecArchives = [];
+  if (!appState.pendingFiscalYears || typeof appState.pendingFiscalYears !== 'object' || Array.isArray(appState.pendingFiscalYears)) appState.pendingFiscalYears = {};
+  if (!appState.pendingPeriods || typeof appState.pendingPeriods !== 'object' || Array.isArray(appState.pendingPeriods)) appState.pendingPeriods = {};
   if (!Array.isArray(appState.integratedEntries)) appState.integratedEntries = [];
   if (!Array.isArray(appState.recentEntries)) appState.recentEntries = [];
   if (!Array.isArray(appState.auditEvents)) appState.auditEvents = [];
@@ -2816,12 +2820,28 @@ function setStatementMode(mode) {
   renderStatements();
 }
 
+function openingPlanFromSnapshot(snapshot) {
+  const lines = [];
+  (snapshot?.statements?.balanceSheet || []).forEach((line) => {
+    const balance = Number(line.debit || 0) - Number(line.credit || 0);
+    if (balance > 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: balance, credit: 0 });
+    if (balance < 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: 0, credit: Math.abs(balance) });
+  });
+  const result = Number(snapshot?.statements?.resultBeforeTax || 0);
+  if (result > 0) lines.push({ accountId: '131', label: 'À-nouveau — résultat bénéficiaire', debit: 0, credit: result });
+  if (result < 0) lines.push({ accountId: '139', label: 'À-nouveau — résultat déficitaire', debit: Math.abs(result), credit: 0 });
+  return { companyId: snapshot.companyId, sourceYear: snapshot.fiscalYear, sourceEntryIds: snapshot.sourceEntryIds || [], sourceSnapshotId: snapshot.id, lines, totalDebit: lines.reduce((sum, line) => sum + Number(line.debit || 0), 0), totalCredit: lines.reduce((sum, line) => sum + Number(line.credit || 0), 0) };
+}
+
 function openingBalancePreview() {
   const year = currentFiscalYear();
-  const plan = calculateOpeningBalances(appState.integratedEntries, { companyId: appState.activeCompany, sourceYear: year.id });
   const targetYear = String(Number(year.id) + 1);
-  const run = appState.openingRuns.find((item) => item.companyId === appState.activeCompany && item.sourceYear === year.id);
-  return { ...plan, sourceYear: year.id, targetYear, run };
+  const previousOpening = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.targetYear) === String(year.id));
+  if (previousOpening && !currentFinancialSnapshot()) return { companyId: appState.activeCompany, sourceYear: year.id, targetYear, sourceEntryIds: [], lines: [], totalDebit: 0, totalCredit: 0, opened: true, run: null };
+  const snapshot = currentFinancialSnapshot();
+  const plan = snapshot ? openingPlanFromSnapshot(snapshot) : calculateOpeningBalances(appState.integratedEntries, { companyId: appState.activeCompany, sourceYear: year.id });
+  const run = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.sourceYear) === String(year.id));
+  return { ...plan, sourceYear: year.id, targetYear, run, opened: false };
 }
 
 function renderOpening() {
@@ -2829,35 +2849,92 @@ function renderOpening() {
   if (!rows) return;
   const year = currentFiscalYear();
   const preview = openingBalancePreview();
-  rows.innerHTML = preview.lines.map((line) => `<tr><td><b class="account-number">${escapeHtml(line.accountId)}</b></td><td>${escapeHtml(line.label)}</td><td class="align-right">${line.debit ? numberLabel(line.debit) : '—'}</td><td class="align-right">${line.credit ? numberLabel(line.credit) : '—'}</td><td><span class="account-origin origin-custom">Calcul automatique</span></td></tr>`).join('');
-  if (!preview.lines.length) rows.innerHTML = '<tr><td colspan="5" class="dossier-empty">Aucun solde de bilan à reporter pour cet exercice.</td></tr>';
+  rows.innerHTML = preview.lines.map((line) => `<tr><td><b class="account-number">${escapeHtml(line.accountId)}</b></td><td>${escapeHtml(line.label)}</td><td class="align-right">${line.debit ? numberLabel(line.debit) : '—'}</td><td class="align-right">${line.credit ? numberLabel(line.credit) : '—'}</td><td><span class="account-origin ${preview.sourceSnapshotId ? 'origin-custom' : ''}">${preview.sourceSnapshotId ? 'Instantané officiel' : 'Calcul automatique'}</span></td></tr>`).join('');
+  if (!preview.lines.length) rows.innerHTML = `<tr><td colspan="5" class="dossier-empty">${preview.opened ? `L’exercice ${escapeHtml(year.id)} est ouvert. Les reports de ${escapeHtml(String(Number(year.id) - 1))} ont déjà été intégrés.` : 'Aucun solde de bilan à reporter pour cet exercice.'}</td></tr>`;
   $('#openingAccountCount').textContent = String(preview.lines.length);
   $('#openingDebitTotal').innerHTML = `${numberLabel(preview.totalDebit)} <em>FCFA</em>`;
   $('#openingCreditTotal').innerHTML = `${numberLabel(preview.totalCredit)} <em>FCFA</em>`;
-  $('#openingPreviewDescription').textContent = `${preview.sourceEntryIds.length} écriture(s) source · destination : exercice ${preview.targetYear}`;
+  $('#openingPreviewDescription').textContent = preview.opened ? `Exercice ${year.id} ouvert avec ses reports intégrés.` : `${preview.sourceEntryIds.length} écriture(s) source · destination : exercice ${preview.targetYear}`;
   const badge = $('#openingStatusBadge');
   const lock = $('#openingLockLabel');
   const button = $('#generateOpeningButton');
+  const validateButton = $('#openNextYearButton');
   const finalized = year.status === 'FINALIZED';
   const generated = Boolean(preview.run);
-  if (badge) { badge.innerHTML = `<i></i> ${generated ? 'Reports générés' : finalized ? 'Prêt à générer' : 'En attente de l’arrêté'}`; badge.className = `opening-status-badge ${finalized ? 'is-ready' : ''}`; }
-  if (lock) lock.textContent = generated ? 'Reports générés' : finalized ? 'Exercice arrêté' : 'Exercice 2025 ouvert';
+  const opened = Boolean(preview.opened);
+  if (badge) { badge.innerHTML = `<i></i> ${opened ? 'Exercice ouvert' : generated ? 'Reports à contrôler' : finalized ? 'Prêt à générer' : 'En attente de l’arrêté'}`; badge.className = `opening-status-badge ${finalized || opened ? 'is-ready' : ''}`; }
+  if (lock) lock.textContent = opened ? `Exercice ${year.id} ouvert` : generated ? 'Reports à contrôler' : finalized ? `Exercice ${year.id} arrêté` : `Exercice ${year.id} ouvert`;
   if (button) { button.disabled = !finalized || generated || !preview.lines.length; button.textContent = generated ? 'Reports générés' : finalized ? 'Générer les reports' : 'Attente de l’arrêté'; }
+  if (validateButton) { validateButton.disabled = !generated || opened || preview.run?.status === 'VALIDATED'; validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
 }
 
 function generateOpeningBalances() {
   const year = currentFiscalYear();
   if (year.status !== 'FINALIZED') { showToast('L’exercice doit être arrêté avant de générer les reports à nouveau.'); return; }
   const preview = openingBalancePreview();
+  if (preview.run) { showToast('Les reports de cet exercice ont déjà été générés.'); return; }
   if (!preview.lines.length) { showToast('Aucun solde à reporter.'); return; }
   const entry = createAutomaticJournalEntry({ companyId: appState.activeCompany, integrationCategory: 'REPORTS_A_NOUVEAU', date: `${preview.targetYear}-01-01`, reference: 'AN-0001', label: `Reports à nouveau — exercice ${preview.targetYear}`, dossierId: currentDossierCode(appState.activeCompany), lines: preview.lines });
-  const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...entry, id: `auto-opening-${appState.activeCompany}-${preview.targetYear}`, amount: preview.totalDebit, debit: preview.totalDebit, credit: preview.totalCredit, source: `Reports de l’exercice ${preview.sourceYear}`, technicalOnly: false, status: OPERATION_STATES.TO_REVIEW }).entries[0];
-  appState.integratedEntries.unshift(synced);
-  appState.openingRuns.push({ companyId: appState.activeCompany, sourceYear: preview.sourceYear, targetYear: preview.targetYear, count: preview.lines.length, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...entry, id: `auto-opening-${appState.activeCompany}-${preview.targetYear}`, amount: preview.totalDebit, debit: preview.totalDebit, credit: preview.totalCredit, source: `Reports de l’exercice ${preview.sourceYear}`, technicalOnly: false, status: OPERATION_STATES.TO_REVIEW });
+  const openingEntry = synced.entries[0];
+  appState.integratedEntries.unshift(openingEntry);
+  appState.openingRuns.push({ companyId: appState.activeCompany, sourceYear: preview.sourceYear, targetYear: preview.targetYear, count: preview.lines.length, entryId: openingEntry.id, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  appState.pendingFiscalYears[appState.activeCompany] = { id: preview.targetYear, label: `Exercice ${preview.targetYear}`, status: 'OPEN', openedFrom: preview.sourceYear, openingEntryId: openingEntry.id, createdAt: new Date().toISOString() };
+  appState.pendingPeriods[appState.activeCompany] = createMonthlyPeriods(Number(preview.targetYear));
+  appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'OPENING_BALANCES_GENERATED', companyId: appState.activeCompany, sourceYear: preview.sourceYear, targetYear: preview.targetYear, entryId: openingEntry.id, at: new Date().toISOString(), userId: 'claire-dossou' });
   persistAppState();
   renderOpening();
   renderIntegratedJournal();
-  showToast(`Reports à nouveau générés dans le journal AN pour ${preview.targetYear}.`);
+  showToast(`Reports à nouveau préparés pour ${preview.targetYear}. Contrôlez-les avant d’ouvrir l’exercice.`);
+}
+
+function validateOpeningAndOpen() {
+  const year = currentFiscalYear();
+  const preview = openingBalancePreview();
+  const run = preview.run;
+  if (year.status !== 'FINALIZED' || !run) { showToast('Générez d’abord les reports à nouveau depuis l’exercice arrêté.'); return; }
+  if (run.status !== 'VALIDATED') {
+    const entryIndex = appState.integratedEntries.findIndex((entry) => entry.id === run.entryId && entry.companyId === appState.activeCompany);
+    if (entryIndex < 0) { showToast('L’écriture de report est introuvable.'); return; }
+    const validatedAt = new Date().toISOString();
+    appState.integratedEntries[entryIndex] = { ...appState.integratedEntries[entryIndex], status: OPERATION_STATES.VALIDATED, validatedAt, statusChangedAt: validatedAt };
+    const recentIndex = appState.recentEntries.findIndex((entry) => entry.id === run.entryId && entry.companyId === appState.activeCompany);
+    if (recentIndex >= 0) appState.recentEntries[recentIndex] = { ...appState.recentEntries[recentIndex], status: OPERATION_STATES.VALIDATED, validatedAt, statusChangedAt: validatedAt };
+    run.status = 'VALIDATED';
+    run.validatedAt = validatedAt;
+    appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'OPENING_BALANCES_VALIDATED', companyId: appState.activeCompany, sourceYear: run.sourceYear, targetYear: run.targetYear, entryId: run.entryId, at: validatedAt, userId: 'claire-dossou' });
+  }
+  openNextFiscalYear();
+}
+
+function openNextFiscalYear() {
+  const target = appState.pendingFiscalYears[appState.activeCompany];
+  if (!target) { showToast('Aucun exercice suivant n’est prêt à être ouvert.'); return; }
+  const periods = appState.pendingPeriods[appState.activeCompany] || createMonthlyPeriods(Number(target.id));
+  const openingRun = (appState.openingRuns || []).find((run) => run.companyId === appState.activeCompany && String(run.targetYear) === String(target.id));
+  const company = appState.companies[appState.activeCompany];
+  const targetDossierCode = makeDossierCode(company.code || company.shortName, `${target.id}-01-01`);
+  let targetDossier = (appState.dossiers || []).find((item) => item.companyId === appState.activeCompany && item.moduleId === 'CSR' && item.exerciseYear === String(target.id) && item.status !== 'Archivé');
+  if (!targetDossier) {
+    targetDossier = { id: `${appState.activeCompany}-${target.id}-csr`, companyId: appState.activeCompany, dossier: targetDossierCode, moduleId: 'CSR', period: `01/01/${target.id} - 31/12/${target.id}`, exerciseYear: String(target.id), sessions: 0, status: 'Actif', statusClass: 'status-green' };
+    appState.dossiers.push(targetDossier);
+  }
+  appState.selectedDossier = targetDossier.id;
+  appState.fiscalYears[appState.activeCompany] = { ...target, dossierCode: targetDossierCode, status: 'OPEN', openedAt: new Date().toISOString() };
+  appState.periods[appState.activeCompany] = periods;
+  appState.activePeriodIds[appState.activeCompany] = `${target.id}-01`;
+  appState.correctionWindows[appState.activeCompany] = createCorrectionWindow({ id: `correction-${appState.activeCompany}-${target.id}`, dossierId: currentDossierCode(appState.activeCompany), companyId: appState.activeCompany, userId: 'claire-dossou', periodId: `${target.id}-01` });
+  delete appState.pendingFiscalYears[appState.activeCompany];
+  delete appState.pendingPeriods[appState.activeCompany];
+  appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'FISCAL_YEAR_OPENED', companyId: appState.activeCompany, sourceYear: target.openedFrom, targetYear: target.id, openingRunId: openingRun?.entryId || null, at: new Date().toISOString(), userId: 'claire-dossou' });
+  persistAppState();
+  renderPeriods();
+  renderOpening();
+  renderFinalization();
+  renderStatements();
+  renderEntryQueue();
+  renderIntegratedJournal();
+  showToast(`Exercice ${target.id} ouvert avec les reports à nouveau validés.`);
 }
 
 function currentFiscalYear() {
@@ -3029,8 +3106,12 @@ function closeCurrentPeriod() {
 }
 
 function currentDossierCode(companyId = appState.activeCompany) {
-  const dossier = appState.dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.status !== 'Archivé') || appState.dossiers.find((item) => item.companyId === companyId && item.status !== 'Archivé');
-  return dossier?.dossier || `${appState.companies[companyId]?.code || 'DOSSIER'}-25`;
+  const fiscalYear = appState.fiscalYears?.[companyId]?.id;
+  const dossiers = appState.dossiers || [];
+  const dossier = dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.exerciseYear === String(fiscalYear) && item.status !== 'Archivé')
+    || dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.status !== 'Archivé')
+    || dossiers.find((item) => item.companyId === companyId && item.status !== 'Archivé');
+  return dossier?.dossier || `${appState.companies[companyId]?.code || 'DOSSIER'}-${String(fiscalYear || '2025').slice(-2)}`;
 }
 
 function activeCorrectionWindow() {
@@ -3115,7 +3196,8 @@ function deleteRecentEntry(entryId) {
 }
 
 function integratedJournalForCompany(companyId) {
-  let journal = createIntegratedJournal({ id: `lj-${companyId}-2025`, companyId, fiscalYear: '2025' });
+  const fiscalYear = appState.fiscalYears?.[companyId]?.id || '2025';
+  let journal = createIntegratedJournal({ id: `lj-${companyId}-${fiscalYear}`, companyId, fiscalYear });
   appState.integratedEntries.filter((entry) => entry.companyId === companyId).forEach((entry) => {
     journal = syncIntegratedJournal(journal, entry);
   });
@@ -3885,6 +3967,7 @@ function bindEvents() {
     if (action === 'finalize-year') finalizeCurrentYear();
     if (action === 'prepare-final-snapshot') void prepareFinalSnapshot().catch((error) => showToast(error.message));
     if (action === 'generate-opening') generateOpeningBalances();
+    if (action === 'validate-opening') validateOpeningAndOpen();
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');

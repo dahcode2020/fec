@@ -865,3 +865,6 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .fec-archive-hash { display:none; }
   .fec-archive-stats { grid-template-columns:repeat(2, 1fr); }
 }
+.opening-action-buttons { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.opening-action-buttons .button:disabled { color:#a3998a; background:#eee9df; border-color:#eee9df; box-shadow:none; cursor:not-allowed; }
+@media (max-width:620px) { .opening-action-buttons { width:100%; flex-direction:column; } .opening-action-buttons .button { width:100%; } }
