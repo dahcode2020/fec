@@ -70,6 +70,18 @@ const appState = {
     acacia: { id: '2025', label: 'Exercice 2025', status: 'OPEN' },
     noria: { id: '2025', label: 'Exercice 2025', status: 'OPEN' }
   },
+  fiscalYearCatalog: {
+    acacia: [{ id: '2025', label: 'Exercice 2025', status: 'OPEN' }],
+    noria: [{ id: '2025', label: 'Exercice 2025', status: 'OPEN' }]
+  },
+  fiscalYearPeriods: {
+    acacia: { '2025': createMonthlyPeriods(2025) },
+    noria: { '2025': createMonthlyPeriods(2025) }
+  },
+  activePeriodIdsByYear: {
+    acacia: { '2025': '2025-06' },
+    noria: { '2025': '2025-06' }
+  },
   periodClosures: [],
   fiscalYearFinalizations: [],
   openingRuns: [],
@@ -129,7 +141,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -139,6 +151,18 @@ function hydrateAppState() {
     if (saved[key] !== undefined) appState[key] = saved[key];
   });
   if (!appState.companies[appState.activeCompany]) appState.activeCompany = Object.keys(appState.companies)[0] || 'acacia';
+  if (!appState.fiscalYearCatalog || typeof appState.fiscalYearCatalog !== 'object' || Array.isArray(appState.fiscalYearCatalog)) appState.fiscalYearCatalog = {};
+  if (!appState.fiscalYearPeriods || typeof appState.fiscalYearPeriods !== 'object' || Array.isArray(appState.fiscalYearPeriods)) appState.fiscalYearPeriods = {};
+  if (!appState.activePeriodIdsByYear || typeof appState.activePeriodIdsByYear !== 'object' || Array.isArray(appState.activePeriodIdsByYear)) appState.activePeriodIdsByYear = {};
+  Object.keys(appState.companies).forEach((companyId) => {
+    const year = String(appState.fiscalYears?.[companyId]?.id || '2025');
+    if (!Array.isArray(appState.fiscalYearCatalog[companyId])) appState.fiscalYearCatalog[companyId] = [{ id: year, label: `Exercice ${year}`, status: appState.fiscalYears?.[companyId]?.status || 'OPEN' }];
+    if (!appState.fiscalYearCatalog[companyId].some((item) => String(item.id) === year)) appState.fiscalYearCatalog[companyId].push({ id: year, label: `Exercice ${year}`, status: appState.fiscalYears?.[companyId]?.status || 'OPEN' });
+    if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
+    if (!Array.isArray(appState.fiscalYearPeriods[companyId][year])) appState.fiscalYearPeriods[companyId][year] = appState.periods?.[companyId] || createMonthlyPeriods(Number(year));
+    if (!appState.activePeriodIdsByYear[companyId] || typeof appState.activePeriodIdsByYear[companyId] !== 'object') appState.activePeriodIdsByYear[companyId] = {};
+    appState.activePeriodIdsByYear[companyId][year] = appState.activePeriodIdsByYear[companyId][year] || appState.activePeriodIds?.[companyId] || `${year}-01`;
+  });
   Object.keys(appState.companies).forEach((companyId) => {
     const defaults = createCsrSetup({ companyId });
     const existing = appState.accountingSetups?.[companyId];
@@ -162,7 +186,10 @@ function hydrateAppState() {
     const existingPeriods = appState.periods[companyId] || [];
     const defaults = createMonthlyPeriods(Number(appState.fiscalYears?.[companyId]?.id || 2025));
     appState.periods[companyId] = defaults.map((period) => ({ ...period, ...(existingPeriods.find((item) => item.id === period.id) || {}) }));
-    if (!appState.activePeriodIds[companyId]) appState.activePeriodIds[companyId] = appState.periods[companyId].find((period) => period.id === '2025-06')?.id || appState.periods[companyId][0].id;
+    const year = String(appState.fiscalYears?.[companyId]?.id || 2025);
+    appState.fiscalYearPeriods[companyId][year] = appState.periods[companyId];
+    if (!appState.activePeriodIds[companyId]) appState.activePeriodIds[companyId] = appState.activePeriodIdsByYear[companyId][year] || appState.periods[companyId].find((period) => period.id === `${year}-06`)?.id || appState.periods[companyId][0].id;
+    appState.activePeriodIdsByYear[companyId][year] = appState.activePeriodIds[companyId];
   });
   if (!appState.periodClosures) appState.periodClosures = [];
   if (!appState.fiscalYears) appState.fiscalYears = {};
@@ -1010,6 +1037,9 @@ function addCompany(event) {
   appState.accountingSetups[id] = newSetup;
   appState.periods[id] = createMonthlyPeriods(Number(year));
   appState.activePeriodIds[id] = `${year}-01`;
+  appState.fiscalYearPeriods[id] = { [String(year)]: appState.periods[id] };
+  appState.activePeriodIdsByYear[id] = { [String(year)]: appState.activePeriodIds[id] };
+  appState.fiscalYearCatalog[id] = [{ id: String(year), label: `Exercice ${year}`, status: 'OPEN' }];
   appState.fiscalYears[id] = { id: year, label: `Exercice ${year}`, status: 'OPEN' };
   appState.fiscalSettings[id] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
   persistAppState();
@@ -2727,9 +2757,56 @@ function applyAccountImport() {
   showToast(`${pendingAccountImport.imported.length} comptes ajoutés au plan.`);
 }
 
+function fiscalYearStatusLabel(status) {
+  return status === 'FINALIZED' ? 'Arrêté' : status === 'OPEN' ? 'Ouvert' : 'Préparé';
+}
+
+function renderFiscalYearCatalog() {
+  const container = $('#fiscalYearCatalog');
+  if (!container) return;
+  const companyId = appState.activeCompany;
+  const current = currentFiscalYear();
+  const years = [...(appState.fiscalYearCatalog?.[companyId] || [])].sort((left, right) => Number(right.id) - Number(left.id));
+  container.innerHTML = years.map((year) => {
+    const active = String(year.id) === String(current.id);
+    const status = year.status || 'OPEN';
+    return `<button class="fiscal-year-card ${active ? 'is-active' : ''} ${status === 'FINALIZED' ? 'is-finalized' : ''}" type="button" data-fiscal-year-switch="${escapeHtml(year.id)}" aria-pressed="${active}"><span class="fiscal-year-card-year">${escapeHtml(year.id)}</span><span><strong>${escapeHtml(year.label || `Exercice ${year.id}`)}</strong><small>${active ? 'Exercice actif' : status === 'FINALIZED' ? 'Consultation historique' : 'Disponible'}</small></span><span class="fiscal-year-card-status">${fiscalYearStatusLabel(status)}</span></button>`;
+  }).join('');
+  if (!years.length) container.innerHTML = '<div class="fiscal-year-empty">Aucun exercice enregistré.</div>';
+}
+
+function switchFiscalYear(yearId) {
+  const companyId = appState.activeCompany;
+  const target = (appState.fiscalYearCatalog?.[companyId] || []).find((year) => String(year.id) === String(yearId));
+  if (!target) { showToast('Exercice introuvable pour cette société.'); return; }
+  const current = currentFiscalYear();
+  if (String(current.id) === String(target.id)) { renderFiscalYearCatalog(); return; }
+  appState.fiscalYearPeriods[companyId][String(current.id)] = appState.periods[companyId] || createMonthlyPeriods(Number(current.id));
+  appState.activePeriodIdsByYear[companyId][String(current.id)] = appState.activePeriodIds[companyId] || `${current.id}-01`;
+  const targetPeriods = appState.fiscalYearPeriods[companyId][String(target.id)] || createMonthlyPeriods(Number(target.id), { status: target.status === 'FINALIZED' ? 'CLOSED' : 'OPEN' });
+  appState.fiscalYears[companyId] = { ...target };
+  appState.periods[companyId] = targetPeriods;
+  appState.activePeriodIds[companyId] = appState.activePeriodIdsByYear[companyId][String(target.id)] || targetPeriods[0]?.id || `${target.id}-01`;
+  appState.activePeriodIdsByYear[companyId][String(target.id)] = appState.activePeriodIds[companyId];
+  appState.exportDraft = null;
+  appState.fecDraft = null;
+  appState.selectedDossier = (appState.dossiers || []).find((dossier) => dossier.companyId === companyId && dossier.moduleId === 'CSR' && String(dossier.exerciseYear) === String(target.id) && dossier.status !== 'Archivé')?.id || appState.selectedDossier;
+  persistAppState();
+  renderFiscalYearCatalog();
+  renderPeriods();
+  renderFinalization();
+  renderOpening();
+  renderStatements();
+  renderClosure();
+  renderFiscalPreview();
+  renderFecAssistant();
+  showToast(`${target.label || `Exercice ${target.id}`} est maintenant l’exercice actif.`);
+}
+
 function renderPeriods() {
   const grid = $('#periodGrid');
   if (!grid) return;
+  const currentYear = currentFiscalYear();
   const periods = appState.periods[appState.activeCompany] || [];
   const activeId = appState.activePeriodIds?.[appState.activeCompany];
   const open = periods.filter((period) => period.status !== 'CLOSED').length;
@@ -2738,6 +2815,12 @@ function renderPeriods() {
   grid.innerHTML = periods.map((period) => `<button class="period-card ${period.id === active?.id ? 'is-active' : ''} ${period.status === 'CLOSED' ? 'is-closed' : ''}" type="button" data-period-id="${period.id}" aria-pressed="${period.id === active?.id}"><span class="period-card-number">${period.id.slice(-2)}</span><span><strong>${period.label}</strong><small>${displayDate(period.start)} — ${displayDate(period.end)}</small></span><span class="period-card-status">${period.status === 'CLOSED' ? 'Clôturée' : period.id === active?.id ? 'Active' : 'Ouverte'}</span></button>`).join('');
   $('#openPeriodsCount').textContent = String(open);
   $('#closedPeriodsCount').textContent = String(closed);
+  $('#periodsActiveYearBadge').textContent = currentYear.label;
+  $('#periodsBannerYear').textContent = currentYear.id;
+  $('#periodsBannerLabel').textContent = currentYear.label;
+  $('#periodsBannerStatus').textContent = currentYear.status === 'FINALIZED' ? 'Exercice arrêté' : 'Exercice ouvert';
+  $('#periodsPanelTitle').textContent = `Les périodes de ${currentYear.id}`;
+  renderFiscalYearCatalog();
   $('#activePeriodLabel').textContent = active?.label?.split(' ')[0] || '—';
   $('#activePeriodDates').textContent = active ? `${displayDate(active.start)} — ${displayDate(active.end)}` : '—';
 }
@@ -2746,6 +2829,9 @@ function selectPeriod(periodId) {
   const period = (appState.periods[appState.activeCompany] || []).find((item) => item.id === periodId);
   if (!period) return;
   appState.activePeriodIds[appState.activeCompany] = period.id;
+  const yearId = String(currentFiscalYear().id);
+  appState.activePeriodIdsByYear[appState.activeCompany][yearId] = period.id;
+  appState.fiscalYearPeriods[appState.activeCompany][yearId] = appState.periods[appState.activeCompany];
   persistAppState();
   renderPeriods();
   renderClosure();
@@ -2854,6 +2940,8 @@ function renderOpening() {
   $('#openingAccountCount').textContent = String(preview.lines.length);
   $('#openingDebitTotal').innerHTML = `${numberLabel(preview.totalDebit)} <em>FCFA</em>`;
   $('#openingCreditTotal').innerHTML = `${numberLabel(preview.totalCredit)} <em>FCFA</em>`;
+  $('#openingSourceYear').textContent = `Exercice ${year.id}`;
+  $('#openingTargetYear').textContent = `Exercice ${preview.targetYear}`;
   $('#openingPreviewDescription').textContent = preview.opened ? `Exercice ${year.id} ouvert avec ses reports intégrés.` : `${preview.sourceEntryIds.length} écriture(s) source · destination : exercice ${preview.targetYear}`;
   const badge = $('#openingStatusBadge');
   const lock = $('#openingLockLabel');
@@ -2921,6 +3009,9 @@ function openNextFiscalYear() {
   }
   appState.selectedDossier = targetDossier.id;
   appState.fiscalYears[appState.activeCompany] = { ...target, dossierCode: targetDossierCode, status: 'OPEN', openedAt: new Date().toISOString() };
+  appState.fiscalYearCatalog[appState.activeCompany] = [...(appState.fiscalYearCatalog[appState.activeCompany] || []).filter((item) => String(item.id) !== String(target.id)), { ...appState.fiscalYears[appState.activeCompany] }];
+  appState.fiscalYearPeriods[appState.activeCompany][String(target.id)] = periods;
+  appState.activePeriodIdsByYear[appState.activeCompany][String(target.id)] = `${target.id}-01`;
   appState.periods[appState.activeCompany] = periods;
   appState.activePeriodIds[appState.activeCompany] = `${target.id}-01`;
   appState.correctionWindows[appState.activeCompany] = createCorrectionWindow({ id: `correction-${appState.activeCompany}-${target.id}`, dossierId: currentDossierCode(appState.activeCompany), companyId: appState.activeCompany, userId: 'claire-dossou', periodId: `${target.id}-01` });
@@ -3009,6 +3100,8 @@ function renderFinalization() {
   const periods = appState.periods[appState.activeCompany] || [];
   const closedPeriods = periods.filter((period) => period.status === 'CLOSED').length;
   container.innerHTML = evaluation.checks.map((check) => `<div class="closure-check-row ${check.passed ? 'is-passed' : 'is-blocked'}"><span class="closure-check-icon">${check.passed ? '✓' : '!'}</span><span class="closure-check-copy"><strong>${escapeHtml(check.label)}</strong><small>${escapeHtml(check.description)}</small></span>${check.passed ? '<span class="status status-green">OK</span>' : `<button class="closure-check-action" type="button" data-finalization-action="${escapeHtml(check.action)}">${escapeHtml(check.actionLabel)}</button>`}</div>`).join('');
+  $('#finalizationYearIcon').textContent = String(year.id);
+  $('#finalizationYearLabel').textContent = year.label;
   $('#finalizationProgress').textContent = `${evaluation.passedCount} / ${evaluation.totalCount} contrôles`;
   $('#finalizationBlockCount').textContent = evaluation.blockingCount ? `${evaluation.blockingCount} blocage${evaluation.blockingCount > 1 ? 's' : ''}` : 'Prêt à arrêter';
   $('#finalizationScore').textContent = String(evaluation.passedCount);
@@ -3035,7 +3128,9 @@ function finalizeCurrentYear() {
   try {
     const finalized = finalizeFiscalYear(year, { periods: appState.periods[appState.activeCompany] || [], checks: currentFinalizationChecks(), snapshot, userId: 'claire-dossou' });
     appState.fiscalYears[appState.activeCompany] = finalized;
+    appState.fiscalYearCatalog[appState.activeCompany] = (appState.fiscalYearCatalog[appState.activeCompany] || []).map((item) => String(item.id) === String(year.id) ? { ...item, ...finalized, status: 'FINALIZED' } : item);
     appState.periods[appState.activeCompany] = (appState.periods[appState.activeCompany] || []).map((period) => ({ ...period, status: 'CLOSED', closedAt: finalized.finalizedAt, closedBy: finalized.finalizedBy }));
+    appState.fiscalYearPeriods[appState.activeCompany][String(year.id)] = appState.periods[appState.activeCompany];
     appState.financialSnapshots = (appState.financialSnapshots || []).map((item) => item.id === snapshot.id ? { ...item, status: 'FINALIZED', immutable: true, finalizedAt: finalized.finalizedAt } : item);
     appState.fiscalYearFinalizations.push({ companyId: appState.activeCompany, fiscalYear: year.id, snapshotId: snapshot.id, finalizedAt: finalized.finalizedAt, userId: 'claire-dossou' });
     appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'FISCAL_YEAR_FINALIZED', companyId: appState.activeCompany, fiscalYear: year.id, snapshotId: snapshot.id, at: finalized.finalizedAt, userId: 'claire-dossou' });
@@ -3847,6 +3942,9 @@ function bindEvents() {
 
     const parameterAction = event.target.closest('[data-parameter-action]');
     if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
+
+    const fiscalYearSwitch = event.target.closest('[data-fiscal-year-switch]');
+    if (fiscalYearSwitch) { switchFiscalYear(fiscalYearSwitch.dataset.fiscalYearSwitch); return; }
 
     const periodCard = event.target.closest('[data-period-id]');
     if (periodCard) { selectPeriod(periodCard.dataset.periodId); return; }

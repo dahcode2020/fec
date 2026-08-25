@@ -2,7 +2,7 @@
 
 **Version :** 0.1  
 **Accès :** Configuration → Société & exercice  
-**Statut :** calendrier mensuel du dossier
+**Statut :** catalogue multi-exercices et calendrier mensuel du dossier
 
 ## Objectif
 
@@ -31,6 +31,10 @@ Le statut `CLOSED` est appliqué par l’assistant de clôture. L’arrêté dé
 
 L’écran affiche :
 
+- le catalogue des exercices de la société ;
+- l’exercice actif ;
+- les exercices arrêtés consultables ;
+- les exercices ouverts disponibles ;
 - périodes ouvertes ;
 - périodes clôturées ;
 - période active ;
@@ -39,4 +43,4 @@ L’écran affiche :
 - lien vers la saisie ;
 - lien vers la checklist de clôture.
 
-Le changement de période active est enregistré dans le contexte local de la société.
+Le changement d’exercice et le changement de période active sont enregistrés séparément dans le contexte local de la société. Chaque exercice conserve son propre calendrier de douze périodes et sa propre période active. Le dossier annuel est identifié par le code sigle-année, par exemple `ACACIA-25` puis `ACACIA-26`. L’exercice arrêté reste consultable et ne peut pas recevoir de nouvelle saisie ; l’exercice ouvert suivant devient le contexte opérationnel courant après validation des reports à nouveau.
