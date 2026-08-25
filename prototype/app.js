@@ -2078,7 +2078,7 @@ function postPayment() {
     const documents = paymentDocuments();
     const result = applyPaymentAllocations(payment, documents, readPaymentAllocations());
     const setup = currentAccountSetup();
-    const journalEntry = createJournalEntry({ companyId: appState.activeCompany, journalId: 'BQ', date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, lines: paymentToJournalLines(payment) }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
+    const journalEntry = createJournalEntry({ companyId: appState.activeCompany, journalId: 'BQ', date: payment.date, pieceDate: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, thirdPartyId: payment.thirdPartyId, thirdPartyAccountId: payment.thirdPartyAccountId, settlementDate: payment.date, settlementMode: payment.method, natureOperation: payment.type === PAYMENT_TYPES.RECEIPT ? 'ENCAISSEMENT' : 'PAIEMENT', lines: paymentToJournalLines(payment) }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
     const workflowEntry = transitionOperation(transitionOperation(journalEntry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
     const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id };
     appState.payments.push(updatedPayment);
@@ -2192,7 +2192,7 @@ function saveInvoiceDocument(type, post = false) {
     const accountLines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
     let stored = { ...document, paidAmount: 0, outstanding: document.totalInclTax, allocations: [], status: post ? 'POSTED' : 'DRAFT' };
     if (post) {
-      const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: config.journalId, date: document.date, reference: document.reference, label: `${config.title} — ${document.thirdPartyName}`, lines: accountLines }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
+      const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: config.journalId, date: document.date, pieceDate: document.date, reference: document.reference, label: `${config.title} — ${document.thirdPartyName}`, thirdPartyId: document.thirdPartyId, thirdPartyAccountId: document.thirdPartyAccountId, lines: accountLines }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
       const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
       const total = document.totalInclTax;
       stored = { ...stored, journalEntryId: workflowEntry.id };
@@ -3012,8 +3012,9 @@ function insertEntry() {
   try {
     const dossierId = currentDossierCode(appState.activeCompany);
     const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
+    const entryThirdParty = currentThirdParties().find((party) => party.id === $('#entryThirdParty')?.value);
     appState.accountingSetups[appState.activeCompany] = setup;
-    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, lines }, { activeCompanyId: appState.activeCompany, dossierId, accountIds: setup.accounts.map((account) => account.id) });
+    const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, pieceDate: $('#entryDate').value, reference: $('#entryReference').value, label: $('#entryLabel').value, thirdPartyId: entryThirdParty?.id, thirdPartyAccountId: entryThirdParty?.auxiliaryAccountId, lines }, { activeCompanyId: appState.activeCompany, dossierId, accountIds: setup.accounts.map((account) => account.id) });
     const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
     const total = lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
     const enteredAmount = parseUiAmount(operation.total);

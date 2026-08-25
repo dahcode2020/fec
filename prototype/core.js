@@ -346,13 +346,15 @@ export function applyPaymentAllocations(payment, documents = [], allocations = [
 }
 
 export function paymentToJournalLines(payment) {
+  const settlementMetadata = { settlementDate: payment.date, settlementMode: payment.method, natureOperation: payment.type === PAYMENT_TYPES.RECEIPT ? 'ENCAISSEMENT' : 'PAIEMENT', pieceDate: payment.date };
+  const thirdPartyMetadata = { thirdPartyId: payment.thirdPartyId, auxiliaryAccountId: payment.thirdPartyAccountId, auxiliaryLabel: payment.thirdPartyName };
   if (payment.type === PAYMENT_TYPES.RECEIPT) return [
-    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, debit: payment.amount, credit: 0 },
-    { accountId: payment.thirdPartyAccountId, label: `Règlement client — ${payment.thirdPartyName}`, debit: 0, credit: payment.amount }
+    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, ...settlementMetadata, debit: payment.amount, credit: 0 },
+    { accountId: payment.thirdPartyAccountId, label: `Règlement client — ${payment.thirdPartyName}`, ...settlementMetadata, ...thirdPartyMetadata, debit: 0, credit: payment.amount }
   ];
   return [
-    { accountId: payment.thirdPartyAccountId, label: `Règlement fournisseur — ${payment.thirdPartyName}`, debit: payment.amount, credit: 0 },
-    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, debit: 0, credit: payment.amount }
+    { accountId: payment.thirdPartyAccountId, label: `Règlement fournisseur — ${payment.thirdPartyName}`, ...settlementMetadata, ...thirdPartyMetadata, debit: payment.amount, credit: 0 },
+    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, ...settlementMetadata, debit: 0, credit: payment.amount }
   ];
 }
 
@@ -552,15 +554,16 @@ export function createInvoiceDocument({ id, companyId, type = 'SALE', thirdParty
 }
 
 export function documentToJournalLines(document, { revenueAccountId = '7061', expenseAccountId = '6047', salesTaxAccountId = '4431', purchaseTaxAccountId = '4452' } = {}) {
+  const thirdPartyMetadata = { thirdPartyId: document.thirdPartyId, auxiliaryAccountId: document.thirdPartyAccountId, auxiliaryLabel: document.thirdPartyName, pieceDate: document.date };
   if (document.type === 'SALE') return [
-    { accountId: document.thirdPartyAccountId, label: `Client — ${document.thirdPartyName}`, debit: document.totalInclTax, credit: 0 },
-    { accountId: revenueAccountId, label: 'Ventes / services', debit: 0, credit: document.totalExclTax },
-    ...(document.tax > 0 ? [{ accountId: salesTaxAccountId, label: `TVA collectée ${document.taxRate}%`, debit: 0, credit: document.tax }] : [])
+    { accountId: document.thirdPartyAccountId, label: `Client — ${document.thirdPartyName}`, ...thirdPartyMetadata, debit: document.totalInclTax, credit: 0 },
+    { accountId: revenueAccountId, label: 'Ventes / services', pieceDate: document.date, debit: 0, credit: document.totalExclTax },
+    ...(document.tax > 0 ? [{ accountId: salesTaxAccountId, label: `TVA collectée ${document.taxRate}%`, pieceDate: document.date, debit: 0, credit: document.tax }] : [])
   ];
   return [
-    { accountId: expenseAccountId, label: 'Achats / charges', debit: document.totalExclTax, credit: 0 },
-    ...(document.tax > 0 ? [{ accountId: purchaseTaxAccountId, label: `TVA récupérable ${document.taxRate}%`, debit: document.tax, credit: 0 }] : []),
-    { accountId: document.thirdPartyAccountId, label: `Fournisseur — ${document.thirdPartyName}`, debit: 0, credit: document.totalInclTax }
+    { accountId: expenseAccountId, label: 'Achats / charges', pieceDate: document.date, debit: document.totalExclTax, credit: 0 },
+    ...(document.tax > 0 ? [{ accountId: purchaseTaxAccountId, label: `TVA récupérable ${document.taxRate}%`, pieceDate: document.date, debit: document.tax, credit: 0 }] : []),
+    { accountId: document.thirdPartyAccountId, label: `Fournisseur — ${document.thirdPartyName}`, ...thirdPartyMetadata, debit: 0, credit: document.totalInclTax }
   ];
 }
 
@@ -636,7 +639,8 @@ export function transitionOperation(operation, nextState) {
   const current = operation?.status || OPERATION_STATES.DRAFT;
   if (!Object.values(OPERATION_STATES).includes(nextState)) throw new DomainError(`État inconnu : ${nextState}`, 'UNKNOWN_OPERATION_STATE');
   if (!allowedTransitions[current]?.includes(nextState)) throw new DomainError(`Transition impossible : ${current} → ${nextState}.`, 'INVALID_OPERATION_TRANSITION');
-  return { ...operation, status: nextState, statusChangedAt: new Date().toISOString() };
+  const statusChangedAt = new Date().toISOString();
+  return { ...operation, status: nextState, statusChangedAt, ...(nextState === OPERATION_STATES.VALIDATED ? { validatedAt: statusChangedAt } : {}) };
 }
 
 export const CORRECTION_WINDOW_LIMIT = 3;
@@ -667,15 +671,22 @@ export function deleteCorrectionCandidate(window, entry, reason = '') {
   };
 }
 
-export function createJournalEntry({ companyId, journalId, date, reference = '', label, lines }, options = {}) {
+export function createJournalEntry({ companyId, journalId, date, pieceDate = date, reference = '', label, thirdPartyId = null, thirdPartyAccountId = null, settlementDate = null, settlementMode = '', natureOperation = '', currency = 'XOF', lines }, options = {}) {
   const entry = {
     id: options.id || `entry_${Date.now()}`,
     companyId,
     dossierId: options.dossierId || null,
     journalId,
     date,
+    pieceDate,
     reference,
     label: label || '',
+    thirdPartyId,
+    thirdPartyAccountId,
+    settlementDate,
+    settlementMode,
+    natureOperation,
+    currency,
     status: OPERATION_STATES.DRAFT,
     lines: lines.map((line) => ({ ...line, debit: amount(line.debit || 0), credit: amount(line.credit || 0) }))
   };
@@ -1000,9 +1011,11 @@ export function prepareFecExport({ entries = [], companyId, fiscalYear = null, s
     const entryNumber = String(entryIndex + 1);
     lines.forEach((line, lineIndex) => {
       const rawAccountId = normalizeAccountNumber(line.accountId);
-      const account = accountMap.get(rawAccountId);
-      const thirdParty = (line.thirdPartyId && thirdPartyMap.get(String(line.thirdPartyId))) || thirdParties.find((party) => party.auxiliaryAccountId === rawAccountId || party.code === line.thirdPartyCode);
+      const thirdParty = (line.thirdPartyId && thirdPartyMap.get(String(line.thirdPartyId))) || thirdParties.find((party) => normalizeAccountNumber(party.auxiliaryAccountId) === rawAccountId || party.code === line.thirdPartyCode);
       const auxiliaryAccountId = line.auxiliaryAccountId || line.accountAuxiliaryId || thirdParty?.auxiliaryAccountId || '';
+      const isAuxiliaryPosting = Boolean(thirdParty && (rawAccountId === normalizeAccountNumber(thirdParty.auxiliaryAccountId) || normalizeAccountNumber(auxiliaryAccountId) === rawAccountId));
+      const fecAccountId = isAuxiliaryPosting && thirdParty?.collectiveAccountId ? normalizeAccountNumber(thirdParty.collectiveAccountId) : rawAccountId;
+      const account = accountMap.get(fecAccountId) || accountMap.get(rawAccountId);
       const auxiliaryLabel = line.auxiliaryLabel || thirdParty?.name || '';
       const accountLabel = account?.label || line.accountLabel || line.label || '';
       const debit = Number(line.debit || 0);
@@ -1013,9 +1026,9 @@ export function prepareFecExport({ entries = [], companyId, fiscalYear = null, s
       const settlementDate = line.settlementDate || line.dateReglement || entry.settlementDate || entry.dateReglement || payment?.date || (entry.journalId === 'BQ' ? entry.date : '');
       const settlementMode = line.settlementMode || line.modeReglement || entry.settlementMode || entry.modeReglement || payment?.method || '';
       if (!rawAccountId) fecIssue(errors, { code: 'FEC_MISSING_ACCOUNT', entryId: entry.id, line: lineIndex + 1, message: `Compte absent sur ${entry.reference || entry.id}, ligne ${lineIndex + 1}.` });
-      else if (!account) fecIssue(errors, { code: 'FEC_UNKNOWN_ACCOUNT', entryId: entry.id, line: lineIndex + 1, message: `Compte ${rawAccountId} absent du plan SYSCOHADA actif.` });
-      if (!/^\d{3}/.test(rawAccountId)) fecIssue(errors, { code: 'FEC_INVALID_ACCOUNT_PREFIX', entryId: entry.id, line: lineIndex + 1, message: `Les trois premiers caractères du compte ${rawAccountId || '(vide)'} doivent respecter le SYSCOHADA.` });
-      if (!accountLabel) fecIssue(errors, { code: 'FEC_MISSING_ACCOUNT_LABEL', entryId: entry.id, line: lineIndex + 1, message: `Libellé de compte absent pour ${rawAccountId || '(vide)'}.` });
+      else if (!account) fecIssue(errors, { code: 'FEC_UNKNOWN_ACCOUNT', entryId: entry.id, line: lineIndex + 1, message: `Compte ${fecAccountId} absent du plan SYSCOHADA actif.` });
+      if (!/^\d{3}/.test(fecAccountId)) fecIssue(errors, { code: 'FEC_INVALID_ACCOUNT_PREFIX', entryId: entry.id, line: lineIndex + 1, message: `Les trois premiers caractères du compte ${fecAccountId || '(vide)'} doivent respecter le SYSCOHADA.` });
+      if (!accountLabel) fecIssue(errors, { code: 'FEC_MISSING_ACCOUNT_LABEL', entryId: entry.id, line: lineIndex + 1, message: `Libellé de compte absent pour ${fecAccountId || '(vide)'}.` });
       if (!pieceDate) fecIssue(errors, { code: 'FEC_MISSING_PIECE_DATE', entryId: entry.id, line: lineIndex + 1, message: `Date de pièce absente pour ${entry.reference || entry.id}.` });
       if (!line.label && !entry.label) fecIssue(errors, { code: 'FEC_MISSING_ENTRY_LABEL', entryId: entry.id, line: lineIndex + 1, message: `Libellé d’écriture absent pour ${entry.reference || entry.id}.` });
       if (debit === 0 && credit === 0) fecIssue(errors, { code: 'FEC_ZERO_LINE', entryId: entry.id, line: lineIndex + 1, message: `La ligne ${lineIndex + 1} de ${entry.reference || entry.id} est sans montant.` });
@@ -1028,7 +1041,7 @@ export function prepareFecExport({ entries = [], companyId, fiscalYear = null, s
         LibJournal: fecText(journal?.label || ''),
         NumEcriture: entryNumber,
         DateEcriture: fecDate(lineDate),
-        NumCompte: rawAccountId,
+        NumCompte: fecAccountId,
         LibCompte: fecText(accountLabel),
         NumCompteAux: fecText(auxiliaryAccountId),
         LibCompteAux: fecText(auxiliaryLabel),

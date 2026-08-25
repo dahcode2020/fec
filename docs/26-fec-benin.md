@@ -104,10 +104,16 @@ Les contrôles portent notamment sur :
 
 Chaque génération est enregistrée dans l’historique et la piste d’audit du dossier.
 
+## Préparation des données sources
+
+Les nouveaux flux d’écriture conservent désormais la date de pièce, le tiers, l’auxiliaire et, pour les règlements, la date et le mode de règlement. La transition vers l’état `VALIDATED` conserve une date de validation dédiée. L’assistant FEC signale encore les écritures historiques qui ne possèdent pas ces informations plutôt que de les inventer dans un FEC officiel.
+
+Depuis le résultat du précontrôle, l’utilisateur peut ouvrir **Saisie et insertion** afin de compléter les écritures sources. Cette correction doit être effectuée dans la comptabilité, puis le FEC doit être contrôlé à nouveau.
+
 ## Points à compléter avant usage professionnel
 
 - faire valider la correspondance exacte entre le régime fiscal du contribuable et le profil SMT ;
-- compléter les dates de validation et les références de pièces dans les écritures CSR ;
+- compléter les dates de validation et les références de pièces des écritures historiques ;
 - tester les sorties avec les outils ou procédures de la DGID ;
 - vérifier les dimensions de découpage et les supports acceptés lors d’un contrôle ;
 - faire relire le générateur et le descriptif technique par un professionnel compétent au Bénin.

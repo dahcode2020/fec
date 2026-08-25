@@ -52,6 +52,7 @@ import {
   createBankMovement,
   reconcileBankMovement,
   createPayment,
+  paymentToJournalLines,
   encodeFecText,
   exportFecNoticeTxt,
   exportFecTxt,
@@ -161,6 +162,10 @@ test('calcule et impute une facture client multi-lignes', () => {
 
 test('affecte un encaissement à une facture et met à jour son solde', () => {
   const payment = createPayment({ companyId: 'co-a', type: 'RECEIPT', thirdPartyId: 'tp-1', thirdPartyName: 'Client test', thirdPartyAccountId: '411101', date: '2025-06-16', reference: 'REG-001', amount: 150000, treasuryAccountId: '5211' });
+  const paymentLines = paymentToJournalLines(payment);
+  assert.equal(paymentLines[1].settlementDate, '2025-06-16');
+  assert.equal(paymentLines[1].settlementMode, 'Virement');
+  assert.equal(paymentLines[0].auxiliaryAccountId, undefined);
   const invoice = { id: 'invoice-1', companyId: 'co-a', type: 'SALE', thirdPartyId: 'tp-1', totalInclTax: 250000, paidAmount: 0, outstanding: 250000, status: 'POSTED' };
   const result = applyPaymentAllocations(payment, [invoice], [{ documentId: 'invoice-1', amount: 150000 }]);
   assert.equal(result.payment.allocatedAmount, 150000);
@@ -286,6 +291,9 @@ test('fait progresser une écriture sans autoriser de saut de statut', () => {
   const imputed = transitionOperation(draft, OPERATION_STATES.IMPUTED);
   const review = transitionOperation(imputed, OPERATION_STATES.TO_REVIEW);
   assert.equal(review.status, 'TO_REVIEW');
+  const validated = transitionOperation(review, OPERATION_STATES.VALIDATED);
+  assert.equal(validated.status, 'VALIDATED');
+  assert.ok(validated.validatedAt);
   assert.throws(() => transitionOperation(draft, OPERATION_STATES.VALIDATED), (error) => error.code === 'INVALID_OPERATION_TRANSITION');
 });
 
@@ -416,11 +424,11 @@ test('prépare le FEC béninois normal avec ses 18 champs et exclut les écritur
   ];
   const entries = [
     { id: 'report', companyId: 'co-a', journalId: 'AN', reference: 'AN-0001', date: '2025-01-01', validatedAt: '2025-01-02', label: 'Report des soldes', integrationCategory: 'REPORTS_A_NOUVEAU', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 1000, credit: 0 }, { accountId: '131', debit: 0, credit: 1000 }] },
-    { id: 'sale', companyId: 'co-a', journalId: 'VE', reference: 'FAC-001', date: '2025-01-03', validatedAt: '2025-01-04', label: 'Vente client', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 1000, credit: 0 }, { accountId: '7061', debit: 0, credit: 1000 }] },
+    { id: 'sale', companyId: 'co-a', journalId: 'VE', reference: 'FAC-001', date: '2025-01-03', validatedAt: '2025-01-04', label: 'Vente client', status: 'VALIDATED', lines: [{ accountId: '411101', thirdPartyId: 'tp-1', debit: 1000, credit: 0 }, { accountId: '7061', debit: 0, credit: 1000 }] },
     { id: 'central', companyId: 'co-a', journalId: 'CT', reference: 'CT-0001', date: '2025-01-05', validatedAt: '2025-01-05', label: 'Centralisation', integrationCategory: 'CENTRALISATION', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 100, credit: 100 }] },
     { id: 'result', companyId: 'co-a', journalId: 'RP', reference: 'RP-0001', date: '2025-01-06', validatedAt: '2025-01-06', label: 'Solde des comptes 6 et 7', integrationCategory: 'RESULTAT', status: 'VALIDATED', lines: [{ accountId: '131', debit: 100, credit: 100 }] }
   ];
-  const prepared = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'NORMAL', journals, accounts, startDate: '2025-01-01', endDate: '2025-12-31' });
+  const prepared = prepareFecExport({ entries, companyId: 'co-a', fiscalYear: '2025', regime: 'NORMAL', journals, accounts, thirdParties: [{ id: 'tp-1', name: 'Client test', collectiveAccountId: '4111', auxiliaryAccountId: '411101' }], startDate: '2025-01-01', endDate: '2025-12-31' });
   assert.equal(prepared.valid, true);
   assert.equal(prepared.fields.length, 18);
   assert.equal(prepared.records.length, 4);
@@ -428,6 +436,9 @@ test('prépare le FEC béninois normal avec ses 18 champs et exclut les écritur
   assert.equal(prepared.records[0].values.LibEcriture, 'REPORT');
   assert.equal(prepared.records[1].values.NumEcriture, '1');
   assert.equal(prepared.records[2].values.NumEcriture, '2');
+  assert.equal(prepared.records[2].values.NumCompte, '4111');
+  assert.equal(prepared.records[2].values.NumCompteAux, '411101');
+  assert.equal(prepared.records[2].values.LibCompte, 'Clients');
   assert.equal(prepared.excludedEntries.length, 2);
   const content = exportFecTxt({ prepared });
   assert.match(content.split('\r\n')[0], /^CodeJournal\tLibJournal\tNumEcriture\tDateEcriture/);
