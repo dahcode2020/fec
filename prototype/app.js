@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -55,6 +55,11 @@ const appState = {
     { id: 'purchase-demo', companyId: 'acacia', type: 'PURCHASE', thirdPartyId: 'tp-cotonou-bureau', thirdPartyName: 'Cotonou Bureau', thirdPartyAccountId: '401101', date: '2025-06-12', reference: 'FA-0154', dueDate: '2025-07-12', lines: [{ description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500, total: 38500 }], taxRate: 0, totalExclTax: 38500, tax: 0, totalInclTax: 38500, paidAmount: 0, outstanding: 38500, allocations: [], status: 'POSTED' }
   ],
   payments: [],
+  bankMovements: [
+    { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
+    { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
+    { id: 'bank-demo-3', companyId: 'acacia', date: '2025-06-12', reference: 'BQ-0010', label: 'Frais de tenue de compte', debit: 4800, credit: 0, amount: 4800, status: 'UNMATCHED', matchedEntryId: null, currency: 'XOF' }
+  ],
   thirdParties: {
     acacia: [
       { id: 'tp-awa', code: 'AWACONCEPT', name: 'Awa Concept', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411101', ifu: '3201900045612', address: 'Cotonou, Littoral', phone: '+229 97 00 00 01', paymentTerms: '30 jours', currency: 'XOF', active: true },
@@ -97,7 +102,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -120,6 +125,7 @@ function hydrateAppState() {
   if (!appState.automaticSchedules) appState.automaticSchedules = [];
   if (!appState.automaticRuns) appState.automaticRuns = [];
   if (!appState.payments) appState.payments = [];
+  if (!appState.bankMovements) appState.bankMovements = [];
 }
 
 async function loadFullSyscohadaPlan() {
@@ -569,6 +575,7 @@ function setActiveCompany(companyId, notify = true) {
   renderPaymentDocuments();
   renderPaymentHistory();
   renderLettering();
+  renderBankMovements();
   renderAutomaticTasks();
   renderAutomaticRuns();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
@@ -1251,6 +1258,111 @@ function exportThirdParties() {
   showToast('Les tiers de la société ont été exportés.');
 }
 
+let currentBankView = 'reconciliation';
+let pendingBankImport = [];
+
+function bankStatusLabel(status) {
+  return ({ RECONCILED: ['Rapproché', 'status-green'], POINTED: ['Pointé', 'status-purple'], UNMATCHED: ['À pointer', 'status-amber'] })[status] || ['À contrôler', 'status-amber'];
+}
+
+function renderBankMovements() {
+  const rows = $('#bankMovementRows');
+  if (!rows) return;
+  const filter = currentBankView === 'unmatched' ? 'UNMATCHED' : 'ALL';
+  const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && (filter === 'ALL' || movement.status === filter));
+  rows.innerHTML = movements.map((movement) => {
+    const [statusLabelText, statusClass] = bankStatusLabel(movement.status);
+    const match = movement.matchedEntryId && appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId);
+    const action = movement.status === 'RECONCILED' ? '<span class="entry-locked" title="Mouvement rapproché">✓</span>' : `<button class="button button-secondary button-small" type="button" data-action="reconcile-bank" data-bank-id="${escapeHtml(movement.id)}">${movement.status === 'POINTED' ? 'Rapprocher' : 'Pointer'}</button>`;
+    return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span></td><td><b>${escapeHtml(movement.reference || '—')}</b></td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td>${match ? `<span class="bank-match">${escapeHtml(match.reference || match.label)}</span>` : '<span class="bank-no-match">Aucune correspondance</span>'}</td><td><span class="status ${statusClass}">${statusLabelText}</span></td><td>${action}</td></tr>`;
+  }).join('');
+  if (!movements.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucun mouvement dans cette vue.</td></tr>';
+  const all = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
+  const reconciled = all.filter((movement) => movement.status === 'RECONCILED').length;
+  $('#bankReconciledCount').textContent = `${reconciled} / ${all.length}`;
+  $('#bankDifferenceLabel').textContent = `${all.filter((movement) => movement.status === 'UNMATCHED').length} mouvement${all.filter((movement) => movement.status === 'UNMATCHED').length > 1 ? 's' : ''} à imputer`;
+}
+
+function renderBankImportPreview() {
+  const container = $('#bankImportRows');
+  if (!container) return;
+  container.innerHTML = pendingBankImport.map((movement) => `<div class="bank-import-row"><span>${escapeHtml(displayDate(movement.date))}</span><strong>${escapeHtml(movement.label)}</strong><span>${escapeHtml(movement.reference || '—')}</span><b>${movement.debit ? `− ${numberLabel(movement.debit)}` : `+ ${numberLabel(movement.credit)}`} FCFA</b></div>`).join('');
+  $('#bankImportSummary').textContent = `${pendingBankImport.length} mouvement${pendingBankImport.length > 1 ? 's' : ''} détecté${pendingBankImport.length > 1 ? 's' : ''}`;
+}
+
+function setBankView(view) {
+  currentBankView = view;
+  $$('.bank-tab').forEach((tab) => { const active = tab.dataset.bankView === view; tab.classList.toggle('is-active', active); tab.setAttribute('aria-selected', String(active)); });
+  const reconciliation = $('#bankReconciliationPane');
+  const importPane = $('#bankImportPane');
+  const cashPane = $('#cashPane');
+  if (view === 'import') { reconciliation?.setAttribute('hidden', ''); cashPane?.setAttribute('hidden', ''); importPane?.removeAttribute('hidden'); }
+  else if (view === 'cash') { reconciliation?.setAttribute('hidden', ''); importPane?.setAttribute('hidden', ''); cashPane?.removeAttribute('hidden'); }
+  else { reconciliation?.removeAttribute('hidden'); importPane?.setAttribute('hidden', ''); cashPane?.setAttribute('hidden', ''); renderBankMovements(); }
+}
+
+function findBankCandidate(movement) {
+  return appState.integratedEntries.find((entry) => entry.companyId === movement.companyId && Number(entry.amount || entry.debit || entry.credit) === Number(movement.amount) && !appState.bankMovements.some((item) => item.matchedEntryId === entry.id));
+}
+
+function reconcileBankMovementById(movementId) {
+  const index = appState.bankMovements.findIndex((movement) => movement.id === movementId && movement.companyId === appState.activeCompany);
+  if (index < 0) return;
+  const movement = appState.bankMovements[index];
+  const candidate = movement.matchedEntryId ? appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId) : findBankCandidate(movement);
+  if (!candidate) { movement.status = 'POINTED'; persistAppState(); renderBankMovements(); showToast('Mouvement pointé. Imputez-le avant le rapprochement.'); return; }
+  try {
+    appState.bankMovements[index] = reconcileBankMovement(movement, candidate);
+    persistAppState();
+    renderBankMovements();
+    showToast('Mouvement rapproché avec le journal BQ.');
+  } catch (error) { showToast(error.message); }
+}
+
+function openBankImport() {
+  pendingBankImport = [];
+  $('#bankFileInput').value = '';
+  $('#bankFileName').textContent = 'Déposez votre relevé ici';
+  $('#bankImportResult')?.setAttribute('hidden', '');
+  setBankView('import');
+}
+
+function parseBankFile(file) {
+  if (!file) return;
+  const extension = file.name.toLowerCase().split('.').pop();
+  if (!['txt', 'csv'].includes(extension)) { showToast('Pour ce premier import, utilisez un relevé TXT ou CSV.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || '');
+    const delimiter = text.includes(';') ? ';' : text.includes('\t') ? '\t' : ',';
+    const parsed = parseDelimited(text, { delimiter });
+    const headers = Object.fromEntries(parsed.headers.map((value) => [value.toLowerCase().replace(/[^a-zà-ÿ]/g, ''), value]));
+    const getHeader = (names) => names.map((name) => headers[name]).find(Boolean);
+    const dateHeader = getHeader(['date', 'dateoperation']) || parsed.headers[0];
+    const labelHeader = getHeader(['libelle', 'description', 'operation']) || parsed.headers[1];
+    const referenceHeader = getHeader(['reference', 'ref', 'numero']) || parsed.headers[2];
+    const debitHeader = getHeader(['debit', 'sortie']) || parsed.headers[3];
+    const creditHeader = getHeader(['credit', 'entree']) || parsed.headers[4];
+    try {
+      pendingBankImport = parsed.rows.map((row, index) => createBankMovement({ id: `imported-bank-${Date.now()}-${index}`, companyId: appState.activeCompany, date: row[dateHeader], label: row[labelHeader], reference: row[referenceHeader], debit: row[debitHeader], credit: row[creditHeader] }));
+      $('#bankFileName').textContent = file.name;
+      $('#bankImportResult')?.removeAttribute('hidden');
+      renderBankImportPreview();
+    } catch (error) { showToast(error.message); }
+  };
+  reader.readAsText(file);
+}
+
+function applyBankImport() {
+  if (!pendingBankImport.length) { showToast('Aucun mouvement à intégrer.'); return; }
+  appState.bankMovements = [...pendingBankImport, ...(appState.bankMovements || [])];
+  appState.auditEvents.push({ type: 'BANK_STATEMENT_IMPORTED', companyId: appState.activeCompany, count: pendingBankImport.length, at: new Date().toISOString() });
+  persistAppState();
+  pendingBankImport = [];
+  setBankView('reconciliation');
+  showToast('Relevé intégré. Les mouvements sont prêts à être pointés.');
+}
+
 const PAYMENT_TYPE_LABELS = { RECEIPT: 'Encaissement client', PAYMENT: 'Paiement fournisseur' };
 
 function paymentDocuments() {
@@ -1382,6 +1494,10 @@ function postPayment() {
     const workflowEntry = transitionOperation(transitionOperation(journalEntry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
     const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id };
     appState.payments.push(updatedPayment);
+    const bankMovement = createBankMovement({ id: `bank-${payment.id}`, companyId: appState.activeCompany, date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, debit: payment.type === PAYMENT_TYPES.PAYMENT ? payment.amount : 0, credit: payment.type === PAYMENT_TYPES.RECEIPT ? payment.amount : 0, currency: 'XOF' });
+    bankMovement.status = 'POINTED';
+    bankMovement.matchedEntryId = workflowEntry.id;
+    appState.bankMovements.unshift(bankMovement);
     const collectionKey = payment.type === PAYMENT_TYPES.RECEIPT ? 'invoices' : 'purchaseBills';
     appState[collectionKey] = appState[collectionKey].map((document) => result.documents.find((updated) => updated.id === document.id) || document);
     const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: payment.amount, debit: payment.amount, credit: payment.amount, source: PAYMENT_TYPE_LABELS[payment.type], integrationCategory: 'GENERAL' }).entries[0];
@@ -1390,6 +1506,7 @@ function postPayment() {
     persistAppState();
     renderPaymentHistory();
     renderPaymentDocuments();
+    renderBankMovements();
     renderInvoiceHistory('SALE');
     renderInvoiceHistory('PURCHASE');
     renderIntegratedJournal();
@@ -2363,6 +2480,7 @@ function handleEditionAction(action, title) {
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
+  $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
   $('#paymentForm')?.addEventListener('input', updatePaymentPreview);
   $('#paymentForm')?.addEventListener('change', (event) => {
     if (event.target.id === 'paymentParty') { paymentAllocations = {}; renderPaymentDocuments(); }
@@ -2468,6 +2586,9 @@ function bindEvents() {
     const parameterAction = event.target.closest('[data-parameter-action]');
     if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
 
+    const bankTab = event.target.closest('.bank-tab[data-bank-view]');
+    if (bankTab) { setBankView(bankTab.dataset.bankView); return; }
+
     const paymentTab = event.target.closest('.payment-tab[data-payment-type]');
     if (paymentTab) { setPaymentType(paymentTab.dataset.paymentType); return; }
 
@@ -2522,6 +2643,10 @@ function bindEvents() {
     if (!actionTarget) return;
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
+    if (action === 'open-bank-import') openBankImport();
+    if (action === 'close-bank-import') setBankView('reconciliation');
+    if (action === 'apply-bank-import') applyBankImport();
+    if (action === 'reconcile-bank') reconcileBankMovementById(actionTarget.dataset.bankId);
     if (action === 'reset-payment') { setPaymentType(PAYMENT_TYPES.RECEIPT); resetPayment(); }
     if (action === 'clear-payment') clearPayment();
     if (action === 'post-payment') postPayment();

@@ -350,6 +350,23 @@ export function paymentToJournalLines(payment) {
   ];
 }
 
+export const BANK_MOVEMENT_STATUS = Object.freeze({ UNMATCHED: 'UNMATCHED', POINTED: 'POINTED', RECONCILED: 'RECONCILED' });
+
+export function createBankMovement({ id, companyId, statementId = null, date, reference = '', label, debit = 0, credit = 0, currency = 'XOF' } = {}) {
+  const debitAmount = amount(debit);
+  const creditAmount = amount(credit);
+  if (!companyId || !date || !label) throw new DomainError('Société, date et libellé sont obligatoires pour un mouvement bancaire.', 'INVALID_BANK_MOVEMENT');
+  if (!Number.isFinite(debitAmount) || !Number.isFinite(creditAmount) || debitAmount < 0 || creditAmount < 0 || (debitAmount === 0 && creditAmount === 0) || (debitAmount > 0 && creditAmount > 0)) throw new DomainError('Un mouvement bancaire doit avoir un seul sens et un montant positif.', 'INVALID_BANK_MOVEMENT_AMOUNT');
+  return { id: id || `bank_${Date.now()}`, companyId, statementId, date, reference, label: String(label).trim(), debit: debitAmount, credit: creditAmount, amount: debitAmount || creditAmount, currency, status: BANK_MOVEMENT_STATUS.UNMATCHED, matchedEntryId: null, importedAt: new Date().toISOString() };
+}
+
+export function reconcileBankMovement(movement, entry) {
+  if (!movement || !entry || movement.companyId !== entry.companyId) throw new DomainError('Le mouvement et l’écriture ne correspondent pas à la même société.', 'BANK_RECONCILIATION_SCOPE_VIOLATION');
+  const entryAmount = amount(entry.amount || entry.debit || entry.credit);
+  if (!Number.isFinite(entryAmount) || Math.abs(entryAmount - movement.amount) > 0.005) throw new DomainError('Le montant du mouvement ne correspond pas à l’écriture.', 'BANK_RECONCILIATION_AMOUNT_MISMATCH');
+  return { ...movement, status: BANK_MOVEMENT_STATUS.RECONCILED, matchedEntryId: entry.id, reconciledAt: new Date().toISOString() };
+}
+
 export function calculateDocumentTotals(lines = [], taxRate = 0) {
   const normalizedTaxRate = Number(taxRate) || 0;
   const normalizedLines = lines.map((line, index) => {

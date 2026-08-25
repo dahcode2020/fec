@@ -39,6 +39,8 @@ import {
   exportAccountPlanTxt,
   exportBalanceTxt,
   applyPaymentAllocations,
+  createBankMovement,
+  reconcileBankMovement,
   createPayment,
   importAccountPlanRows,
   makeDossierCode,
@@ -151,6 +153,14 @@ test('affecte un encaissement à une facture et met à jour son solde', () => {
   assert.equal(result.documents[0].outstanding, 100000);
   assert.equal(result.documents[0].status, 'PARTIAL');
   assert.equal(result.documents[0].lettered, false);
+});
+
+test('pointe et rapproche un mouvement bancaire avec une écriture', () => {
+  const movement = createBankMovement({ companyId: 'co-a', date: '2025-06-16', reference: 'BQ-001', label: 'Encaissement client', credit: 250000 });
+  const reconciled = reconcileBankMovement(movement, { companyId: 'co-a', id: 'entry-1', amount: 250000 });
+  assert.equal(reconciled.status, 'RECONCILED');
+  assert.equal(reconciled.matchedEntryId, 'entry-1');
+  assert.throws(() => reconcileBankMovement(movement, { companyId: 'co-a', id: 'entry-2', amount: 200000 }), (error) => error.code === 'BANK_RECONCILIATION_AMOUNT_MISMATCH');
 });
 
 test('accepte une imputation multi-lignes équilibrée', () => {
