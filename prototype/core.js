@@ -268,6 +268,44 @@ export function exportAccountPlanTxt({ companyName = '', planVersion = 'SYSCOHAD
   return [`SOCIETE${delimiter}${cell(companyName)}`, `PLAN${delimiter}${cell(planVersion)}`, '', ['COMPTE', 'LIBELLE', 'NATURE', 'ETAT'].join(delimiter), ...lines].join('\r\n') + '\r\n';
 }
 
+export const THIRD_PARTY_TYPES = Object.freeze({ CLIENT: 'CLIENT', SUPPLIER: 'SUPPLIER', PERSONNEL: 'PERSONNEL', OTHER: 'OTHER' });
+
+export function nextAuxiliaryAccountId(accounts, collectiveAccountId) {
+  const prefix = normalizeAccountNumber(collectiveAccountId);
+  const children = accounts.filter((account) => normalizeAccountNumber(account.id).startsWith(prefix) && normalizeAccountNumber(account.id).length > prefix.length).map((account) => Number(normalizeAccountNumber(account.id).slice(prefix.length))).filter((number) => Number.isFinite(number));
+  const next = (children.length ? Math.max(...children) : 0) + 1;
+  return `${prefix}${String(next).padStart(2, '0')}`;
+}
+
+export function validateThirdParty(thirdParty, { existingThirdParties = [] } = {}) {
+  const id = String(thirdParty?.id || '').trim();
+  const code = String(thirdParty?.code || '').trim().toUpperCase();
+  const name = String(thirdParty?.name || '').trim();
+  const type = String(thirdParty?.type || '').trim().toUpperCase();
+  const collectiveAccountId = normalizeAccountNumber(thirdParty?.collectiveAccountId);
+  if (!id || !name || !code) throw new DomainError('Le code et le nom du tiers sont obligatoires.', 'INVALID_THIRD_PARTY');
+  if (!Object.values(THIRD_PARTY_TYPES).includes(type)) throw new DomainError('Le type de tiers est invalide.', 'INVALID_THIRD_PARTY_TYPE');
+  if (!/^\d{2,8}$/.test(collectiveAccountId)) throw new DomainError('Le compte collectif du tiers est invalide.', 'INVALID_COLLECTIVE_ACCOUNT');
+  if (existingThirdParties.some((item) => item.code.toUpperCase() === code || item.id === id)) throw new DomainError(`Le tiers ${code} existe déjà dans cette société.`, 'DUPLICATE_THIRD_PARTY');
+  return { id, code, name, type, collectiveAccountId, auxiliaryAccountId: thirdParty.auxiliaryAccountId || null, ifu: String(thirdParty.ifu || '').trim(), address: String(thirdParty.address || '').trim(), phone: String(thirdParty.phone || '').trim(), paymentTerms: String(thirdParty.paymentTerms || 'Comptant').trim(), currency: thirdParty.currency || 'XOF', active: thirdParty.active !== false, createdAt: thirdParty.createdAt || new Date().toISOString() };
+}
+
+export function addThirdPartyToDirectory(thirdParties, thirdParty, accounts = []) {
+  const normalized = validateThirdParty(thirdParty, { existingThirdParties: thirdParties });
+  const auxiliaryAccountId = normalized.auxiliaryAccountId || nextAuxiliaryAccountId(accounts, normalized.collectiveAccountId);
+  return [...thirdParties, { ...normalized, auxiliaryAccountId }];
+}
+
+export function updateThirdPartyInDirectory(thirdParties, thirdPartyId, patch) {
+  const index = thirdParties.findIndex((thirdParty) => thirdParty.id === thirdPartyId);
+  if (index < 0) throw new DomainError('Tiers inconnu.', 'UNKNOWN_THIRD_PARTY');
+  const current = thirdParties[index];
+  const updated = { ...current, ...patch, id: current.id, code: String(patch.code ?? current.code).trim().toUpperCase(), name: String(patch.name ?? current.name).trim(), auxiliaryAccountId: current.auxiliaryAccountId, createdAt: current.createdAt };
+  if (!updated.name || !updated.code) throw new DomainError('Le code et le nom du tiers sont obligatoires.', 'INVALID_THIRD_PARTY');
+  if (thirdParties.some((thirdParty, thirdPartyIndex) => thirdPartyIndex !== index && thirdParty.code.toUpperCase() === updated.code)) throw new DomainError(`Le tiers ${updated.code} existe déjà dans cette société.`, 'DUPLICATE_THIRD_PARTY');
+  return thirdParties.map((thirdParty, thirdPartyIndex) => thirdPartyIndex === index ? updated : thirdParty);
+}
+
 export function companiesFor(workspace, { includeArchived = false } = {}) {
   return workspace.companies.filter((company) => includeArchived || !company.archived);
 }

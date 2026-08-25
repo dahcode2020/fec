@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, validateJournalDefinition, validateJournalEntry, OPERATION_STATES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -48,6 +48,17 @@ const appState = {
     acacia: createCsrSetup({ companyId: 'acacia', regime: 'NORMAL' }),
     noria: createCsrSetup({ companyId: 'noria', regime: 'SMT' })
   },
+  thirdParties: {
+    acacia: [
+      { id: 'tp-awa', code: 'AWACONCEPT', name: 'Awa Concept', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411101', ifu: '3201900045612', address: 'Cotonou, Littoral', phone: '+229 97 00 00 01', paymentTerms: '30 jours', currency: 'XOF', active: true },
+      { id: 'tp-benin-services', code: 'BENINSERVICES', name: 'Bénin Services', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411102', ifu: '3201800037211', address: 'Cotonou, Akpakpa', phone: '+229 96 00 00 02', paymentTerms: 'Comptant', currency: 'XOF', active: true },
+      { id: 'tp-cotonou-bureau', code: 'COTONOUBUREAU', name: 'Cotonou Bureau', type: THIRD_PARTY_TYPES.SUPPLIER, collectiveAccountId: '4011', auxiliaryAccountId: '401101', ifu: '3202100065413', address: 'Cotonou, Haie Vive', phone: '+229 95 00 00 03', paymentTerms: '30 jours', currency: 'XOF', active: true },
+      { id: 'tp-fournisseur-internet', code: 'FOURNISSEURINTERNET', name: 'Fournisseur internet', type: THIRD_PARTY_TYPES.SUPPLIER, collectiveAccountId: '4011', auxiliaryAccountId: '401102', ifu: '', address: 'Cotonou', phone: '', paymentTerms: 'Mensuel', currency: 'XOF', active: true }
+    ],
+    noria: [
+      { id: 'tp-noria-client', code: 'CLIENTNORIA', name: 'Client Noria', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411101', ifu: '', address: 'Cotonou', phone: '', paymentTerms: 'Comptant', currency: 'XOF', active: true }
+    ]
+  },
   automaticSchedules: [
     { id: 'sub-internet-acacia', companyId: 'acacia', label: 'Abonnement internet', supplierName: 'Fournisseur internet', amount: 12000, expenseAccount: '6281', supplierAccount: '4011', periodicity: 'Mensuelle', active: true },
     { id: 'sub-banque-acacia', companyId: 'acacia', label: 'Abonnement logiciel', supplierName: 'Éditeur logiciel', amount: 18500, expenseAccount: '6288', supplierAccount: '4011', periodicity: 'Mensuelle', active: true }
@@ -79,7 +90,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -231,8 +242,8 @@ const CONFIG_GROUPS = {
     label: 'Tiers',
     description: 'Organisez les fiches et les comptes auxiliaires de vos partenaires.',
     actions: [
-      { label: 'Fournisseurs', description: 'Fiches, comptes auxiliaires, échéances et contacts', symbol: 'F', tone: 'blue', action: 'purchases' },
-      { label: 'Clients', description: 'Fiches, comptes auxiliaires, créances et règlements', symbol: 'C', tone: 'green', action: 'sales' },
+      { label: 'Fournisseurs', description: 'Fiches, comptes auxiliaires, échéances et contacts', symbol: 'F', tone: 'blue', action: 'thirdparties-supplier' },
+      { label: 'Clients', description: 'Fiches, comptes auxiliaires, créances et règlements', symbol: 'C', tone: 'green', action: 'thirdparties-client' },
       { label: 'Personnel', description: 'Comptes de personnel et avances à suivre', symbol: 'P', tone: 'purple', action: 'placeholder' },
       { label: 'Débiteurs / créditeurs divers', description: 'Tiers occasionnels et comptes à régulariser', symbol: 'D', tone: 'amber', action: 'placeholder' }
     ]
@@ -537,6 +548,7 @@ function setActiveCompany(companyId, notify = true) {
   renderCorrectionWindow();
   renderAccountPlan();
   renderJournalSetup();
+  renderThirdpartyList();
   renderAutomaticTasks();
   renderAutomaticRuns();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
@@ -1103,6 +1115,115 @@ let accountShowInactive = false;
 let editingAccountId = null;
 let editingJournalId = null;
 let pendingAccountImport = null;
+let currentThirdpartyType = THIRD_PARTY_TYPES.CLIENT;
+let thirdpartyShowInactive = false;
+let editingThirdPartyId = null;
+
+const THIRD_PARTY_TYPE_LABELS = { CLIENT: 'Clients', SUPPLIER: 'Fournisseurs', PERSONNEL: 'Personnel', OTHER: 'Débiteurs / créditeurs divers' };
+const THIRD_PARTY_DEFAULT_ACCOUNTS = { CLIENT: '4111', SUPPLIER: '4011', PERSONNEL: '421', OTHER: '4711' };
+
+function currentThirdParties() {
+  return appState.thirdParties[appState.activeCompany] || (appState.thirdParties[appState.activeCompany] = []);
+}
+
+function nextThirdPartyAuxiliary(collectiveAccountId) {
+  const prefix = normalizeAccountNumber(collectiveAccountId);
+  const accountIds = currentAccountSetup().accounts.map((account) => normalizeAccountNumber(account.id));
+  const values = accountIds.filter((id) => id.startsWith(prefix) && id.length > prefix.length).map((id) => Number(id.slice(prefix.length))).filter(Number.isFinite);
+  return `${prefix}${String((values.length ? Math.max(...values) : 0) + 1).padStart(2, '0')}`;
+}
+
+function updateAuxiliaryPreview() {
+  const collective = $('#collectiveAccountId')?.value || '4111';
+  const preview = $('#auxiliaryAccountPreview');
+  const label = $('#auxiliaryAccountLabel');
+  if (preview) preview.textContent = editingThirdPartyId ? (currentThirdParties().find((item) => item.id === editingThirdPartyId)?.auxiliaryAccountId || nextThirdPartyAuxiliary(collective)) : nextThirdPartyAuxiliary(collective);
+  if (label) label.textContent = `Sous-compte de ${collective}`;
+}
+
+function renderThirdpartyOptions() {
+  const select = $('#entryThirdParty');
+  if (!select) return;
+  const category = $('#entryCategory')?.value || 'service-sale';
+  const desiredType = category === 'goods-purchase' || category === 'bank-fee' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
+  const options = currentThirdParties().filter((thirdParty) => thirdParty.active !== false && (thirdParty.type === desiredType || category === 'other')).map((thirdParty) => `<option value="${escapeHtml(thirdParty.id)}">${escapeHtml(thirdParty.name)} · ${escapeHtml(thirdParty.auxiliaryAccountId || thirdParty.collectiveAccountId)}</option>`);
+  select.innerHTML = `${options.join('')}<option value="none">Aucun tiers</option>`;
+  if (options.length) select.value = currentThirdParties().find((thirdParty) => thirdParty.type === desiredType)?.id || 'none';
+  else select.value = 'none';
+}
+
+function renderThirdpartyList() {
+  const rows = $('#thirdpartyRows');
+  if (!rows) return;
+  const all = currentThirdParties();
+  const filtered = all.filter((thirdParty) => thirdParty.type === currentThirdpartyType && (thirdpartyShowInactive || thirdParty.active !== false));
+  const query = ($('#thirdpartySearch')?.value || '').trim().toLowerCase();
+  const visible = filtered.filter((thirdParty) => !query || `${thirdParty.code} ${thirdParty.name} ${thirdParty.ifu} ${thirdParty.auxiliaryAccountId}`.toLowerCase().includes(query));
+  rows.innerHTML = visible.map((thirdParty) => `<tr><td><b class="thirdparty-code">${escapeHtml(thirdParty.code)}</b></td><td><span class="cell-title">${escapeHtml(thirdParty.name)}</span><small class="cell-subtitle">${escapeHtml(thirdParty.address || 'Adresse à compléter')}</small></td><td><span class="thirdparty-aux-account">${escapeHtml(thirdParty.auxiliaryAccountId || 'À définir')}</span></td><td><span class="account-class-badge">${escapeHtml(thirdParty.collectiveAccountId)}</span></td><td>${escapeHtml(thirdParty.paymentTerms || 'Comptant')}</td><td><span class="status ${thirdParty.active === false ? 'status-muted' : 'status-green'}">${thirdParty.active === false ? 'Inactif' : 'Actif'}</span></td><td><button class="icon-button small" type="button" data-action="edit-thirdparty" data-thirdparty-id="${escapeHtml(thirdParty.id)}" aria-label="Modifier le tiers"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-1 5zM14 6l4 4M4 4h6"/></svg></button></td></tr>`).join('');
+  if (!visible.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun tiers dans cette catégorie.</td></tr>';
+  const count = (type) => all.filter((thirdParty) => thirdParty.type === type && thirdParty.active !== false).length;
+  $('#clientCount').textContent = String(count(THIRD_PARTY_TYPES.CLIENT));
+  $('#supplierCount').textContent = String(count(THIRD_PARTY_TYPES.SUPPLIER));
+  $('#personnelCount').textContent = String(count(THIRD_PARTY_TYPES.PERSONNEL));
+  $('#otherThirdpartyCount').textContent = String(count(THIRD_PARTY_TYPES.OTHER));
+  $('#thirdpartyListTitle').textContent = THIRD_PARTY_TYPE_LABELS[currentThirdpartyType];
+  $('#thirdpartyListSubtitle').textContent = `${visible.length} fiche${visible.length > 1 ? 's' : ''} · comptes auxiliaires et informations de règlement`;
+  renderThirdpartyOptions();
+}
+
+function openThirdPartyModal(thirdPartyId = null) {
+  editingThirdPartyId = thirdPartyId;
+  const thirdParty = thirdPartyId ? currentThirdParties().find((item) => item.id === thirdPartyId) : null;
+  $('#thirdpartyModalTitle').textContent = thirdParty ? 'Modifier un tiers' : `Ajouter ${THIRD_PARTY_TYPE_LABELS[currentThirdpartyType].toLowerCase().replace('s', '')}`;
+  $('#thirdpartySubmitButton').textContent = thirdParty ? 'Enregistrer les modifications' : 'Ajouter le tiers';
+  $('#thirdpartyOriginalId').value = thirdParty?.id || '';
+  $('#thirdpartyType').value = thirdParty?.type || currentThirdpartyType;
+  $('#thirdpartyType').disabled = Boolean(thirdParty);
+  $('#thirdpartyCode').value = thirdParty?.code || '';
+  $('#thirdpartyName').value = thirdParty?.name || '';
+  $('#thirdpartyIfu').value = thirdParty?.ifu || '';
+  $('#thirdpartyAddress').value = thirdParty?.address || '';
+  $('#thirdpartyPhone').value = thirdParty?.phone || '';
+  $('#paymentTerms').value = thirdParty?.paymentTerms || 'Comptant';
+  $('#collectiveAccountId').value = thirdParty?.collectiveAccountId || THIRD_PARTY_DEFAULT_ACCOUNTS[currentThirdpartyType];
+  $('#collectiveAccountId').disabled = Boolean(thirdParty);
+  updateAuxiliaryPreview();
+  openModal('thirdpartyModal');
+}
+
+function saveThirdParty(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const existing = editingThirdPartyId ? currentThirdParties().find((item) => item.id === editingThirdPartyId) : null;
+  const type = String(formData.get('thirdpartyType') || existing?.type || currentThirdpartyType);
+  const input = { id: String(formData.get('thirdpartyOriginalId') || `tp-${Date.now()}`), type, code: formData.get('thirdpartyCode'), name: formData.get('thirdpartyName'), ifu: formData.get('thirdpartyIfu'), address: formData.get('thirdpartyAddress'), phone: formData.get('thirdpartyPhone'), paymentTerms: formData.get('paymentTerms'), collectiveAccountId: formData.get('collectiveAccountId') || existing?.collectiveAccountId || THIRD_PARTY_DEFAULT_ACCOUNTS[type], currency: 'XOF', active: true };
+  try {
+    const list = currentThirdParties();
+    let saved;
+    if (editingThirdPartyId) {
+      saved = updateThirdPartyInDirectory(list, editingThirdPartyId, input);
+    } else {
+      saved = addThirdPartyToDirectory(list, input, currentAccountSetup().accounts);
+      const added = saved.at(-1);
+      const setup = currentAccountSetup();
+      if (!setup.accounts.some((account) => account.id === added.auxiliaryAccountId)) setup.accounts = addAccountToPlan(setup.accounts, { id: added.auxiliaryAccountId, label: `${added.collectiveAccountId} — ${added.name}`, nature: type === THIRD_PARTY_TYPES.CLIENT ? 'Actif / tiers' : type === THIRD_PARTY_TYPES.SUPPLIER ? 'Passif / tiers' : 'Tiers', isCustom: true });
+    }
+    appState.thirdParties[appState.activeCompany] = saved;
+    appState.auditEvents.push({ type: editingThirdPartyId ? 'THIRD_PARTY_UPDATED' : 'THIRD_PARTY_CREATED', companyId: appState.activeCompany, thirdPartyId: input.id, at: new Date().toISOString() });
+    persistAppState();
+    closeModal();
+    renderThirdpartyList();
+    renderAccountPlan();
+    showToast(editingThirdPartyId ? 'Fiche tiers mise à jour.' : 'Tiers ajouté avec son compte auxiliaire.');
+  } catch (error) { showToast(error.message); }
+}
+
+function exportThirdParties() {
+  const company = appState.companies[appState.activeCompany];
+  const content = ['SOCIETE;'+company.name, 'TYPE;CODE;NOM;COMPTE_AUXILIAIRE;COMPTE_COLLECTIF;IFU;CONDITIONS', ...currentThirdParties().map((thirdParty) => [THIRD_PARTY_TYPE_LABELS[thirdParty.type], thirdParty.code, thirdParty.name, thirdParty.auxiliaryAccountId, thirdParty.collectiveAccountId, thirdParty.ifu, thirdParty.paymentTerms].join(';'))].join('\r\n') + '\r\n';
+  downloadText(`${company.code || company.shortName}-tiers.txt`, content);
+  showToast('Les tiers de la société ont été exportés.');
+}
 
 function currentAccountSetup() {
   const companyId = appState.activeCompany;
@@ -1548,10 +1669,15 @@ function entryLinesForCurrentOperation(suggestion) {
 }
 
 function entryOperation() {
+  const category = $('#entryCategory')?.value || 'other';
+  const thirdPartyId = $('#entryThirdParty')?.value || 'none';
+  const thirdParty = currentThirdParties().find((item) => item.id === thirdPartyId);
   return {
-    category: $('#entryCategory')?.value || 'other',
+    category,
     total: $('#entryAmount')?.value || '',
-    thirdPartyName: $('#entryThirdParty')?.value || '',
+    thirdPartyName: thirdParty?.name || 'Aucun tiers',
+    customerAccount: thirdParty?.type === THIRD_PARTY_TYPES.CLIENT ? thirdParty.auxiliaryAccountId : undefined,
+    supplierAccount: thirdParty?.type === THIRD_PARTY_TYPES.SUPPLIER ? thirdParty.auxiliaryAccountId : undefined,
     label: $('#entryLabel')?.value || ''
   };
 }
@@ -1611,6 +1737,7 @@ function selectEntryTab(tab) {
   if (category) category.value = config.category;
   const journal = $('#entryJournal');
   if (journal) journal.value = config.journal;
+  renderThirdpartyOptions();
   renderLivePosting();
 }
 
@@ -1701,6 +1828,8 @@ function renderConfigurationGroup(groupId = 'societe') {
 
 function handleConfigurationAction(action) {
   if (action === 'companies') openView('companies');
+  if (action === 'thirdparties-client') { currentThirdpartyType = THIRD_PARTY_TYPES.CLIENT; openView('thirdparties'); renderThirdpartyList(); }
+  if (action === 'thirdparties-supplier') { currentThirdpartyType = THIRD_PARTY_TYPES.SUPPLIER; openView('thirdparties'); renderThirdpartyList(); }
   if (action === 'accounts') openView('accounts');
   if (action === 'add-account') openAccountModal();
   if (action === 'journals-config') openView('journals-config');
@@ -1948,7 +2077,7 @@ function handleEditionAction(action, title) {
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
-  $('#entryForm')?.addEventListener('change', renderLivePosting);
+  $('#entryForm')?.addEventListener('change', (event) => { if (event.target.id === 'entryCategory') renderThirdpartyOptions(); renderLivePosting(); });
   $('#multiLineRows')?.addEventListener('input', (event) => {
     const input = event.target.closest('[data-manual-line]');
     if (!input) return;
@@ -2001,6 +2130,18 @@ function bindEvents() {
 
     const manualRemove = event.target.closest('[data-action="remove-manual-line"]');
     if (manualRemove) { manualLineDraft.splice(Number(manualRemove.dataset.lineIndex), 1); renderManualLineEditor(); return; }
+
+    const thirdpartyTab = event.target.closest('.thirdparty-tab[data-thirdparty-type]');
+    if (thirdpartyTab) {
+      currentThirdpartyType = thirdpartyTab.dataset.thirdpartyType;
+      $$('.thirdparty-tab').forEach((item) => {
+        const selected = item === thirdpartyTab;
+        item.classList.toggle('is-active', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+      renderThirdpartyList();
+      return;
+    }
 
     const parameterTab = event.target.closest('.parameter-tab[data-parameter-group]');
     if (parameterTab) {
@@ -2105,6 +2246,10 @@ function bindEvents() {
     if (action === 'show-company-modal') openModal('companyModal');
     if (action === 'show-account-modal') openAccountModal();
     if (action === 'edit-account') openAccountModal(actionTarget.dataset.accountId);
+    if (action === 'show-thirdparty-modal') openThirdPartyModal();
+    if (action === 'edit-thirdparty') openThirdPartyModal(actionTarget.dataset.thirdpartyId);
+    if (action === 'export-thirdparties') exportThirdParties();
+    if (action === 'toggle-inactive-thirdparties') { thirdpartyShowInactive = !thirdpartyShowInactive; actionTarget.childNodes[0].textContent = thirdpartyShowInactive ? 'Tous les tiers ' : 'Actifs uniquement '; renderThirdpartyList(); }
     if (action === 'show-journal-modal') openJournalModal();
     if (action === 'edit-journal') openJournalModal(actionTarget.dataset.journalId);
     if (action === 'export-journal-config') exportJournalConfig();
@@ -2150,6 +2295,10 @@ function bindEvents() {
   $('#companyForm')?.addEventListener('submit', addCompany);
   $('#accountForm')?.addEventListener('submit', saveAccount);
   $('#journalForm')?.addEventListener('submit', saveJournal);
+  $('#thirdpartyForm')?.addEventListener('submit', saveThirdParty);
+  $('#thirdpartySearch')?.addEventListener('input', () => renderThirdpartyList());
+  $('#thirdpartyType')?.addEventListener('change', (event) => { currentThirdpartyType = event.target.value; $('#collectiveAccountId').value = THIRD_PARTY_DEFAULT_ACCOUNTS[currentThirdpartyType]; updateAuxiliaryPreview(); });
+  $('#collectiveAccountId')?.addEventListener('change', updateAuxiliaryPreview);
   $('#accountImportFile')?.addEventListener('change', (event) => parseAccountImportFile(event.target.files?.[0]));
   $('#companyForm')?.addEventListener('input', updateDossierPreview);
   $('#companyForm')?.addEventListener('change', (event) => {

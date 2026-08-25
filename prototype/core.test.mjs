@@ -5,6 +5,7 @@ import {
   DomainError,
   addAccountToPlan,
   addJournalToSetup,
+  addThirdPartyToDirectory,
   addCompany,
   calculateStraightLinePlan,
   companiesFor,
@@ -36,6 +37,7 @@ import {
   exportBalanceTxt,
   importAccountPlanRows,
   makeDossierCode,
+  nextAuxiliaryAccountId,
   mapImportedRows,
   parseDelimited,
   suggestPosting,
@@ -109,6 +111,9 @@ test('ajoute, modifie et importe des comptes sans doublon', () => {
   assert.equal(setup.accounts.at(-1).isCustom, true);
   setup.accounts = updateAccountInPlan(setup.accounts, '411100', { label: 'Clients administrations', nature: 'Actif / tiers' });
   assert.equal(setup.accounts.at(-1).label, 'Clients administrations');
+  assert.equal(nextAuxiliaryAccountId(setup.accounts, '4111'), '411101');
+  const tiers = addThirdPartyToDirectory([], { id: 'tp-1', code: 'ACACIA', name: 'Acacia Client', type: 'CLIENT', collectiveAccountId: '4111' }, setup.accounts);
+  assert.equal(tiers[0].auxiliaryAccountId, '411101');
   assert.throws(() => updateAccountInPlan(setup.accounts, '4111', { id: '411001' }, { usedAccountIds: ['4111'] }), (error) => error.code === 'USED_ACCOUNT_NUMBER_LOCKED');
   assert.throws(() => addAccountToPlan(setup.accounts, { id: '411100', label: 'Doublon' }), (error) => error.code === 'DUPLICATE_ACCOUNT');
   const imported = importAccountPlanRows([{ id: '512100', label: 'Banque locale', nature: 'Actif / trésorerie' }], { existingAccounts: setup.accounts });
