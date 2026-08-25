@@ -31,6 +31,7 @@ import {
   createDossier,
   createFecAnnualDemoEntries,
   createIntegratedJournal,
+  decodeFecText,
   createZipArchive,
   createInvoiceDocument,
   documentToJournalLines,
@@ -470,7 +471,9 @@ test('ajoute les trois champs du SMT et bloque le FEC officiel si la date de val
 test('encode le FEC dans les jeux de caractères prévus', () => {
   assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ASCII')], [0x41, 0x09, 0x45, 0x0d, 0x0a]);
   assert.deepEqual([...encodeFecText('A\tÉ\r\n', 'ISO-8859-15')], [0x41, 0x09, 0xc9, 0x0d, 0x0a]);
-  assert.deepEqual([...encodeFecText('A1\t', 'EBCDIC')], [0xc1, 0xf1, 0x05]);
+  const ebcdic = encodeFecText('A1\t', 'EBCDIC');
+  assert.deepEqual([...ebcdic], [0xc1, 0xf1, 0x05]);
+  assert.equal(decodeFecText(ebcdic, 'EBCDIC'), 'A1\t');
 });
 
 test('contrôle une séquence FEC annuelle avec reports, opérations détaillées et plusieurs mois', () => {

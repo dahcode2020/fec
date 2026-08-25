@@ -1331,3 +1331,23 @@ export function extractZipArchive(bytes) {
   if (!files.length) throw new DomainError('Le paquet ZIP ne contient aucun fichier lisible.', 'FEC_ARCHIVE_EMPTY');
   return files;
 }
+
+export function decodeFecText(bytes, encoding = 'ISO-8859-15') {
+  const source = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes || []);
+  if (encoding === 'EBCDIC') {
+    const punctuation = { 0x40: ' ', 0x05: '\t', 0x0d: '\r', 0x25: '\n', 0x60: '-', 0x61: '/', 0x6b: ',', 0x4b: '.', 0x5e: ';', 0x7a: ':', 0x6d: '_', 0x4e: '+', 0x7e: '=', 0x6f: '?', 0x5a: '!', 0x7c: '@', 0x7b: '#', 0x5b: '$', 0x6c: '%', 0x50: '&', 0x5c: '*', 0x4d: '(', 0x5d: ')', 0x4c: '<', 0x6e: '>', 0x7d: "'", 0x7f: '"' };
+    return Array.from(source, (byte) => {
+      if (punctuation[byte] !== undefined) return punctuation[byte];
+      if (byte >= 0xc1 && byte <= 0xc9) return String.fromCharCode(0x41 + byte - 0xc1);
+      if (byte >= 0xd1 && byte <= 0xd9) return String.fromCharCode(0x4a + byte - 0xd1);
+      if (byte >= 0xe2 && byte <= 0xe9) return String.fromCharCode(0x53 + byte - 0xe2);
+      if (byte >= 0x81 && byte <= 0x89) return String.fromCharCode(0x61 + byte - 0x81);
+      if (byte >= 0x91 && byte <= 0x99) return String.fromCharCode(0x6a + byte - 0x91);
+      if (byte >= 0xa2 && byte <= 0xa9) return String.fromCharCode(0x73 + byte - 0xa2);
+      if (byte >= 0xf0 && byte <= 0xf9) return String.fromCharCode(0x30 + byte - 0xf0);
+      return '?';
+    }).join('');
+  }
+  const isoMap = { 0xa4: '€', 0xa6: 'Š', 0xa8: 'š', 0xb4: 'Ž', 0xb8: 'ž', 0xbc: 'Œ', 0xbd: 'œ', 0xbe: 'Ÿ' };
+  return Array.from(source, (byte) => isoMap[byte] || String.fromCharCode(byte <= 0x7f || encoding !== 'ASCII' ? byte : 0x3f)).join('');
+}
