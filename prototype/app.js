@@ -99,6 +99,7 @@ const appState = {
   openingRuns: [],
   financialSnapshots: [],
   statementMode: 'control',
+  syncStatus: { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' },
   exportDraft: null,
   exportHistory: [],
   fecDraft: null,
@@ -153,7 +154,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'syncStatus', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -212,6 +213,7 @@ function hydrateAppState() {
   if (!appState.statementMode) appState.statementMode = 'control';
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
+  if (!appState.syncStatus || typeof appState.syncStatus !== 'object' || Array.isArray(appState.syncStatus)) appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' };
   if (!Array.isArray(appState.fecArchives)) appState.fecArchives = [];
   if (!appState.pendingFiscalYears || typeof appState.pendingFiscalYears !== 'object' || Array.isArray(appState.pendingFiscalYears)) appState.pendingFiscalYears = {};
   if (!appState.pendingPeriods || typeof appState.pendingPeriods !== 'object' || Array.isArray(appState.pendingPeriods)) appState.pendingPeriods = {};
@@ -737,6 +739,7 @@ function setActiveCompany(companyId, notify = true) {
   renderExportAssistant();
   renderFecAssistant();
   renderAccessView();
+  refreshSyncStatus();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -850,6 +853,48 @@ function showLogin() {
   $('#loginScreen')?.removeAttribute('hidden');
   document.body.style.overflow = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function syncStateText(state) {
+  return ({ OFFLINE: 'Hors ligne', PENDING: 'À synchroniser', CONFLICT: 'Conflit à traiter', LOCAL: 'Données locales' })[state] || 'Données locales';
+}
+
+function refreshSyncStatus() {
+  if (!appState.syncStatus || typeof appState.syncStatus !== 'object') appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' };
+  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const status = appState.syncStatus;
+  status.state = status.forcedOffline || browserOffline ? 'OFFLINE' : status.conflicts > 0 ? 'CONFLICT' : status.pending > 0 ? 'PENDING' : 'LOCAL';
+  const label = syncStateText(status.state);
+  const indicator = $('#syncStatusButton');
+  if (indicator) {
+    indicator.className = `sync-status sync-status-${status.state.toLowerCase()}`;
+    indicator.setAttribute('aria-label', `${label}. Ouvrir le centre de synchronisation`);
+  }
+  const detail = status.state === 'OFFLINE' ? 'Les changements restent sur cet appareil' : status.transport === 'NOT_CONNECTED' ? 'Connecteur distant à configurer' : 'Prêt à synchroniser';
+  $('#syncStatusLabel').textContent = label;
+  $('#syncStatusDetail').textContent = detail;
+  $('#syncModalState').textContent = label;
+  $('#syncModalDescription').textContent = detail;
+  $('#syncPendingCount').textContent = String(status.pending || 0);
+  $('#syncConflictCount').textContent = String(status.conflicts || 0);
+  $('#syncLastDate').textContent = status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString('fr-FR') : 'Jamais';
+  $('#syncTransportLabel').textContent = status.transport === 'NOT_CONNECTED' ? 'Non connecté' : 'Disponible';
+}
+
+function openSyncModal() {
+  refreshSyncStatus();
+  openModal('syncModal');
+}
+
+function toggleOfflineDemo() {
+  appState.syncStatus.forcedOffline = !appState.syncStatus.forcedOffline;
+  refreshSyncStatus();
+  $('#toggleOfflineButton').textContent = appState.syncStatus.forcedOffline ? 'Repasser en mode réseau' : 'Simuler une coupure';
+  showToast(appState.syncStatus.forcedOffline ? 'Mode hors ligne simulé : les données restent locales.' : 'Mode réseau simulé rétabli.');
+}
+
+function showSyncTransportInfo() {
+  showToast('Le connecteur distant sera branché après l’initialisation des commandes Tauri et de l’API.');
 }
 
 function resetLocalData() {
@@ -3995,6 +4040,8 @@ function handleEditionAction(action, title) {
 
 function bindEvents() {
   bindAuthForm();
+  window.addEventListener('online', refreshSyncStatus);
+  window.addEventListener('offline', refreshSyncStatus);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
   ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax'].forEach((field) => {
@@ -4274,6 +4321,9 @@ function bindEvents() {
     if (action === 'toggle-sidebar') $('#sidebar')?.classList.toggle('is-open');
     if (action === 'show-help') showToast('Le guide vous accompagne à chaque étape.');
     if (action === 'show-notifications') showToast('3 actions attendent votre contrôle.');
+    if (action === 'open-sync-modal') openSyncModal();
+    if (action === 'toggle-offline-demo') toggleOfflineDemo();
+    if (action === 'sync-info') showSyncTransportInfo();
     if (action === 'dismiss-notice') actionTarget.closest('.notice')?.remove();
     if (action === 'save-draft') showToast('Brouillon enregistré.');
     if (action === 'accept-suggestion') acceptSuggestion();
