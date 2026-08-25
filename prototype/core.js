@@ -425,6 +425,15 @@ export function closePeriod(period, { checks = [], userId = null } = {}) {
   return { ...period, status: PERIOD_STATUSES.CLOSED, closedAt: new Date().toISOString(), closedBy: userId, closure: evaluation };
 }
 
+export function finalizeFiscalYear(year, { periods = [], checks = [], userId = null } = {}) {
+  if (!year?.id) throw new DomainError('Exercice comptable invalide.', 'INVALID_FISCAL_YEAR');
+  if (year.status === 'FINALIZED') throw new DomainError('L’exercice est déjà arrêté.', 'FISCAL_YEAR_ALREADY_FINALIZED');
+  if (!periods.length || periods.some((period) => period.status !== PERIOD_STATUSES.CLOSED)) throw new DomainError('Toutes les périodes doivent être clôturées avant l’arrêté.', 'FISCAL_YEAR_PERIODS_OPEN');
+  const evaluation = evaluatePeriodClosure(checks);
+  if (!evaluation.valid) throw new DomainError('L’exercice ne peut pas être arrêté : des contrôles restent à traiter.', 'FISCAL_YEAR_CLOSURE_BLOCKED');
+  return { ...year, status: 'FINALIZED', finalizedAt: new Date().toISOString(), finalizedBy: userId, closure: evaluation };
+}
+
 export function requestPeriodReopen(period, { userId = null, reason = '' } = {}) {
   if (!period?.id || period.status !== PERIOD_STATUSES.CLOSED) throw new DomainError('Seule une période clôturée peut demander une réouverture.', 'PERIOD_NOT_CLOSED');
   if (!reason.trim()) throw new DomainError('Le motif de réouverture est obligatoire.', 'MISSING_REOPEN_REASON');

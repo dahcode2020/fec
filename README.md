@@ -21,6 +21,7 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - banque, caisse et rapprochement des écritures ;
 - travaux périodiques pour générer les écritures système ;
 - clôture périodique avec checklist et verrouillage contrôlé ;
+- arrêté définitif de l’exercice avec contrôles annuels ;
 - livre journal intégré, catégorisé et synchronisé automatiquement ;
 - section Éditions pour exploiter, imprimer et exporter les informations ;
 - regroupement des amortissements, centralisations, abonnements et résultats de période ;
@@ -41,7 +42,7 @@ L’architecture multi-modules et l’association indépendante des modules aux 
 
 La structure des menus **Fichier** et **Configuration** du module CSR est décrite dans [`docs/06-menus-pilotage.md`](docs/06-menus-pilotage.md). Les fonctions de configuration sont détaillées dans [`docs/07-configuration-csr.md`](docs/07-configuration-csr.md).
 
-Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-insertion-csr.md`](docs/08-saisie-insertion-csr.md). Le menu **Paramétrage** est décrit dans [`docs/11-parametrage-operationnel.md`](docs/11-parametrage-operationnel.md). Le menu **Outils** est décrit dans [`docs/12-outils-csr.md`](docs/12-outils-csr.md). Les traitements système sont décrits dans [`docs/15-travaux-periodiques-csr.md`](docs/15-travaux-periodiques-csr.md). Le résultat fiscal et l’impôt sont décrits dans [`docs/20-resultat-fiscal-impot-csr.md`](docs/20-resultat-fiscal-impot-csr.md). La clôture périodique est décrite dans [`docs/21-cloture-periodique-csr.md`](docs/21-cloture-periodique-csr.md).
+Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-insertion-csr.md`](docs/08-saisie-insertion-csr.md). Le menu **Paramétrage** est décrit dans [`docs/11-parametrage-operationnel.md`](docs/11-parametrage-operationnel.md). Le menu **Outils** est décrit dans [`docs/12-outils-csr.md`](docs/12-outils-csr.md). Les traitements système sont décrits dans [`docs/15-travaux-periodiques-csr.md`](docs/15-travaux-periodiques-csr.md). Le résultat fiscal et l’impôt sont décrits dans [`docs/20-resultat-fiscal-impot-csr.md`](docs/20-resultat-fiscal-impot-csr.md). La clôture périodique est décrite dans [`docs/21-cloture-periodique-csr.md`](docs/21-cloture-periodique-csr.md). L’arrêté définitif est décrit dans [`docs/22-arrete-definitif-csr.md`](docs/22-arrete-definitif-csr.md).
 
 L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). L’écran **Configuration → Journaux** est décrit dans [`docs/14-journaux-csr.md`](docs/14-journaux-csr.md). L’écran **Configuration → Tiers** est décrit dans [`docs/16-tiers-csr.md`](docs/16-tiers-csr.md). Les factures clients et fournisseurs sont décrites dans [`docs/17-factures-clients-fournisseurs-csr.md`](docs/17-factures-clients-fournisseurs-csr.md). Les règlements et le lettrage sont décrits dans [`docs/18-reglements-lettrage-csr.md`](docs/18-reglements-lettrage-csr.md). La banque, la caisse et le rapprochement sont décrits dans [`docs/19-banque-rapprochement-csr.md`](docs/19-banque-rapprochement-csr.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
 

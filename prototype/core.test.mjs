@@ -22,6 +22,7 @@ import {
   calculateFiscalResult,
   closePeriod,
   evaluatePeriodClosure,
+  finalizeFiscalYear,
   calculatePeriodResult,
   createDossier,
   createIntegratedJournal,
@@ -194,6 +195,14 @@ test('verrouille une période uniquement après les contrôles bloquants', () =>
   const closed = closePeriod(period, { checks: ready.checks, userId: 'user-1' });
   assert.equal(closed.status, 'CLOSED');
   assert.equal(closed.closedBy, 'user-1');
+});
+
+test('arrête un exercice uniquement après clôture de toutes ses périodes', () => {
+  const year = { id: '2025', status: 'OPEN' };
+  assert.throws(() => finalizeFiscalYear(year, { periods: [{ id: '2025-06', status: 'OPEN' }], checks: [{ passed: true }] }), (error) => error.code === 'FISCAL_YEAR_PERIODS_OPEN');
+  const finalized = finalizeFiscalYear(year, { periods: [{ id: '2025-06', status: 'CLOSED' }], checks: [{ passed: true }], userId: 'user-1' });
+  assert.equal(finalized.status, 'FINALIZED');
+  assert.equal(finalized.finalizedBy, 'user-1');
 });
 
 test('calcule le résultat fiscal et l’impôt sans taux implicite', () => {
