@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -48,6 +48,8 @@ const appState = {
     acacia: createCsrSetup({ companyId: 'acacia', regime: 'NORMAL' }),
     noria: createCsrSetup({ companyId: 'noria', regime: 'SMT' })
   },
+  invoices: [],
+  purchaseBills: [],
   thirdParties: {
     acacia: [
       { id: 'tp-awa', code: 'AWACONCEPT', name: 'Awa Concept', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411101', ifu: '3201900045612', address: 'Cotonou, Littoral', phone: '+229 97 00 00 01', paymentTerms: '30 jours', currency: 'XOF', active: true },
@@ -90,7 +92,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -549,6 +551,14 @@ function setActiveCompany(companyId, notify = true) {
   renderAccountPlan();
   renderJournalSetup();
   renderThirdpartyList();
+  renderInvoicePartyOptions('SALE');
+  renderInvoicePartyOptions('PURCHASE');
+  renderInvoiceLines('SALE');
+  renderInvoiceLines('PURCHASE');
+  renderInvoicePreview('SALE');
+  renderInvoicePreview('PURCHASE');
+  renderInvoiceHistory('SALE');
+  renderInvoiceHistory('PURCHASE');
   renderAutomaticTasks();
   renderAutomaticRuns();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
@@ -1118,6 +1128,10 @@ let pendingAccountImport = null;
 let currentThirdpartyType = THIRD_PARTY_TYPES.CLIENT;
 let thirdpartyShowInactive = false;
 let editingThirdPartyId = null;
+const invoiceDraftLines = {
+  SALE: [{ id: 'sale-line-1', description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }],
+  PURCHASE: [{ id: 'purchase-line-1', description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }]
+};
 
 const THIRD_PARTY_TYPE_LABELS = { CLIENT: 'Clients', SUPPLIER: 'Fournisseurs', PERSONNEL: 'Personnel', OTHER: 'Débiteurs / créditeurs divers' };
 const THIRD_PARTY_DEFAULT_ACCOUNTS = { CLIENT: '4111', SUPPLIER: '4011', PERSONNEL: '421', OTHER: '4711' };
@@ -1225,10 +1239,122 @@ function exportThirdParties() {
   showToast('Les tiers de la société ont été exportés.');
 }
 
+function invoiceConfig(type) {
+  return type === 'PURCHASE' ? { partyLabel: 'Fournisseur', formPrefix: 'purchase', collection: 'purchaseBills', journalId: 'AC', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4452', title: 'Facture fournisseur' } : { partyLabel: 'Client', formPrefix: 'sales', collection: 'invoices', journalId: 'VE', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4431', title: 'Facture client' };
+}
+
+function currentInvoiceParty(type) {
+  const config = invoiceConfig(type);
+  const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
+  return currentThirdParties().find((thirdParty) => thirdParty.id === select?.value && thirdParty.type === (type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT));
+}
+
+function renderInvoicePartyOptions(type) {
+  const config = invoiceConfig(type);
+  const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
+  if (!select) return;
+  const partyType = type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
+  const parties = currentThirdParties().filter((thirdParty) => thirdParty.type === partyType && thirdParty.active !== false);
+  select.innerHTML = `${parties.map((party) => `<option value="${escapeHtml(party.id)}">${escapeHtml(party.name)} · ${escapeHtml(party.auxiliaryAccountId)}</option>`).join('')}<option value="none">+ Ajouter un ${type === 'PURCHASE' ? 'fournisseur' : 'client'}</option>`;
+  if (parties.length) select.value = parties[0].id;
+}
+
+function invoiceField(type, name) {
+  return $(`#${invoiceConfig(type).formPrefix}Invoice${name.charAt(0).toUpperCase()}${name.slice(1)}`);
+}
+
+function renderInvoiceLines(type) {
+  const prefix = invoiceConfig(type).formPrefix;
+  const container = $(`#${prefix}InvoiceLines`);
+  if (!container) return;
+  container.innerHTML = invoiceDraftLines[type].map((line, index) => `<div class="invoice-line document-invoice-line"><input type="text" value="${escapeHtml(line.description || '')}" placeholder="Désignation" data-invoice-line="${index}" data-invoice-field="description"><input type="number" min="0" step="1" value="${escapeHtml(line.quantity ?? 1)}" data-invoice-line="${index}" data-invoice-field="quantity"><input type="text" value="${escapeHtml(line.unitPrice ?? 0)}" placeholder="0" data-invoice-line="${index}" data-invoice-field="unitPrice"><strong>${numberLabel((Number(line.quantity) || 0) * (Number(String(line.unitPrice).replace(/\s/g, '').replace(',', '.')) || 0))}</strong><button class="icon-button small" type="button" aria-label="Supprimer la ligne" data-action="remove-invoice-line" data-invoice-type="${type}" data-line-index="${index}" ${invoiceDraftLines[type].length <= 1 ? 'disabled' : ''}><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>`).join('');
+}
+
+function buildInvoice(type) {
+  const config = invoiceConfig(type);
+  const party = currentInvoiceParty(type);
+  const prefix = config.formPrefix;
+  if (!party) throw new Error(`Sélectionnez un ${config.partyLabel.toLowerCase()}.`);
+  return createInvoiceDocument({ companyId: appState.activeCompany, type, thirdPartyId: party.id, thirdPartyName: party.name, thirdPartyAccountId: party.auxiliaryAccountId, date: $(`#${prefix}InvoiceDate`).value, reference: $(`#${prefix}InvoiceReference`).value.trim(), dueDate: $(`#${prefix}InvoiceDueDate`).value || null, taxRate: $(`#${prefix}InvoiceTaxRate`).value, lines: invoiceDraftLines[type] });
+}
+
+function renderInvoicePreview(type) {
+  const config = invoiceConfig(type);
+  const prefix = config.formPrefix;
+  const targetPrefix = type === 'PURCHASE' ? 'purchase' : 'sales';
+  let document;
+  try { document = buildInvoice(type); } catch (error) {
+    const note = $(`#${targetPrefix}InvoicePreviewNote`);
+    if (note) note.textContent = error.message;
+    return;
+  }
+  const lines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
+  $(`#${targetPrefix}TotalExclTax`).textContent = `${numberLabel(document.totalExclTax)} FCFA`;
+  $(`#${targetPrefix}TaxAmount`).textContent = `${numberLabel(document.tax)} FCFA`;
+  $(`#${targetPrefix}TotalInclTax`).textContent = `${numberLabel(document.totalInclTax)} FCFA`;
+  $(`#${targetPrefix}PostingTotal`).innerHTML = `${numberLabel(document.totalInclTax)} <small>FCFA</small>`;
+  $(`#${targetPrefix}InvoicePosting`).innerHTML = lines.map((line) => `<div class="document-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${numberLabel(line.debit || line.credit)}</strong><em class="${line.debit ? '' : 'credit'}">${line.debit ? 'D' : 'C'}</em></div>`).join('');
+  const note = $(`#${targetPrefix}InvoicePreviewNote`);
+  if (note) note.textContent = `${lines.length} ligne${lines.length > 1 ? 's' : ''} d’imputation proposée${lines.length > 1 ? 's' : ''} · ${document.taxRate}% de TVA.`;
+}
+
+function renderInvoiceHistory(type) {
+  const config = invoiceConfig(type);
+  const collection = appState[config.collection] || [];
+  const entries = collection.filter((document) => document.companyId === appState.activeCompany);
+  const rows = $(`#${config.formPrefix}InvoiceRows`);
+  if (!rows) return;
+  rows.innerHTML = entries.slice().reverse().map((document) => `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${document.status === 'POSTED' ? 'status-purple' : 'status-amber'}">${document.status === 'POSTED' ? 'À contrôler' : 'Brouillon'}</span></td></tr>`).join('');
+  if (!entries.length) rows.innerHTML = `<tr><td colspan="5" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
+  const count = $(`#${config.formPrefix}InvoiceCount`);
+  if (count) count.textContent = String(entries.length);
+}
+
+function resetInvoice(type) {
+  invoiceDraftLines[type] = type === 'PURCHASE' ? [{ id: `purchase-line-${Date.now()}`, description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }] : [{ id: `sale-line-${Date.now()}`, description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }];
+  const prefix = invoiceConfig(type).formPrefix;
+  $(`#${prefix}InvoiceReference`).value = type === 'PURCHASE' ? `FA-${String((appState.purchaseBills?.length || 0) + 155).padStart(4, '0')}` : `FAC-2025-${String((appState.invoices?.length || 0) + 19).padStart(3, '0')}`;
+  renderInvoiceLines(type);
+  renderInvoicePreview(type);
+}
+
+function saveInvoiceDocument(type, post = false) {
+  const config = invoiceConfig(type);
+  try {
+    const document = buildInvoice(type);
+    const setup = currentAccountSetup();
+    const accountLines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
+    let stored = { ...document, status: post ? 'POSTED' : 'DRAFT' };
+    if (post) {
+      const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: config.journalId, date: document.date, reference: document.reference, label: `${config.title} — ${document.thirdPartyName}`, lines: accountLines }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
+      const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
+      const total = document.totalInclTax;
+      stored = { ...stored, journalEntryId: workflowEntry.id };
+      const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: config.title, integrationCategory: 'GENERAL' }).entries[0];
+      appState.integratedEntries.unshift(synced);
+      appState.recentEntries.unshift({ ...workflowEntry, amount: total, accountIds: accountLines.map((line) => line.accountId) });
+    }
+    appState[config.collection].push(stored);
+    appState.auditEvents.push({ type: post ? 'INVOICE_POSTED' : 'INVOICE_DRAFT_CREATED', companyId: appState.activeCompany, documentId: stored.id, at: new Date().toISOString() });
+    persistAppState();
+    renderInvoiceHistory(type);
+    renderIntegratedJournal();
+    renderEntryQueue();
+    showToast(post ? `${config.title} insérée dans le brouillard.` : 'Brouillon de facture enregistré.');
+    if (post) resetInvoice(type);
+  } catch (error) { showToast(error.message); }
+}
+
 function currentAccountSetup() {
   const companyId = appState.activeCompany;
   if (!appState.accountingSetups[companyId]) appState.accountingSetups[companyId] = createCsrSetup({ companyId });
-  return appState.accountingSetups[companyId];
+  const setup = appState.accountingSetups[companyId];
+  (appState.thirdParties?.[companyId] || []).forEach((thirdParty) => {
+    if (thirdParty.auxiliaryAccountId && !setup.accounts.some((account) => account.id === thirdParty.auxiliaryAccountId)) {
+      setup.accounts.push({ id: thirdParty.auxiliaryAccountId, label: `${thirdParty.collectiveAccountId} — ${thirdParty.name}`, nature: thirdParty.type === THIRD_PARTY_TYPES.CLIENT ? 'Actif / tiers' : thirdParty.type === THIRD_PARTY_TYPES.SUPPLIER ? 'Passif / tiers' : 'Tiers', active: true, isCustom: true, class: accountClass(thirdParty.auxiliaryAccountId) });
+    }
+  });
+  return setup;
 }
 
 function usedAccountIds() {
@@ -2077,6 +2203,21 @@ function handleEditionAction(action, title) {
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
+  ['SALE', 'PURCHASE'].forEach((type) => {
+    const form = $(`#${invoiceConfig(type).formPrefix}InvoiceForm`);
+    form?.addEventListener('input', (event) => {
+      const field = event.target.closest('[data-invoice-line]');
+      if (field) {
+        const index = Number(field.dataset.invoiceLine);
+        const key = field.dataset.invoiceField;
+        if (invoiceDraftLines[type][index]) invoiceDraftLines[type][index][key] = field.value;
+        const row = field.closest('.document-invoice-line');
+        if (row && (key === 'quantity' || key === 'unitPrice')) row.querySelector('strong').textContent = numberLabel((Number(invoiceDraftLines[type][index]?.quantity) || 0) * (parseUiAmount(invoiceDraftLines[type][index]?.unitPrice) || 0));
+      }
+      renderInvoicePreview(type);
+    });
+    form?.addEventListener('change', () => renderInvoicePreview(type));
+  });
   $('#entryForm')?.addEventListener('change', (event) => { if (event.target.id === 'entryCategory') renderThirdpartyOptions(); renderLivePosting(); });
   $('#multiLineRows')?.addEventListener('input', (event) => {
     const input = event.target.closest('[data-manual-line]');
@@ -2208,6 +2349,11 @@ function bindEvents() {
     if (!actionTarget) return;
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
+    if (action === 'reset-invoice') { resetInvoice(actionTarget.dataset.invoiceType); showToast('Nouvelle facture prête à être saisie.'); }
+    if (action === 'add-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].push({ id: `line-${Date.now()}`, description: '', quantity: 1, unitPrice: 0 }); renderInvoiceLines(type); renderInvoicePreview(type); window.setTimeout(() => $(`#${invoiceConfig(type).formPrefix}InvoiceLines [data-invoice-field="description"]:last-of-type`)?.focus(), 0); }
+    if (action === 'remove-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].splice(Number(actionTarget.dataset.lineIndex), 1); renderInvoiceLines(type); renderInvoicePreview(type); }
+    if (action === 'save-invoice-draft') saveInvoiceDocument(actionTarget.dataset.invoiceType, false);
+    if (action === 'post-invoice') saveInvoiceDocument(actionTarget.dataset.invoiceType, true);
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
     if (action === 'show-calculator') openCalculator();
     if (action === 'capture-screen') captureScreen();

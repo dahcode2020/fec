@@ -18,8 +18,11 @@ import {
   transitionOperation,
   updateAccountInPlan,
   updateJournalInSetup,
+  calculateDocumentTotals,
   createDossier,
   createIntegratedJournal,
+  createInvoiceDocument,
+  documentToJournalLines,
   syncIntegratedJournal,
   summarizeIntegratedJournal,
   canDeleteCorrectionCandidate,
@@ -119,6 +122,22 @@ test('ajoute, modifie et importe des comptes sans doublon', () => {
   const imported = importAccountPlanRows([{ id: '512100', label: 'Banque locale', nature: 'Actif / trésorerie' }], { existingAccounts: setup.accounts });
   assert.equal(imported.valid, true);
   assert.match(exportAccountPlanTxt({ companyName: 'Acacia Conseil', accounts: imported.imported }), /512100/);
+});
+
+test('calcule et impute une facture client multi-lignes', () => {
+  const totals = calculateDocumentTotals([
+    { description: 'Conseil', quantity: 1, unitPrice: 200000 },
+    { description: 'Support', quantity: 2, unitPrice: 25000 }
+  ], 18);
+  assert.equal(totals.totalExclTax, 250000);
+  assert.equal(totals.tax, 45000);
+  assert.equal(totals.totalInclTax, 295000);
+  const invoice = createInvoiceDocument({ companyId: 'co-a', type: 'SALE', thirdPartyId: 'tp-1', thirdPartyName: 'Client test', thirdPartyAccountId: '411101', date: '2025-06-16', reference: 'FAC-001', taxRate: 18, lines: totals.lines });
+  const lines = documentToJournalLines(invoice);
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0].debit, 295000);
+  assert.equal(lines[1].credit, 250000);
+  assert.equal(lines[2].credit, 45000);
 });
 
 test('accepte une imputation multi-lignes équilibrée', () => {

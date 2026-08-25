@@ -154,6 +154,7 @@ export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
   Object.freeze({ id: '6813', label: 'Dotations aux amortissements des immobilisations corporelles', nature: 'Charge' }),
   Object.freeze({ id: '2844', label: 'Amortissements du matériel et mobilier', nature: 'Correctif d’actif' }),
   Object.freeze({ id: '4431', label: 'TVA facturée sur ventes', nature: 'Passif / taxe' }),
+  Object.freeze({ id: '4452', label: 'TVA récupérable sur achats', nature: 'Actif / taxe' }),
   Object.freeze({ id: '7061', label: 'Services vendus dans la Région', nature: 'Produit' })
 ]);
 
@@ -304,6 +305,43 @@ export function updateThirdPartyInDirectory(thirdParties, thirdPartyId, patch) {
   if (!updated.name || !updated.code) throw new DomainError('Le code et le nom du tiers sont obligatoires.', 'INVALID_THIRD_PARTY');
   if (thirdParties.some((thirdParty, thirdPartyIndex) => thirdPartyIndex !== index && thirdParty.code.toUpperCase() === updated.code)) throw new DomainError(`Le tiers ${updated.code} existe déjà dans cette société.`, 'DUPLICATE_THIRD_PARTY');
   return thirdParties.map((thirdParty, thirdPartyIndex) => thirdPartyIndex === index ? updated : thirdParty);
+}
+
+export function calculateDocumentTotals(lines = [], taxRate = 0) {
+  const normalizedTaxRate = Number(taxRate) || 0;
+  const normalizedLines = lines.map((line, index) => {
+    const quantity = amount(line.quantity || 0);
+    const unitPrice = amount(line.unitPrice || 0);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new DomainError(`Quantité invalide à la ligne ${index + 1}.`, 'INVALID_DOCUMENT_LINE');
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new DomainError(`Prix invalide à la ligne ${index + 1}.`, 'INVALID_DOCUMENT_LINE');
+    const total = round(quantity * unitPrice);
+    return { id: line.id || `line_${index + 1}`, description: String(line.description || '').trim(), quantity, unitPrice, total };
+  });
+  if (!normalizedLines.length || normalizedLines.some((line) => !line.description)) throw new DomainError('Chaque ligne doit avoir une désignation.', 'INVALID_DOCUMENT_LINE');
+  const totalExclTax = round(normalizedLines.reduce((sum, line) => sum + line.total, 0));
+  const tax = round(totalExclTax * normalizedTaxRate / 100);
+  return { lines: normalizedLines, taxRate: normalizedTaxRate, totalExclTax, tax, totalInclTax: round(totalExclTax + tax) };
+}
+
+export function createInvoiceDocument({ id, companyId, type = 'SALE', thirdPartyId, thirdPartyName, thirdPartyAccountId, date, reference, lines, taxRate = 0, dueDate = null } = {}) {
+  if (!companyId || !thirdPartyId || !thirdPartyAccountId) throw new DomainError('La société et le tiers sont obligatoires.', 'INVALID_DOCUMENT');
+  if (!date || !reference) throw new DomainError('La date et la référence de la pièce sont obligatoires.', 'INVALID_DOCUMENT');
+  if (!['SALE', 'PURCHASE'].includes(type)) throw new DomainError('Type de document inconnu.', 'INVALID_DOCUMENT_TYPE');
+  const totals = calculateDocumentTotals(lines, taxRate);
+  return { id: id || `document_${Date.now()}`, companyId, type, thirdPartyId, thirdPartyName, thirdPartyAccountId, date, reference, dueDate, ...totals, status: 'DRAFT', createdAt: new Date().toISOString() };
+}
+
+export function documentToJournalLines(document, { revenueAccountId = '7061', expenseAccountId = '6047', salesTaxAccountId = '4431', purchaseTaxAccountId = '4452' } = {}) {
+  if (document.type === 'SALE') return [
+    { accountId: document.thirdPartyAccountId, label: `Client — ${document.thirdPartyName}`, debit: document.totalInclTax, credit: 0 },
+    { accountId: revenueAccountId, label: 'Ventes / services', debit: 0, credit: document.totalExclTax },
+    ...(document.tax > 0 ? [{ accountId: salesTaxAccountId, label: `TVA collectée ${document.taxRate}%`, debit: 0, credit: document.tax }] : [])
+  ];
+  return [
+    { accountId: expenseAccountId, label: 'Achats / charges', debit: document.totalExclTax, credit: 0 },
+    ...(document.tax > 0 ? [{ accountId: purchaseTaxAccountId, label: `TVA récupérable ${document.taxRate}%`, debit: document.tax, credit: 0 }] : []),
+    { accountId: document.thirdPartyAccountId, label: `Fournisseur — ${document.thirdPartyName}`, debit: 0, credit: document.totalInclTax }
+  ];
 }
 
 export function companiesFor(workspace, { includeArchived = false } = {}) {
