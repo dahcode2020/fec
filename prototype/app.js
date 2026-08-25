@@ -1308,6 +1308,81 @@ function prepareFecFromForm() {
   return prepared;
 }
 
+function fecCorrectionEntry(entryId) {
+  return appState.integratedEntries.find((entry) => entry.id === entryId && entry.companyId === appState.activeCompany)
+    || appState.recentEntries.find((entry) => entry.id === entryId && entry.companyId === appState.activeCompany);
+}
+
+function renderFecCorrectionOptions(selectedAccountId, selectedThirdPartyId) {
+  const accounts = currentAccountSetup().accounts || [];
+  const parties = currentThirdParties().filter((party) => party.active !== false);
+  const accountOptions = accounts.map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === selectedAccountId ? 'selected' : ''}>${escapeHtml(account.id)} · ${escapeHtml(account.label)}</option>`).join('');
+  const partyOptions = [`<option value="">Aucun tiers / non applicable</option>`, ...parties.map((party) => `<option value="${escapeHtml(party.id)}" ${party.id === selectedThirdPartyId ? 'selected' : ''}>${escapeHtml(party.name)} · ${escapeHtml(party.auxiliaryAccountId || '')}</option>`)].join('');
+  return { accountOptions, partyOptions };
+}
+
+function openFecCorrection(entryId, lineNumber = 1) {
+  const entry = fecCorrectionEntry(entryId);
+  if (!entry) { showToast('Écriture FEC introuvable dans la société active.'); return; }
+  const lineIndex = Math.max(0, Number(lineNumber || 1) - 1);
+  const line = entry.lines?.[lineIndex] || entry.lines?.[0];
+  if (!line) { showToast('La ligne comptable à corriger est introuvable.'); return; }
+  const thirdParty = currentThirdParties().find((party) => party.id === line.thirdPartyId || party.auxiliaryAccountId === line.auxiliaryAccountId || party.auxiliaryAccountId === line.accountId);
+  const options = renderFecCorrectionOptions(line.accountId, thirdParty?.id || '');
+  $('#fecCorrectionEntryId').value = entry.id;
+  $('#fecCorrectionLineNumber').value = String(lineIndex + 1);
+  $('#fecCorrectionReference').value = entry.reference || '';
+  $('#fecCorrectionPieceDate').value = String(entry.pieceDate || line.pieceDate || entry.date || '').slice(0, 10);
+  const validationInput = $('#fecCorrectionValidationDate');
+  validationInput.value = String(entry.validatedAt || entry.dateValid || '').slice(0, 10);
+  validationInput.required = entry.status === OPERATION_STATES.VALIDATED || entry.status === OPERATION_STATES.CLOSED;
+  $('#fecCorrectionLabel').value = entry.label || line.entryLabel || line.label || '';
+  $('#fecCorrectionAccount').innerHTML = options.accountOptions;
+  $('#fecCorrectionThirdParty').innerHTML = options.partyOptions;
+  $('#fecCorrectionThirdParty').value = thirdParty?.id || '';
+  $('#fecCorrectionSettlementDate').value = String(line.settlementDate || entry.settlementDate || '').slice(0, 10);
+  $('#fecCorrectionSettlementMode').value = line.settlementMode || entry.settlementMode || '';
+  $('#fecCorrectionReason').value = '';
+  $('#fecCorrectionContext').textContent = `${entry.journalId || '—'} · ${entry.reference || entry.id} · ligne ${lineIndex + 1}`;
+  $('#fecCorrectionStatus').textContent = entry.status === OPERATION_STATES.VALIDATED || entry.status === OPERATION_STATES.CLOSED ? 'Écriture validée' : 'Écriture à contrôler';
+  openModal('fecCorrectionModal');
+}
+
+function saveFecCorrection(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const entryId = $('#fecCorrectionEntryId').value;
+  const lineIndex = Math.max(0, Number($('#fecCorrectionLineNumber').value || 1) - 1);
+  const entry = fecCorrectionEntry(entryId);
+  const sourceLines = entry?.lines;
+  if (!entry || !Array.isArray(sourceLines) || !sourceLines[lineIndex]) { showToast('Écriture FEC introuvable.'); return; }
+  const partyId = $('#fecCorrectionThirdParty').value;
+  const party = currentThirdParties().find((item) => item.id === partyId);
+  const pieceDate = $('#fecCorrectionPieceDate').value;
+  const validationDate = $('#fecCorrectionValidationDate').value;
+  const settlementDate = $('#fecCorrectionSettlementDate').value;
+  const settlementMode = $('#fecCorrectionSettlementMode').value.trim();
+  const nextLine = { ...sourceLines[lineIndex], accountId: $('#fecCorrectionAccount').value, pieceDate, thirdPartyId: party?.id || undefined, auxiliaryAccountId: party?.auxiliaryAccountId || undefined, auxiliaryLabel: party?.name || undefined, settlementDate: settlementDate || undefined, settlementMode: settlementMode || undefined };
+  const updatedEntry = { ...entry, reference: $('#fecCorrectionReference').value.trim(), pieceDate, label: $('#fecCorrectionLabel').value.trim(), lines: sourceLines.map((line, index) => index === lineIndex ? nextLine : line) };
+  if (validationDate) updatedEntry.validatedAt = `${validationDate}T12:00:00.000Z`;
+  const updateCollection = (collection) => collection.map((item) => item.id === entryId && item.companyId === appState.activeCompany ? { ...item, ...updatedEntry, lines: updatedEntry.lines } : item);
+  appState.integratedEntries = updateCollection(appState.integratedEntries);
+  appState.recentEntries = updateCollection(appState.recentEntries);
+  const reason = $('#fecCorrectionReason').value.trim();
+  appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'FEC_SOURCE_CORRECTION', companyId: appState.activeCompany, entryId, line: lineIndex + 1, reason, at: new Date().toISOString(), userId: 'claire-dossou' });
+  persistAppState();
+  closeModal();
+  renderEntryQueue();
+  renderIntegratedJournal();
+  renderFecCorrectionAfterSave();
+  showToast('Donnée source corrigée. Le précontrôle FEC a été relancé.');
+}
+
+function renderFecCorrectionAfterSave() {
+  if ($('#fecForm')) prepareFecFromForm();
+}
+
 function fecIssueLabel(issue) {
   return `${issue.severity === 'WARNING' ? 'Avertissement' : 'Blocage'} · ${issue.message}`;
 }
@@ -1319,7 +1394,7 @@ function renderFecResult(prepared, returnOnly = false) {
   const canGenerate = prepared.valid || !official || draft.mode === 'OFFICIAL_REPORT';
   const fileIssues = prepared.fileValidation?.errors || [];
   const fileWarnings = prepared.fileValidation?.warnings || [];
-  const issueItems = [...prepared.errors, ...fileIssues, ...prepared.warnings, ...fileWarnings].slice(0, 60).map((issue) => `<li class="fec-issue-${issue.severity === 'WARNING' ? 'warning' : 'error'}"><span>${issue.severity === 'WARNING' ? '!' : '×'}</span><span>${escapeHtml(fecIssueLabel(issue))}</span></li>`).join('');
+  const issueItems = [...prepared.errors, ...fileIssues, ...prepared.warnings, ...fileWarnings].slice(0, 60).map((issue) => { const correction = issue.entryId ? `<button class="fec-correction-button" type="button" data-action="open-fec-correction" data-fec-entry-id="${escapeHtml(issue.entryId)}" data-fec-line="${escapeHtml(issue.line || '1')}">Corriger</button>` : ''; return `<li class="fec-issue-${issue.severity === 'WARNING' ? 'warning' : 'error'}"><span>${issue.severity === 'WARNING' ? '!' : '×'}</span><span class="fec-issue-message">${escapeHtml(fecIssueLabel(issue))}</span>${correction}</li>`; }).join('');
   const previewRows = prepared.records.slice(0, 8).map((record) => `<tr><td>${escapeHtml(record.values.CodeJournal)}</td><td>${escapeHtml(record.values.NumEcriture)}</td><td>${escapeHtml(record.values.DateEcriture)}</td><td><b>${escapeHtml(record.values.NumCompte)}</b></td><td>${escapeHtml(record.values.RefPiece)}</td><td class="align-right">${escapeHtml(record.values.MontDebit)}</td><td class="align-right">${escapeHtml(record.values.MontCredit)}</td></tr>`).join('');
   const html = `<section class="fec-control-result"><div class="fec-result-heading"><div><span class="eyebrow">RÉSULTAT DU PRÉCONTRÔLE</span><h3>${prepared.valid ? 'FEC contrôlé' : 'Corrections nécessaires avant remise'}</h3><p>${official ? 'Le mode officiel ne produit aucun fichier tant qu’un blocage subsiste.' : 'Ce diagnostic peut être généré pour préparer les corrections, mais reste non transmissible.'}</p></div><span class="fec-result-status ${prepared.valid ? 'is-valid' : 'is-invalid'}"><i></i>${prepared.valid ? 'Aucune erreur bloquante' : `${prepared.errors.length} blocage${prepared.errors.length > 1 ? 's' : ''}`}</span></div><div class="fec-summary"><span><small>ÉCRITURES</small><strong>${prepared.entryCount}</strong><em>retenues</em></span><span><small>LIGNES</small><strong>${prepared.lineCount}</strong><em>enregistrements</em></span><span><small>EXCLUES</small><strong>${prepared.excludedEntries.length}</strong><em>centralisation / résultat</em></span><span><small>EN ATTENTE</small><strong>${prepared.pendingCount}</strong><em>non validées</em></span></div>${issueItems ? `<div class="fec-issues"><strong>Anomalies et avertissements</strong><ul>${issueItems}</ul><button class="text-button" type="button" data-action="open-view" data-view="entry">Compléter les écritures sources <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>` : '<div class="fec-clean"><span>✓</span><strong>Le périmètre ne présente aucune anomalie bloquante.</strong></div>'}<div class="fec-preview-table"><div class="fec-preview-table-heading"><strong>Premières lignes du fichier</strong><span>${prepared.lineCount} ligne${prepared.lineCount > 1 ? 's' : ''} · ${prepared.totalDebit.toFixed(2).replace('.', ',')} débit / ${prepared.totalCredit.toFixed(2).replace('.', ',')} crédit</span></div><div class="table-wrap"><table><thead><tr><th>JOURNAL</th><th>N° ÉCRITURE</th><th>DATE</th><th>COMPTE</th><th>PIÈCE</th><th class="align-right">DÉBIT</th><th class="align-right">CRÉDIT</th></tr></thead><tbody>${previewRows || '<tr><td colspan="7" class="fec-empty">Aucune ligne dans la période sélectionnée.</td></tr>'}</tbody></table></div></div></section>`;
   if (returnOnly) return html;
@@ -3682,6 +3757,7 @@ function bindEvents() {
     if (action === 'confirm-export') confirmExport();
     if (action === 'check-fec') prepareFecFromForm();
     if (action === 'generate-fec') generateFec();
+    if (action === 'open-fec-correction') openFecCorrection(actionTarget.dataset.fecEntryId, actionTarget.dataset.fecLine);
     if (action === 'open-fec') openFecAssistant();
     if (action === 'download-report') openExportAssistant(actionTarget.dataset.exportReport || null);
     if (action === 'download-template') downloadTemplate();
@@ -3718,6 +3794,7 @@ function bindEvents() {
     updateDossierPreview();
   });
   $('#assetForm')?.addEventListener('submit', addAsset);
+  $('#fecCorrectionForm')?.addEventListener('submit', saveFecCorrection);
   $('#fileInput')?.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
   document.addEventListener('input', (event) => {
     if (event.target.closest('#exportForm')) invalidateExportReview();
