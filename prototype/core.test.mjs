@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   DomainError,
   addAccountToPlan,
@@ -69,6 +70,15 @@ test('prépare un paramétrage CSR avec comptes et journaux', () => {
   assert.equal(setup.regime, 'SMT');
   assert.ok(setup.accounts.some((account) => account.id === '411000'));
   assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
+});
+
+test('le référentiel SYSCOHADA intégré couvre les 9 classes', () => {
+  const plan = JSON.parse(readFileSync(new URL('./data/syscohada-revise.json', import.meta.url), 'utf8'));
+  assert.equal(plan.metadata.classCount, 9);
+  assert.ok(plan.accounts.length > 1200);
+  assert.ok(plan.accounts.some((account) => account.id === '4111' && account.label));
+  assert.ok(plan.accounts.some((account) => account.id === '7061' && account.label));
+  assert.ok(plan.accounts.some((account) => account.id === '9011' && account.label));
 });
 
 test('ajoute, modifie et importe des comptes sans doublon', () => {

@@ -95,6 +95,28 @@ function hydrateAppState() {
   if (!appState.recentEntries) appState.recentEntries = [];
 }
 
+async function loadFullSyscohadaPlan() {
+  try {
+    const response = await fetch('data/syscohada-revise.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Plan comptable indisponible');
+    const payload = await response.json();
+    fullPlanPayload = payload;
+    const fullAccounts = payload.accounts.map((account) => ({ ...account, nature: account.nature || 'À définir', active: account.active !== false, isCustom: false }));
+    Object.keys(appState.companies).forEach((companyId) => {
+      const setup = appState.accountingSetups[companyId] || createCsrSetup({ companyId });
+      const customAccounts = (setup.accounts || []).filter((account) => account.isCustom);
+      setup.accounts = Array.from(new Map([...fullAccounts, ...customAccounts].map((account) => [account.id, account])).values());
+      setup.planVersion = `${payload.metadata.name} · ${payload.metadata.accountCount} comptes`;
+      setup.planMetadata = payload.metadata;
+      appState.accountingSetups[companyId] = setup;
+    });
+    persistAppState();
+    renderAccountPlan();
+  } catch {
+    // Le référentiel embarqué de démonstration reste disponible hors connexion.
+  }
+}
+
 function persistAppState() {
   try {
     const payload = { version: 1 };
@@ -107,6 +129,7 @@ function persistAppState() {
 
 let manualLineOverride = null;
 let manualLineDraft = [];
+let fullPlanPayload = null;
 
 const MODULES = {
   CSR: { ...MODULE_DEFINITIONS.CSR, color: 'green' },
@@ -809,7 +832,9 @@ function addCompany(event) {
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
   appState.dossiers.push({ id: dossierId, companyId: id, dossier: generatedDossierCode, period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
-  appState.accountingSetups[id] = createCsrSetup({ companyId: id, regime: 'NORMAL' });
+  const newSetup = createCsrSetup({ companyId: id, regime: 'NORMAL' });
+  if (fullPlanPayload) newSetup.accounts = fullPlanPayload.accounts.map((account) => ({ ...account, nature: account.nature || 'À définir', active: account.active !== false, isCustom: false }));
+  appState.accountingSetups[id] = newSetup;
   persistAppState();
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
@@ -1943,6 +1968,7 @@ function bindEvents() {
 document.addEventListener('DOMContentLoaded', () => {
   hydrateAppState();
   persistAppState();
+  loadFullSyscohadaPlan();
   renderCompanyMenu();
   setActiveCompany(appState.activeCompany, false);
   buildExportPane();

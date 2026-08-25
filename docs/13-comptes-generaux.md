@@ -69,6 +69,8 @@ L’export TXT contient :
 
 Un export Excel sera branché dans la tranche dédiée aux adaptateurs tableurs.
 
-## Référentiel de démonstration
+## Référentiel intégré
 
-Le prototype initialise des comptes CSR courants pour permettre le premier flux de vente, d’achat, de banque, d’abonnement et d’amortissement. Ce référentiel est une base de développement et doit être remplacé ou complété depuis une source SYSCOHADA validée avant une utilisation professionnelle.
+Le prototype charge maintenant le référentiel complet local `prototype/data/syscohada-revise.json`, organisé sur les 9 classes, avec les comptes de regroupement et les sous-comptes détaillés (1 357 entrées de l’arbre intégré). Il est chargé au démarrage et fusionné avec les personnalisations de la société.
+
+Le référentiel intégré est versionné comme base de développement et sa source doit être comparée au PDF fourni puis validée par un professionnel avant une utilisation réglementaire. L’application ne remplace pas le référentiel officiel par des comptes personnalisés : les ajouts de la société restent une extension non destructive.
