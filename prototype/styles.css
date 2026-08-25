@@ -687,3 +687,5 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .export-footer-actions { width:100%; flex-direction:column-reverse; }
   .export-footer-actions .button { width:100%; }
 }
+.export-format.is-unavailable { opacity:.55; cursor:not-allowed; }
+.export-format.is-unavailable:hover { border-color:var(--line); background:#fff; transform:none; }

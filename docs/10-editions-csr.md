@@ -136,7 +136,7 @@ La société active et le dossier sont affichés comme contexte verrouillé : il
 
 Les champs marqués d’un astérisque sont contrôlés avant la vérification. Le téléchargement reste désactivé tant que le périmètre n’a pas été vérifié. Le récapitulatif affiche le nombre de lignes, la période, les journaux, le niveau de données et le nom final du fichier avant confirmation.
 
-Après confirmation, la configuration de l’export est conservée dans l’historique et dans la piste d’audit du dossier. Cette maquette prépare les adaptateurs TXT, CSV et tableur ; elle ne doit pas être considérée comme la génération réglementaire définitive des formats Excel tant que ces adaptateurs n’ont pas été branchés.
+Après confirmation, la configuration de l’export est conservée dans l’historique et dans la piste d’audit du dossier. Dans cette maquette, la sortie réellement téléchargeable est le TXT tabulé ; les choix Excel restent signalés comme « adaptateur à venir » afin de ne pas produire un faux fichier `.xlsx` ou `.xls`. Les adaptateurs TXT, CSV et tableur seront branchés dans un jalon dédié.
 
 ## Formats
 

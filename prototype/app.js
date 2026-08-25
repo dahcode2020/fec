@@ -1002,9 +1002,9 @@ const EXPORT_REPORTS = Object.freeze([
 ]);
 
 const EXPORT_FORMATS = Object.freeze({
-  xlsx: { label: 'Excel moderne', extension: 'xlsx', description: '.xlsx · recommandé', icon: 'X', tone: 'green' },
-  xls: { label: 'Excel compatibilité', extension: 'xls', description: '.xls · ancien format', icon: 'X', tone: 'blue' },
-  txt: { label: 'Texte comptable', extension: 'txt', description: '.txt · séparateur tabulation', icon: 'T', tone: 'purple' }
+  xlsx: { label: 'Excel moderne', extension: 'xlsx', outputExtension: 'txt', available: false, description: '.xlsx · adaptateur à venir', icon: 'X', tone: 'green' },
+  xls: { label: 'Excel compatibilité', extension: 'xls', outputExtension: 'txt', available: false, description: '.xls · adaptateur à venir', icon: 'X', tone: 'blue' },
+  txt: { label: 'Texte comptable', extension: 'txt', outputExtension: 'txt', available: true, description: '.txt · séparateur tabulation', icon: 'T', tone: 'purple' }
 });
 
 let pendingExportRows = null;
@@ -1077,7 +1077,7 @@ function renderExportAssistant() {
   const fiscalYear = currentFiscalYear();
   const dossier = currentDossierCode(appState.activeCompany);
   const reportOptions = EXPORT_REPORTS.map((item) => `<option value="${item.value}" ${item.value === report.value ? 'selected' : ''}>${item.label}</option>`).join('');
-  const formatOptions = Object.entries(EXPORT_FORMATS).map(([value, item]) => `<button class="export-format ${value === draft.format ? 'is-selected' : ''}" type="button" data-export-format="${value}" aria-pressed="${value === draft.format}"><span class="file-icon file-icon-${item.tone}">${item.icon}</span><span><strong>${item.label}</strong><small>${item.description}</small></span><span class="radio-check"></span></button>`).join('');
+  const formatOptions = Object.entries(EXPORT_FORMATS).map(([value, item]) => `<button class="export-format ${value === draft.format ? 'is-selected' : ''} ${item.available ? '' : 'is-unavailable'}" type="button" data-export-format="${value}" aria-pressed="${value === draft.format}" ${item.available ? '' : 'disabled aria-disabled="true" title="Adaptateur tableur prévu dans un prochain jalon"'}><span class="file-icon file-icon-${item.tone}">${item.icon}</span><span><strong>${item.label}</strong><small>${item.description}</small></span><span class="radio-check"></span></button>`).join('');
   const reviewHidden = draft.exportReady ? '' : ' hidden';
   const confirmDisabled = draft.exportReady ? '' : ' disabled';
 
@@ -1113,6 +1113,7 @@ function readExportForm() {
     journalId: String(formData.get('journalId') || 'ALL'),
     statusMode: String(formData.get('statusMode') || 'CONTROL'),
     profile: String(formData.get('profile') || 'cabinet'),
+    format: EXPORT_FORMATS[(appState.exportDraft || {}).format]?.available ? appState.exportDraft.format : 'txt',
     title: String(formData.get('title') || '').trim(),
     filename: filenameBase,
     recipient: String(formData.get('recipient') || '').trim(),
@@ -1158,7 +1159,7 @@ function renderExportReview(data) {
   const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
   const statusLabel = draft.statusMode === 'OFFICIAL' ? 'Officiel · validées ou clôturées' : 'Contrôle · brouillons et revue inclus';
   const journalLabel = draft.journalId === 'ALL' ? 'Tous les journaux' : draft.journalId;
-  const extension = format.extension;
+  const extension = format.outputExtension || format.extension;
   review.innerHTML = `<div class="export-review-icon">✓</div><div class="export-review-copy"><strong>Vérification prête</strong><p>${escapeHtml(data.rows.length)} ligne${data.rows.length > 1 ? 's' : ''} seront exportée${data.rows.length > 1 ? 's' : ''} pour ${escapeHtml(company.name)}. Aucun téléchargement n’a encore été lancé.</p><div class="export-review-tags"><span>${escapeHtml(data.report.label)}</span><span>${escapeHtml(data.periodLabel)}</span><span>${escapeHtml(journalLabel)}</span><span>${escapeHtml(statusLabel)}</span><span>${escapeHtml(`${draft.filename}.${extension}`)}</span></div></div>`;
   review.removeAttribute('hidden');
   $('#confirmExportButton')?.removeAttribute('disabled');
@@ -1222,9 +1223,10 @@ function confirmExport() {
   const draft = appState.exportDraft;
   const data = buildExportData(draft);
   const format = EXPORT_FORMATS[draft.format] || EXPORT_FORMATS.txt;
-  const filename = `${exportFileBase(draft.filename)}.${format.extension}`;
+  const outputExtension = format.outputExtension || format.extension;
+  const filename = `${exportFileBase(draft.filename)}.${outputExtension}`;
   downloadText(filename, exportContent(draft, data));
-  const historyItem = { id: `export-${Date.now()}`, companyId: appState.activeCompany, dossier: currentDossierCode(appState.activeCompany), exercise: currentFiscalYear().id, period: draft.periodId, reportType: data.report.label, format: format.extension, title: draft.title, filename, recipient: draft.recipient, purpose: draft.purpose, statusMode: draft.statusMode, journalId: draft.journalId, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
+  const historyItem = { id: `export-${Date.now()}`, companyId: appState.activeCompany, dossier: currentDossierCode(appState.activeCompany), exercise: currentFiscalYear().id, period: draft.periodId, reportType: data.report.label, format: outputExtension, requestedFormat: format.extension, title: draft.title, filename, recipient: draft.recipient, purpose: draft.purpose, statusMode: draft.statusMode, journalId: draft.journalId, createdAt: new Date().toISOString(), author: 'Claire Dossou' };
   appState.exportHistory.unshift(historyItem);
   appState.auditEvents.unshift({ id: `audit-${Date.now()}`, action: 'EXPORT_CREATED', companyId: appState.activeCompany, label: draft.title, metadata: historyItem, at: historyItem.createdAt, userId: 'claire-dossou' });
   persistAppState();
