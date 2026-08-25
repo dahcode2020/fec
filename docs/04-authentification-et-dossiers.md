@@ -114,7 +114,9 @@ Le bouton « Nouveau dossier » permet également de vérifier le parcours d’a
 - une session ouverte dans une société ne doit pas exposer les données d’une autre ;
 - les actions de duplication, archivage et restauration seront tracées ;
 - le mot de passe ne devra jamais être stocké en clair ;
-- la récupération du mot de passe sera traitée avec l’authentification réelle, pas dans la maquette.
+- la récupération du mot de passe sera traitée avec l’authentification réelle, pas dans la maquette ;
+- le prototype distingue désormais l’utilisateur courant, son rôle et ses droits par société/module ;
+- les opérations sensibles CSR refusent une action lorsque le rôle ne possède pas la permission correspondante.
 
 ## Limites actuelles
 

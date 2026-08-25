@@ -1369,3 +1369,67 @@ export function decodeFecText(bytes, encoding = 'ISO-8859-15') {
   const isoMap = { 0xa4: '€', 0xa6: 'Š', 0xa8: 'š', 0xb4: 'Ž', 0xb8: 'ž', 0xbc: 'Œ', 0xbd: 'œ', 0xbe: 'Ÿ' };
   return Array.from(source, (byte) => isoMap[byte] || String.fromCharCode(byte <= 0x7f || encoding !== 'ASCII' ? byte : 0x3f)).join('');
 }
+
+/* Utilisateurs et permissions — socle multi-sociétés */
+export const USER_ROLES = Object.freeze({
+  ADMIN: 'ADMIN',
+  CONTROLLER: 'CONTROLLER',
+  OPERATOR: 'OPERATOR',
+  READER: 'READER'
+});
+
+export const USER_ROLE_LABELS = Object.freeze({
+  ADMIN: 'Administrateur',
+  CONTROLLER: 'Contrôleur / comptable',
+  OPERATOR: 'Opérateur',
+  READER: 'Lecture seule'
+});
+
+export const USER_PERMISSIONS = Object.freeze({
+  READ: 'READ',
+  ENTRIES_CREATE: 'ENTRIES_CREATE',
+  ENTRIES_VALIDATE: 'ENTRIES_VALIDATE',
+  ENTRIES_CORRECT: 'ENTRIES_CORRECT',
+  EXPORTS_CREATE: 'EXPORTS_CREATE',
+  PERIODS_CLOSE: 'PERIODS_CLOSE',
+  FISCAL_SNAPSHOT: 'FISCAL_SNAPSHOT',
+  FISCAL_FINALIZE: 'FISCAL_FINALIZE',
+  OPENING_GENERATE: 'OPENING_GENERATE',
+  OPENING_VALIDATE: 'OPENING_VALIDATE',
+  SETTINGS_MANAGE: 'SETTINGS_MANAGE',
+  USERS_MANAGE: 'USERS_MANAGE'
+});
+
+const ROLE_PERMISSION_SET = Object.freeze({
+  ADMIN: Object.freeze(Object.values(USER_PERMISSIONS)),
+  CONTROLLER: Object.freeze([USER_PERMISSIONS.READ, USER_PERMISSIONS.ENTRIES_CREATE, USER_PERMISSIONS.ENTRIES_VALIDATE, USER_PERMISSIONS.ENTRIES_CORRECT, USER_PERMISSIONS.EXPORTS_CREATE, USER_PERMISSIONS.PERIODS_CLOSE, USER_PERMISSIONS.FISCAL_SNAPSHOT, USER_PERMISSIONS.FISCAL_FINALIZE, USER_PERMISSIONS.OPENING_GENERATE, USER_PERMISSIONS.OPENING_VALIDATE]),
+  OPERATOR: Object.freeze([USER_PERMISSIONS.READ, USER_PERMISSIONS.ENTRIES_CREATE]),
+  READER: Object.freeze([USER_PERMISSIONS.READ, USER_PERMISSIONS.EXPORTS_CREATE])
+});
+
+export function createUser({ id, name, email, active = true } = {}) {
+  if (!id || !name?.trim() || !email?.trim()) throw new DomainError('Un utilisateur doit avoir un nom et une adresse e-mail.', 'INVALID_USER');
+  return { id, name: name.trim(), email: email.trim().toLowerCase(), active, createdAt: new Date().toISOString() };
+}
+
+export function createMembership({ id, userId, companyId, moduleId = 'CSR', role = USER_ROLES.READER, active = true } = {}) {
+  if (!userId || !companyId || !Object.values(USER_ROLES).includes(role)) throw new DomainError('Une relation utilisateur-société est incomplète.', 'INVALID_MEMBERSHIP');
+  return { id: id || `${userId}_${companyId}_${moduleId}`, userId, companyId, moduleId, role, active, createdAt: new Date().toISOString() };
+}
+
+export function permissionsForMembership(membership) {
+  return [...(ROLE_PERMISSION_SET[membership?.role] || [])];
+}
+
+export function hasPermission(membership, permission) {
+  return Boolean(membership?.active !== false && permissionsForMembership(membership).includes(permission));
+}
+
+export function assertPermission(membership, permission) {
+  if (!hasPermission(membership, permission)) throw new DomainError('Cette action n’est pas autorisée pour ce rôle dans cette société.', 'PERMISSION_DENIED');
+  return true;
+}
+
+export function roleLabel(role) {
+  return USER_ROLE_LABELS[role] || 'Rôle inconnu';
+}

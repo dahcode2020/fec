@@ -1,7 +1,19 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createFinancialSnapshot, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, deleteCorrectionCandidate, decodeFecText, extractZipArchive, encodeFecText, evaluatePeriodClosure, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { assertPermission, accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createFinancialSnapshot, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, createUser, createMembership, decodeFecText, extractZipArchive, encodeFecText, evaluatePeriodClosure, roleLabel, USER_PERMISSIONS, USER_ROLE_LABELS, USER_ROLES, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
+  currentUserId: 'claire-dossou',
+  users: [
+    createUser({ id: 'claire-dossou', name: 'Claire Dossou', email: 'claire@acacia.bj' }),
+    createUser({ id: 'marc-kponton', name: 'Marc Kponton', email: 'marc@acacia.bj' }),
+    createUser({ id: 'awa-operatrice', name: 'Awa Hounkpe', email: 'awa@acacia.bj' })
+  ],
+  memberships: [
+    createMembership({ userId: 'claire-dossou', companyId: 'acacia', moduleId: 'CSR', role: 'ADMIN' }),
+    createMembership({ userId: 'claire-dossou', companyId: 'noria', moduleId: 'GCSF', role: 'ADMIN' }),
+    createMembership({ userId: 'marc-kponton', companyId: 'acacia', moduleId: 'CSR', role: 'CONTROLLER' }),
+    createMembership({ userId: 'awa-operatrice', companyId: 'acacia', moduleId: 'CSR', role: 'OPERATOR' })
+  ],
   activeCompany: 'acacia',
   selectedDossier: 'acacia-25-csr',
   companies: {
@@ -141,7 +153,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -209,6 +221,10 @@ function hydrateAppState() {
   if (!appState.accountingSetups || typeof appState.accountingSetups !== 'object' || Array.isArray(appState.accountingSetups)) appState.accountingSetups = {};
   if (!appState.thirdParties || typeof appState.thirdParties !== 'object' || Array.isArray(appState.thirdParties)) appState.thirdParties = {};
   if (!appState.bankMovements || !Array.isArray(appState.bankMovements)) appState.bankMovements = [];
+  if (!Array.isArray(appState.users) || !appState.users.length) appState.users = [createUser({ id: 'claire-dossou', name: 'Claire Dossou', email: 'claire@acacia.bj' })];
+  if (!Array.isArray(appState.memberships)) appState.memberships = [];
+  if (!appState.currentUserId || !appState.users.some((user) => user.id === appState.currentUserId)) appState.currentUserId = appState.users[0].id;
+  if (!appState.memberships.length) appState.memberships.push(createMembership({ userId: 'claire-dossou', companyId: appState.activeCompany, moduleId: 'CSR', role: 'ADMIN' }));
 }
 
 async function loadFullSyscohadaPlan() {
@@ -396,8 +412,8 @@ const CONFIG_GROUPS = {
     label: 'Utilisateurs & accès',
     description: 'Attribuez des rôles par société et, à terme, par fonction du module CSR.',
     actions: [
-      { label: 'Utilisateurs de la société', description: 'Inviter, retirer ou modifier un accès', symbol: 'U', tone: 'purple', action: 'companies' },
-      { label: 'Rôles et permissions', description: 'Saisie, contrôle, validation, clôture et lecture', symbol: '✓', tone: 'green', action: 'placeholder' },
+      { label: 'Utilisateurs de la société', description: 'Inviter, retirer ou modifier un accès', symbol: 'U', tone: 'purple', action: 'access' },
+      { label: 'Rôles et permissions', description: 'Saisie, contrôle, validation, clôture et lecture', symbol: '✓', tone: 'green', action: 'access' },
       { label: 'Journal des connexions', description: 'Consulter les accès et actions sensibles', symbol: '◷', tone: 'blue', action: 'placeholder' }
     ]
   },
@@ -585,6 +601,48 @@ function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
 
+function currentUser() {
+  return appState.users.find((user) => user.id === appState.currentUserId) || appState.users[0] || { id: 'anonymous', name: 'Utilisateur', email: '' };
+}
+
+function currentMembership(companyId = appState.activeCompany, moduleId = 'CSR') {
+  return (appState.memberships || []).find((membership) => membership.userId === appState.currentUserId && membership.companyId === companyId && membership.moduleId === moduleId && membership.active !== false) || null;
+}
+
+function renderCurrentUser() {
+  const user = currentUser();
+  const membership = currentMembership();
+  const initials = user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  $$('[data-current-user-name]').forEach((node) => { node.textContent = user.name; });
+  $$('[data-current-user-role]').forEach((node) => { node.textContent = roleLabel(membership?.role); });
+  $$('[data-current-user-avatar]').forEach((node) => { node.textContent = initials; });
+}
+
+function can(permission, { companyId = appState.activeCompany, moduleId = 'CSR' } = {}) {
+  return Boolean(currentMembership(companyId, moduleId)?.role && hasMembershipPermission(currentMembership(companyId, moduleId), permission));
+}
+
+function hasMembershipPermission(membership, permission) {
+  try {
+    return assertPermission(membership, permission) === true;
+  } catch {
+    return false;
+  }
+}
+
+function requirePermission(permission, { companyId = appState.activeCompany, moduleId = 'CSR' } = {}) {
+  const membership = currentMembership(companyId, moduleId);
+  if (!membership || !hasMembershipPermission(membership, permission)) {
+    showToast(`Action refusée pour le rôle « ${roleLabel(membership?.role)} ».`);
+    return false;
+  }
+  return true;
+}
+
+function companyModuleAccess(companyId, moduleId = 'CSR') {
+  return (appState.memberships || []).some((membership) => membership.userId === appState.currentUserId && membership.companyId === companyId && membership.moduleId === moduleId && membership.active !== false);
+}
+
 function companyAvatarClass(company) {
   return company.color === 'teal' ? 'avatar-teal' : company.color === 'purple' ? 'avatar-purple' : 'avatar-orange';
 }
@@ -618,7 +676,10 @@ function toggleOtherLegalForm() {
 function setActiveCompany(companyId, notify = true) {
   const company = appState.companies[companyId];
   if (!company) return;
+  const hasAccess = (appState.memberships || []).some((membership) => membership.userId === appState.currentUserId && membership.companyId === companyId && membership.active !== false);
+  if (!hasAccess) { showToast('Vous n’avez aucun accès à cette société.'); return; }
   appState.activeCompany = companyId;
+  renderCurrentUser();
   appState.exportDraft = null;
   appState.fecDraft = null;
   pendingExportRows = null;
@@ -675,6 +736,7 @@ function setActiveCompany(companyId, notify = true) {
   renderStatements();
   renderExportAssistant();
   renderFecAssistant();
+  renderAccessView();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -696,8 +758,9 @@ function renderDossiers(query = $('#dossierSearch')?.value || '') {
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDossiers = appState.dossiers.filter((dossier) => {
     const company = appState.companies[dossier.companyId];
-    const module = dossier.moduleId ? MODULES[dossier.moduleId] : { label: 'Aucun module activé', shortLabel: 'À configurer' };
-    return !normalizedQuery || [dossier.dossier, dossier.period, company?.name, module.label, dossier.moduleId].join(' ').toLowerCase().includes(normalizedQuery);
+    const module = dossier.moduleId ? (MODULES[dossier.moduleId] || { label: 'Module', shortLabel: dossier.moduleId }) : { label: 'Aucun module activé', shortLabel: 'À configurer' };
+    const access = dossier.moduleId ? companyModuleAccess(dossier.companyId, dossier.moduleId) : (appState.memberships || []).some((membership) => membership.userId === appState.currentUserId && membership.companyId === dossier.companyId && membership.active !== false);
+    return access && (!normalizedQuery || [dossier.dossier, dossier.period, company?.name, module.label, dossier.moduleId].join(' ').toLowerCase().includes(normalizedQuery));
   });
   rows.innerHTML = visibleDossiers.map((dossier) => {
     const company = appState.companies[dossier.companyId] || { name: 'Société inconnue', shortName: '??', color: 'teal', type: 'Dossier comptable' };
@@ -706,7 +769,7 @@ function renderDossiers(query = $('#dossierSearch')?.value || '') {
     const moduleClass = dossier.moduleId ? `module-table-${module.color}` : 'module-table-muted';
     return `<tr class="${isSelected ? 'is-selected' : ''}" data-dossier-id="${escapeHtml(dossier.id)}" tabindex="0" role="button" aria-label="Sélectionner ${escapeHtml(dossier.dossier)} ${escapeHtml(module.shortLabel)}"><td><span class="dossier-code-icon ${company.color === 'orange' ? 'dossier-code-orange' : 'dossier-code-teal'}">${escapeHtml(company.shortName)}</span><span class="dossier-code"><b>${escapeHtml(dossier.dossier)}</b><small>${dossier.moduleId ? 'Dossier · module rattaché' : 'Dossier · à configurer'}</small></span></td><td><span class="module-table-cell"><i class="module-table-mark ${moduleClass}">${escapeHtml(dossier.moduleId || '—')}</i><span><b>${escapeHtml(module.shortLabel)}</b><small>${escapeHtml(module.label)}</small></span></span></td><td><span class="company-name-cell">${escapeHtml(company.name)}</span><small class="cell-subtitle">${escapeHtml(company.activity || company.type || 'Dossier comptable')}</small></td><td>${escapeHtml(dossier.period)}</td><td><span class="session-count">${dossier.sessions ? dossier.sessions : '—'}</span></td><td><span class="status ${dossier.statusClass || 'status-green'}">${escapeHtml(dossier.status)}</span></td></tr>`;
   }).join('');
-  const activeRecords = appState.dossiers.filter((dossier) => dossier.status !== 'Archivé');
+  const activeRecords = visibleDossiers.filter((dossier) => dossier.status !== 'Archivé');
   const uniqueDossiers = new Set(activeRecords.map((dossier) => `${dossier.companyId}:${dossier.dossier}`));
   const activeModules = activeRecords.filter((dossier) => dossier.moduleId).length;
   const countNode = $('#dossierCount');
@@ -938,6 +1001,17 @@ function bindAuthForm() {
 
 function authenticate(event) {
   event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const email = String(formData.get('email') || '').trim().toLowerCase();
+  const user = appState.users.find((item) => item.email === email && item.active !== false);
+  if (!user) { showToast('Compte inconnu ou désactivé dans cet espace de travail.'); return; }
+  appState.currentUserId = user.id;
+  const firstAccessibleMembership = (appState.memberships || []).find((membership) => membership.userId === user.id && membership.active !== false);
+  if (!(appState.memberships || []).some((membership) => membership.userId === user.id && membership.companyId === appState.activeCompany && membership.active !== false) && firstAccessibleMembership) appState.activeCompany = firstAccessibleMembership.companyId;
+  const firstAccessibleDossier = (appState.dossiers || []).find((dossier) => dossier.companyId === appState.activeCompany && (dossier.moduleId ? companyModuleAccess(dossier.companyId, dossier.moduleId) : true) && dossier.status !== 'Archivé');
+  if (firstAccessibleDossier) appState.selectedDossier = firstAccessibleDossier.id;
+  renderCurrentUser();
+  persistAppState();
   try {
     showDossiers();
   } catch (error) {
@@ -1433,6 +1507,7 @@ function openFecCorrection(entryId, lineNumber = 1) {
 
 function saveFecCorrection(event) {
   event.preventDefault();
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_CORRECT)) return;
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const entryId = $('#fecCorrectionEntryId').value;
@@ -1499,7 +1574,7 @@ function renderFecResult(prepared, returnOnly = false) {
   if (!prepared) return '';
   const draft = prepared.fecDraft || appState.fecDraft || defaultFecDraft();
   const official = draft.mode !== 'DIAGNOSTIC';
-  const canGenerate = prepared.valid || !official || draft.mode === 'OFFICIAL_REPORT';
+  const canGenerate = (prepared.valid || !official || draft.mode === 'OFFICIAL_REPORT') && can(USER_PERMISSIONS.EXPORTS_CREATE);
   const demoLabel = prepared.demo ? 'Jeu annuel de test : aucune donnée de votre comptabilité n’a été modifiée.' : '';
   const fileIssues = prepared.fileValidation?.errors || [];
   const fileWarnings = prepared.fileValidation?.warnings || [];
@@ -1565,6 +1640,7 @@ function buildFecManifest({ base, draft, company, prepared, payloads, packageHas
 }
 
 async function generateFec() {
+  if (!requirePermission(USER_PERMISSIONS.EXPORTS_CREATE)) return;
   const prepared = fecPrepared || prepareFecFromForm();
   if (!prepared) return;
   const draft = prepared.fecDraft || readFecForm();
@@ -2114,6 +2190,7 @@ function openThirdPartyModal(thirdPartyId = null) {
 
 function saveThirdParty(event) {
   event.preventDefault();
+  if (!requirePermission(USER_PERMISSIONS.SETTINGS_MANAGE)) return;
   const formData = new FormData(event.currentTarget);
   const existing = editingThirdPartyId ? currentThirdParties().find((item) => item.id === editingThirdPartyId) : null;
   const type = String(formData.get('thirdpartyType') || existing?.type || currentThirdpartyType);
@@ -2373,6 +2450,7 @@ function clearPayment() {
 }
 
 function postPayment() {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_CREATE)) return;
   if (!ensureActivePeriodOpen()) return;
   try {
     const payment = buildPaymentDraft();
@@ -2485,6 +2563,7 @@ function resetInvoice(type) {
 }
 
 function saveInvoiceDocument(type, post = false) {
+  if (post && !requirePermission(USER_PERMISSIONS.ENTRIES_CREATE)) return;
   if (post && !ensureActivePeriodOpen()) return;
   const config = invoiceConfig(type);
   try {
@@ -2629,6 +2708,7 @@ function openJournalModal(journalId = null) {
 
 function saveJournal(event) {
   event.preventDefault();
+  if (!requirePermission(USER_PERMISSIONS.SETTINGS_MANAGE)) return;
   const formData = new FormData(event.currentTarget);
   const setup = currentAccountSetup();
   const journal = { id: formData.get('journalId'), label: formData.get('journalLabel'), type: formData.get('journalType'), prefix: formData.get('journalPrefix'), nextNumber: formData.get('journalNextNumber'), active: true, isCustom: true };
@@ -2686,6 +2766,7 @@ function openAccountModal(accountId = null) {
 
 function saveAccount(event) {
   event.preventDefault();
+  if (!requirePermission(USER_PERMISSIONS.SETTINGS_MANAGE)) return;
   const formData = new FormData(event.currentTarget);
   const setup = currentAccountSetup();
   const account = { id: formData.get('accountId'), label: formData.get('accountLabel'), nature: formData.get('accountNature'), isCustom: true, active: true };
@@ -2952,11 +3033,12 @@ function renderOpening() {
   const opened = Boolean(preview.opened);
   if (badge) { badge.innerHTML = `<i></i> ${opened ? 'Exercice ouvert' : generated ? 'Reports à contrôler' : finalized ? 'Prêt à générer' : 'En attente de l’arrêté'}`; badge.className = `opening-status-badge ${finalized || opened ? 'is-ready' : ''}`; }
   if (lock) lock.textContent = opened ? `Exercice ${year.id} ouvert` : generated ? 'Reports à contrôler' : finalized ? `Exercice ${year.id} arrêté` : `Exercice ${year.id} ouvert`;
-  if (button) { button.disabled = !finalized || generated || !preview.lines.length; button.textContent = generated ? 'Reports générés' : finalized ? 'Générer les reports' : 'Attente de l’arrêté'; }
-  if (validateButton) { validateButton.disabled = !generated || opened || preview.run?.status === 'VALIDATED'; validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
+  if (button) { button.disabled = !finalized || generated || !preview.lines.length || !can(USER_PERMISSIONS.OPENING_GENERATE); button.textContent = generated ? 'Reports générés' : finalized ? 'Générer les reports' : 'Attente de l’arrêté'; }
+  if (validateButton) { validateButton.disabled = !generated || opened || preview.run?.status === 'VALIDATED' || !can(USER_PERMISSIONS.OPENING_VALIDATE); validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
 }
 
 function generateOpeningBalances() {
+  if (!requirePermission(USER_PERMISSIONS.OPENING_GENERATE)) return;
   const year = currentFiscalYear();
   if (year.status !== 'FINALIZED') { showToast('L’exercice doit être arrêté avant de générer les reports à nouveau.'); return; }
   const preview = openingBalancePreview();
@@ -2977,6 +3059,7 @@ function generateOpeningBalances() {
 }
 
 function validateOpeningAndOpen() {
+  if (!requirePermission(USER_PERMISSIONS.OPENING_VALIDATE)) return;
   const year = currentFiscalYear();
   const preview = openingBalancePreview();
   const run = preview.run;
@@ -3054,6 +3137,7 @@ function currentFinancialSnapshot() {
 }
 
 async function prepareFinalSnapshot() {
+  if (!requirePermission(USER_PERMISSIONS.FISCAL_SNAPSHOT)) return;
   const year = currentFiscalYear();
   if (year.status === 'FINALIZED') { showToast('L’exercice est déjà arrêté ; son instantané est verrouillé.'); return; }
   const entries = officialEntriesForYear(year.id);
@@ -3113,15 +3197,16 @@ function renderFinalization() {
   if (snapshotState) snapshotState.textContent = snapshot ? `Scellé · SHA-256 ${String(snapshot.snapshotHash || '').slice(0, 12)}…` : 'À préparer après les contrôles';
   $('#finalizationMessage').textContent = year.status === 'FINALIZED' ? 'L’exercice est arrêté et son état est verrouillé.' : evaluation.valid ? 'Tous les contrôles sont satisfaits. L’exercice peut être arrêté.' : 'L’exercice reste ouvert tant que les contrôles bloquants ne sont pas terminés.';
   const snapshotButton = $('#prepareSnapshotButton');
-  if (snapshotButton) { snapshotButton.disabled = year.status === 'FINALIZED'; snapshotButton.textContent = year.status === 'FINALIZED' ? 'Instantané scellé' : snapshot ? 'Instantané préparé' : 'Préparer l’instantané'; }
+  if (snapshotButton) { snapshotButton.disabled = year.status === 'FINALIZED' || !can(USER_PERMISSIONS.FISCAL_SNAPSHOT); snapshotButton.textContent = year.status === 'FINALIZED' ? 'Instantané scellé' : snapshot ? 'Instantané préparé' : 'Préparer l’instantané'; }
   const button = $('#finalizeYearButton');
-  button.disabled = year.status === 'FINALIZED' || !evaluation.valid;
+  button.disabled = year.status === 'FINALIZED' || !evaluation.valid || !can(USER_PERMISSIONS.FISCAL_FINALIZE);
   button.textContent = year.status === 'FINALIZED' ? 'Exercice arrêté' : 'Arrêter l’exercice';
   const badge = $('#fiscalYearStatusBadge');
   if (badge) { badge.innerHTML = `<i></i> ${year.status === 'FINALIZED' ? 'Exercice arrêté' : 'Exercice ouvert'}`; badge.classList.toggle('is-finalized', year.status === 'FINALIZED'); }
 }
 
 function finalizeCurrentYear() {
+  if (!requirePermission(USER_PERMISSIONS.FISCAL_FINALIZE)) return;
   const year = currentFiscalYear();
   const snapshot = currentFinancialSnapshot();
   if (!snapshot) { showToast('Préparez l’instantané officiel avant l’arrêté.'); return; }
@@ -3177,7 +3262,7 @@ function renderClosure() {
   $('#closureScore small').textContent = `sur ${evaluation.totalCount} contrôles`;
   $('#closureSideMessage').textContent = period.status === 'CLOSED' ? 'La période est clôturée et les écritures sont verrouillées.' : evaluation.valid ? 'Tous les contrôles bloquants sont résolus.' : 'La période ne peut pas encore être clôturée.';
   const button = $('#closePeriodButton');
-  button.disabled = period.status === 'CLOSED' || !evaluation.valid;
+  button.disabled = period.status === 'CLOSED' || !evaluation.valid || !can(USER_PERMISSIONS.PERIODS_CLOSE);
   button.textContent = period.status === 'CLOSED' ? 'Période clôturée' : 'Clôturer la période';
   const badge = $('#closePeriodBadge');
   if (badge) { badge.innerHTML = `<i></i> ${period.status === 'CLOSED' ? 'Période clôturée' : 'Période ouverte'}`; badge.classList.toggle('is-closed', period.status === 'CLOSED'); }
@@ -3189,6 +3274,7 @@ function refreshClosure() {
 }
 
 function closeCurrentPeriod() {
+  if (!requirePermission(USER_PERMISSIONS.PERIODS_CLOSE)) return;
   const period = currentPeriod();
   try {
     const closed = closePeriod(period, { checks: currentClosureChecks(), userId: 'claire-dossou' });
@@ -3254,6 +3340,7 @@ function renderEntryQueue() {
 }
 
 function validateRecentEntry(entryId) {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_VALIDATE)) return;
   const entryIndex = appState.recentEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (entryIndex < 0) return;
   const entry = appState.recentEntries[entryIndex];
@@ -3271,6 +3358,7 @@ function validateRecentEntry(entryId) {
 }
 
 function deleteRecentEntry(entryId) {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_CORRECT)) return;
   const entry = appState.recentEntries.find((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (!entry) return;
   const window = activeCorrectionWindow();
@@ -3504,6 +3592,7 @@ function ensureActivePeriodOpen() {
 }
 
 function insertEntry() {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_CREATE)) return;
   if (!ensureActivePeriodOpen()) return;
   const operation = entryOperation();
   let suggestion;
@@ -3567,6 +3656,34 @@ function handleFichierAction(action) {
   if (action === 'close') showLogin();
 }
 
+function renderAccessView() {
+  const company = appState.companies[appState.activeCompany];
+  const rows = $('#accessRows');
+  if (!company || !rows) return;
+  const memberships = (appState.memberships || []).filter((membership) => membership.companyId === appState.activeCompany && membership.moduleId === 'CSR' && membership.active !== false);
+  rows.innerHTML = memberships.map((membership) => {
+    const user = appState.users.find((item) => item.id === membership.userId) || { name: 'Utilisateur inconnu', email: '' };
+    const role = roleLabel(membership.role);
+    const initials = user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+    const permissions = membership.role === USER_ROLES.ADMIN ? 'Toutes les permissions' : membership.role === USER_ROLES.CONTROLLER ? 'Contrôle, validation, clôture et exports' : membership.role === USER_ROLES.OPERATOR ? 'Saisie des opérations' : 'Consultation et exports';
+    return `<tr><td><span class="access-user-cell"><i class="avatar avatar-purple">${escapeHtml(initials)}</i><span><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></span></span></td><td><span class="role role-${membership.role.toLowerCase()}">${escapeHtml(role)}</span></td><td>${escapeHtml(permissions)}</td><td><span class="status status-green">Actif</span></td></tr>`;
+  }).join('');
+  if (!memberships.length) rows.innerHTML = '<tr><td colspan="4" class="dossier-empty">Aucun accès CSR configuré pour cette société.</td></tr>';
+  const current = currentMembership();
+  $('#accessCompanyName').textContent = company.name;
+  $('#accessCurrentRole').textContent = roleLabel(current?.role);
+  $('#accessMemberCount').textContent = String(memberships.length);
+  $('#accessPermissionCount').textContent = String(current ? permissionsForCurrentMembership(current).length : 0);
+  const manageButton = $('#inviteMemberButton');
+  if (manageButton) manageButton.disabled = !can(USER_PERMISSIONS.USERS_MANAGE);
+}
+
+function permissionsForCurrentMembership(membership) {
+  const permissions = [];
+  Object.values(USER_PERMISSIONS).forEach((permission) => { if (hasMembershipPermission(membership, permission)) permissions.push(permission); });
+  return permissions;
+}
+
 function renderConfigurationGroup(groupId = 'societe') {
   const group = CONFIG_GROUPS[groupId] || CONFIG_GROUPS.societe;
   const label = $('#configurationSelectedLabel');
@@ -3581,6 +3698,7 @@ function renderConfigurationGroup(groupId = 'societe') {
 
 function handleConfigurationAction(action) {
   if (action === 'companies') openView('companies');
+  if (action === 'access') { openView('access'); renderAccessView(); }
   if (action === 'periods') openView('periods');
   if (action === 'thirdparties-client') { currentThirdpartyType = THIRD_PARTY_TYPES.CLIENT; openView('thirdparties'); renderThirdpartyList(); }
   if (action === 'thirdparties-supplier') { currentThirdpartyType = THIRD_PARTY_TYPES.SUPPLIER; openView('thirdparties'); renderThirdpartyList(); }

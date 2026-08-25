@@ -100,7 +100,7 @@ La suite vérifie :
 ## Limites assumées de cette tranche
 
 - aucune base SQLite n’est encore branchée ;
-- aucune authentification desktop n’est implémentée ;
+- l’authentification réelle n’est pas encore branchée, mais le modèle de session, les utilisateurs et les permissions par société/module sont déjà présents dans le prototype ;
 - les règles fiscales béninoises ne sont pas codées ;
 - le plan SYSCOHADA livré reste à importer depuis une source validée ;
 - les fichiers Excel `.xls`, `.xlsx`, `.xlsm` et `.xlsb` ne sont pas encore lus par le noyau ;

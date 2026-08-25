@@ -74,7 +74,7 @@ Le partage est sélectif, jamais implicite.
 - identité de l’entreprise ;
 - adresse et IFU ;
 - utilisateurs ;
-- rôles et permissions ;
+- rôles et permissions par utilisateur, société et module ;
 - pièces jointes autorisées ;
 - paramètres d’espace de travail.
 
@@ -113,7 +113,7 @@ Le socle doit séparer :
 Toutes les opérations métier devront vérifier simultanément :
 
 ```text
-workspace_id → company_id → dossier_id → module_id → permission
+workspace_id → user_id → company_id → dossier_id → module_id → permission
 ```
 
 Ainsi, une écriture CSR ne pourra pas être créée depuis un module non activé, un dossier différent ou une société différente.

@@ -33,7 +33,8 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - assistant d’exportation guidé avec périmètre, informations de sortie, vérification et historique ;
 - comptabilité générale, trésorerie et facturation comme base du futur MVP ;
 - devise de travail : FCFA/XOF ;
-- paramètres comptables et fiscaux béninois configurables et validables par un professionnel.
+- paramètres comptables et fiscaux béninois configurables et validables par un professionnel ;
+- socle de permissions par utilisateur, société et module CSR.
 
 ## Maquettes UX
 

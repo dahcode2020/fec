@@ -48,6 +48,12 @@ import {
   deleteCorrectionCandidate,
   registerCorrectionCandidate,
   createWorkspace,
+  createUser,
+  createMembership,
+  assertPermission,
+  hasPermission,
+  USER_PERMISSIONS,
+  USER_ROLES,
   depreciationEntry,
   exportAccountPlanTxt,
   exportBalanceTxt,
@@ -535,4 +541,15 @@ test('scelle un paquet FEC ZIP avec plusieurs fichiers sans compression destruct
   assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.txt'));
   assert.ok(new TextDecoder().decode(archive).includes('FEC_3201900045612_20251231.notice.txt'));
   assert.throws(() => createZipArchive([{ name: '../unsafe.txt', bytes: new Uint8Array() }]), (error) => error.code === 'FEC_ARCHIVE_INVALID_NAME');
+});
+
+test('isole les permissions par utilisateur, société et module', () => {
+  const user = createUser({ id: 'u-1', name: 'Opérateur test', email: 'operator@test.bj' });
+  const operator = createMembership({ userId: user.id, companyId: 'co-a', moduleId: 'CSR', role: USER_ROLES.OPERATOR });
+  const reader = createMembership({ userId: user.id, companyId: 'co-b', moduleId: 'CSR', role: USER_ROLES.READER });
+  assert.equal(hasPermission(operator, USER_PERMISSIONS.ENTRIES_CREATE), true);
+  assert.equal(hasPermission(operator, USER_PERMISSIONS.FISCAL_FINALIZE), false);
+  assert.equal(hasPermission(reader, USER_PERMISSIONS.READ), true);
+  assert.equal(hasPermission(reader, USER_PERMISSIONS.ENTRIES_CREATE), false);
+  assert.throws(() => assertPermission(operator, USER_PERMISSIONS.FISCAL_FINALIZE), (error) => error.code === 'PERMISSION_DENIED');
 });
