@@ -20,6 +20,7 @@ import {
   updateJournalInSetup,
   calculateDocumentTotals,
   calculateFiscalResult,
+  calculateOpeningBalances,
   closePeriod,
   createMonthlyPeriods,
   evaluatePeriodClosure,
@@ -224,6 +225,17 @@ test('calcule le résultat fiscal et l’impôt sans taux implicite', () => {
   assert.equal(taxed.taxableResult, 211500);
   assert.equal(taxed.tax, 63450);
   assert.equal(taxed.netResult, 148050);
+});
+
+test('prépare les reports à nouveau des comptes de bilan', () => {
+  const result = calculateOpeningBalances([
+    { id: 'sale', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '411101', label: 'Client', debit: 250000, credit: 0 }, { accountId: '7061', label: 'Vente', debit: 0, credit: 250000 }] },
+    { id: 'bank', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '5211', label: 'Banque', debit: 0, credit: 100000 }, { accountId: '401101', label: 'Fournisseur', debit: 100000, credit: 0 }] }
+  ], { companyId: 'co-a', sourceYear: '2025' });
+  assert.equal(result.sourceEntryIds.length, 2);
+  assert.equal(result.totalDebit, result.totalCredit);
+  assert.equal(result.lines.some((line) => line.accountId === '7061'), false);
+  assert.equal(result.lines.some((line) => line.accountId === '411101' && line.debit === 250000), true);
 });
 
 test('pointe et rapproche un mouvement bancaire avec une écriture', () => {

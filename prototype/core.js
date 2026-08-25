@@ -49,12 +49,13 @@ export const INTEGRATED_JOURNAL_CATEGORIES = Object.freeze({
   AMORTISSEMENTS: Object.freeze({ label: 'Amortissements automatiques', shortLabel: 'Amortissements' }),
   CENTRALISATION: Object.freeze({ label: 'Centralisations', shortLabel: 'Centralisation' }),
   ABONNEMENTS: Object.freeze({ label: 'Abonnements', shortLabel: 'Abonnements' }),
-  RESULTAT: Object.freeze({ label: 'Résultat de la période', shortLabel: 'Résultat' })
+  RESULTAT: Object.freeze({ label: 'Résultat de la période', shortLabel: 'Résultat' }),
+  REPORTS_A_NOUVEAU: Object.freeze({ label: 'Reports à nouveau', shortLabel: 'À-nouveaux' })
 });
 
 export function classifyIntegratedEntry(entry = {}) {
   const explicit = String(entry.integrationCategory || entry.categoryId || '').toUpperCase();
-  const aliases = { AMORT: 'AMORTISSEMENTS', DEPRECIATION: 'AMORTISSEMENTS', AUTOMATIC_DEPRECIATION: 'AMORTISSEMENTS', CENTRALIZATION: 'CENTRALISATION', SUBSCRIPTION: 'ABONNEMENTS', ABONNEMENT: 'ABONNEMENTS', PERIOD_RESULT: 'RESULTAT', RESULT: 'RESULTAT' };
+  const aliases = { AMORT: 'AMORTISSEMENTS', DEPRECIATION: 'AMORTISSEMENTS', AUTOMATIC_DEPRECIATION: 'AMORTISSEMENTS', CENTRALIZATION: 'CENTRALISATION', SUBSCRIPTION: 'ABONNEMENTS', ABONNEMENT: 'ABONNEMENTS', PERIOD_RESULT: 'RESULTAT', RESULT: 'RESULTAT', RAN: 'REPORTS_A_NOUVEAU', OPENING_BALANCE: 'REPORTS_A_NOUVEAU' };
   if (INTEGRATED_JOURNAL_CATEGORIES[explicit]) return explicit;
   if (aliases[explicit]) return aliases[explicit];
   const source = `${entry.source || ''} ${entry.label || ''}`.toLowerCase();
@@ -170,15 +171,17 @@ export const DEFAULT_CSR_JOURNALS = Object.freeze([
   Object.freeze({ id: 'AM', label: 'Amortissements automatiques', type: 'AMORTISSEMENTS', prefix: 'AM-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
   Object.freeze({ id: 'AB', label: 'Abonnements', type: 'ABONNEMENTS', prefix: 'AB-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
   Object.freeze({ id: 'CT', label: 'Centralisations', type: 'CENTRALISATIONS', prefix: 'CT-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
-  Object.freeze({ id: 'RP', label: 'Résultat de la période', type: 'RESULTAT_PERIODE', prefix: 'RP-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true })
+  Object.freeze({ id: 'RP', label: 'Résultat de la période', type: 'RESULTAT_PERIODE', prefix: 'RP-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true }),
+  Object.freeze({ id: 'AN', label: 'À-nouveaux', type: 'REPORTS_A_NOUVEAU', prefix: 'AN-', nextNumber: 1, active: true, isCustom: false, systemGenerated: true })
 ]);
 
-export const SYSTEM_JOURNAL_IDS = Object.freeze(['AM', 'AB', 'CT', 'RP']);
+export const SYSTEM_JOURNAL_IDS = Object.freeze(['AM', 'AB', 'CT', 'RP', 'AN']);
 export const SYSTEM_JOURNAL_BY_CATEGORY = Object.freeze({
   AMORTISSEMENTS: 'AM',
   ABONNEMENTS: 'AB',
   CENTRALISATION: 'CT',
-  RESULTAT: 'RP'
+  RESULTAT: 'RP',
+  REPORTS_A_NOUVEAU: 'AN'
 });
 
 export function createCsrSetup({ companyId, regime = 'NORMAL', planVersion = 'SYSCOHADA-RÉVISÉ' } = {}) {
@@ -450,6 +453,40 @@ export function requestPeriodReopen(period, { userId = null, reason = '' } = {})
   if (!period?.id || period.status !== PERIOD_STATUSES.CLOSED) throw new DomainError('Seule une période clôturée peut demander une réouverture.', 'PERIOD_NOT_CLOSED');
   if (!reason.trim()) throw new DomainError('Le motif de réouverture est obligatoire.', 'MISSING_REOPEN_REASON');
   return { ...period, status: PERIOD_STATUSES.REOPEN_REQUESTED, reopenRequestedAt: new Date().toISOString(), reopenRequestedBy: userId, reopenReason: reason.trim() };
+}
+
+export function calculateOpeningBalances(entries = [], { companyId, sourceYear } = {}) {
+  const byAccount = new Map();
+  const sourceEntryIds = [];
+  let totalCharges = 0;
+  let totalProducts = 0;
+  entries.filter((entry) => entry.companyId === companyId && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && entry.status !== OPERATION_STATES.DRAFT && (!sourceYear || String(entry.date).startsWith(String(sourceYear))) && Array.isArray(entry.lines)).forEach((entry) => {
+    let contributes = false;
+    entry.lines.forEach((line) => {
+      const accountId = normalizeAccountNumber(line.accountId);
+      const debit = Number(line.debit || 0);
+      const credit = Number(line.credit || 0);
+      if (accountId.startsWith('6')) totalCharges += debit;
+      if (accountId.startsWith('7')) totalProducts += credit;
+      if (!/^[1-5]/.test(accountId)) return;
+      const current = byAccount.get(accountId) || { accountId, label: line.label, debit: 0, credit: 0 };
+      current.debit += debit;
+      current.credit += credit;
+      byAccount.set(accountId, current);
+      contributes = true;
+    });
+    if (contributes) sourceEntryIds.push(entry.id);
+  });
+  const lines = [];
+  byAccount.forEach((line) => {
+    const balance = Math.round((line.debit - line.credit) * 100) / 100;
+    if (balance > 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: balance, credit: 0 });
+    if (balance < 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: 0, credit: Math.abs(balance) });
+  });
+  const result = Math.round((totalProducts - totalCharges) * 100) / 100;
+  if (result > 0) lines.push({ accountId: '131', label: 'À-nouveau — résultat bénéficiaire', debit: 0, credit: result });
+  if (result < 0) lines.push({ accountId: '139', label: 'À-nouveau — résultat déficitaire', debit: Math.abs(result), credit: 0 });
+  return { companyId, sourceYear, sourceEntryIds, lines, totalDebit: lines.reduce((sum, line) => sum + line.debit, 0), totalCredit: lines.reduce((sum, line) => sum + line.credit, 0) };
 }
 
 export function centralizeEntries(entries = [], { companyId, period = null, sourceJournalIds = [] } = {}) {

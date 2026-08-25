@@ -442,6 +442,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 22. **Travaux périodiques CSR** — amortissements, abonnements, centralisations, résultat et traitements de période.
 23. **Clôture périodique CSR** — checklist, verrouillage et réouverture contrôlée.
 24. **Arrêté définitif CSR** — contrôle annuel, archivage des états et préparation des reports à nouveau.
+25. **Reports à nouveau CSR** — soldes d’ouverture et ouverture contrôlée de l’exercice suivant.
 
 ### Règles UX
 
