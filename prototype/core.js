@@ -143,18 +143,18 @@ export function addCompany(workspace, company) {
 }
 
 export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
-  Object.freeze({ id: '411000', label: 'Clients' }),
-  Object.freeze({ id: '401000', label: 'Fournisseurs' }),
-  Object.freeze({ id: '601000', label: 'Achats de marchandises' }),
-  Object.freeze({ id: '606000', label: 'Achats de fournitures' }),
-  Object.freeze({ id: '627000', label: 'Services bancaires' }),
-  Object.freeze({ id: '628000', label: 'Abonnements' }),
-  Object.freeze({ id: '512000', label: 'Banque' }),
-  Object.freeze({ id: '571000', label: 'Caisse' }),
-  Object.freeze({ id: '681000', label: 'Dotations aux amortissements' }),
-  Object.freeze({ id: '284500', label: 'Amortissements du matériel' }),
-  Object.freeze({ id: '445700', label: 'TVA collectée' }),
-  Object.freeze({ id: '706000', label: 'Services vendus' })
+  Object.freeze({ id: '411000', label: 'Clients', nature: 'Actif / tiers' }),
+  Object.freeze({ id: '401000', label: 'Fournisseurs', nature: 'Passif / tiers' }),
+  Object.freeze({ id: '601000', label: 'Achats de marchandises', nature: 'Charge' }),
+  Object.freeze({ id: '606000', label: 'Achats de fournitures', nature: 'Charge' }),
+  Object.freeze({ id: '627000', label: 'Services bancaires', nature: 'Charge' }),
+  Object.freeze({ id: '628000', label: 'Abonnements', nature: 'Charge' }),
+  Object.freeze({ id: '512000', label: 'Banque', nature: 'Actif / trésorerie' }),
+  Object.freeze({ id: '571000', label: 'Caisse', nature: 'Actif / trésorerie' }),
+  Object.freeze({ id: '681000', label: 'Dotations aux amortissements', nature: 'Charge' }),
+  Object.freeze({ id: '284500', label: 'Amortissements du matériel', nature: 'Correctif d’actif' }),
+  Object.freeze({ id: '445700', label: 'TVA collectée', nature: 'Passif / taxe' }),
+  Object.freeze({ id: '706000', label: 'Services vendus', nature: 'Produit' })
 ]);
 
 export const DEFAULT_CSR_JOURNALS = Object.freeze([
@@ -167,7 +167,63 @@ export const DEFAULT_CSR_JOURNALS = Object.freeze([
 
 export function createCsrSetup({ companyId, regime = 'NORMAL', planVersion = 'SYSCOHADA-RÉVISÉ' } = {}) {
   if (!companyId) throw new DomainError('Le paramétrage CSR doit être rattaché à une société.', 'INVALID_CSR_SETUP');
-  return { companyId, regime, planVersion, accounts: DEFAULT_CSR_ACCOUNTS.map((account) => ({ ...account })), journals: DEFAULT_CSR_JOURNALS.map((journal) => ({ ...journal })), createdAt: new Date().toISOString() };
+  return { companyId, regime, planVersion, accounts: DEFAULT_CSR_ACCOUNTS.map((account) => ({ ...account, nature: account.nature || 'À définir', active: true, isCustom: false })), journals: DEFAULT_CSR_JOURNALS.map((journal) => ({ ...journal })), createdAt: new Date().toISOString() };
+}
+
+export function normalizeAccountNumber(value) {
+  return String(value || '').trim().replace(/\s/g, '').toUpperCase();
+}
+
+export function accountClass(accountId) {
+  return normalizeAccountNumber(accountId).slice(0, 1) || '?';
+}
+
+export function validateAccountDefinition(account, { existingAccounts = [] } = {}) {
+  const id = normalizeAccountNumber(account?.id);
+  const label = String(account?.label || '').trim();
+  if (!/^\d{1,8}$/.test(id)) throw new DomainError('Le numéro de compte doit contenir entre 1 et 8 chiffres.', 'INVALID_ACCOUNT_NUMBER');
+  if (!label) throw new DomainError('Le libellé du compte est obligatoire.', 'INVALID_ACCOUNT_LABEL');
+  if (existingAccounts.some((item) => normalizeAccountNumber(item.id) === id)) throw new DomainError(`Le compte ${id} existe déjà.`, 'DUPLICATE_ACCOUNT');
+  return { id, label, nature: String(account.nature || 'À définir').trim(), active: account.active !== false, isCustom: account.isCustom !== false, class: account.class || accountClass(id) };
+}
+
+export function addAccountToPlan(accounts, account) {
+  const normalized = validateAccountDefinition(account, { existingAccounts: accounts });
+  return [...accounts, normalized];
+}
+
+export function updateAccountInPlan(accounts, accountId, patch, { usedAccountIds = [] } = {}) {
+  const id = normalizeAccountNumber(accountId);
+  const index = accounts.findIndex((account) => normalizeAccountNumber(account.id) === id);
+  if (index < 0) throw new DomainError(`Compte inconnu : ${id}`, 'UNKNOWN_ACCOUNT');
+  const current = accounts[index];
+  const nextId = normalizeAccountNumber(patch.id || current.id);
+  if (nextId !== id && usedAccountIds.includes(id)) throw new DomainError('Le numéro d’un compte déjà utilisé ne peut pas être modifié.', 'USED_ACCOUNT_NUMBER_LOCKED');
+  if (nextId !== id && accounts.some((account, accountIndex) => accountIndex !== index && normalizeAccountNumber(account.id) === nextId)) throw new DomainError(`Le compte ${nextId} existe déjà.`, 'DUPLICATE_ACCOUNT');
+  if (!/^\d{1,8}$/.test(nextId)) throw new DomainError('Le numéro de compte doit contenir entre 1 et 8 chiffres.', 'INVALID_ACCOUNT_NUMBER');
+  const updated = { ...current, ...patch, id: nextId, label: String(patch.label ?? current.label).trim(), class: accountClass(nextId) };
+  if (!updated.label) throw new DomainError('Le libellé du compte est obligatoire.', 'INVALID_ACCOUNT_LABEL');
+  return accounts.map((account, accountIndex) => accountIndex === index ? updated : account);
+}
+
+export function importAccountPlanRows(rows, { existingAccounts = [] } = {}) {
+  const imported = [];
+  const errors = [];
+  rows.forEach((row, index) => {
+    try {
+      const account = validateAccountDefinition({ id: row.id, label: row.label, nature: row.nature || 'À définir', isCustom: true }, { existingAccounts: [...existingAccounts, ...imported] });
+      imported.push(account);
+    } catch (error) {
+      errors.push({ row: index + 1, code: error.code, message: error.message });
+    }
+  });
+  return { valid: errors.length === 0, imported, errors, rowCount: rows.length };
+}
+
+export function exportAccountPlanTxt({ companyName = '', planVersion = 'SYSCOHADA-RÉVISÉ', accounts = [], delimiter = ';' } = {}) {
+  const cell = (value) => String(value ?? '').replace(/[;\t\n]/g, ' ');
+  const lines = accounts.map((account) => [account.id, account.label, account.nature || 'À définir', account.active === false ? 'Inactif' : 'Actif'].map(cell).join(delimiter));
+  return [`SOCIETE${delimiter}${cell(companyName)}`, `PLAN${delimiter}${cell(planVersion)}`, '', ['COMPTE', 'LIBELLE', 'NATURE', 'ETAT'].join(delimiter), ...lines].join('\r\n') + '\r\n';
 }
 
 export function companiesFor(workspace, { includeArchived = false } = {}) {

@@ -62,6 +62,8 @@ Le noyau sait créer et synchroniser une vue intégrée du livre journal par soc
 
 Le socle initialise une configuration par société avec le régime comptable, une version du plan SYSCOHADA révisé, les comptes de base et les journaux VE, AC, BQ, CA et OD. Cette liste est un point de départ configurable ; elle devra être remplacée par le référentiel validé du dossier.
 
+L’écran **Configuration → Comptes généraux** permet désormais de rechercher, filtrer, ajouter, modifier de manière contrôlée, importer un plan TXT/CSV et exporter le plan actif.
+
 ### Échanges TXT
 
 Le noyau sait déjà :

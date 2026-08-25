@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DomainError,
+  addAccountToPlan,
   addCompany,
   calculateStraightLinePlan,
   companiesFor,
@@ -12,6 +13,7 @@ import {
   createCsrSetup,
   OPERATION_STATES,
   transitionOperation,
+  updateAccountInPlan,
   createDossier,
   createIntegratedJournal,
   syncIntegratedJournal,
@@ -25,7 +27,9 @@ import {
   registerCorrectionCandidate,
   createWorkspace,
   depreciationEntry,
+  exportAccountPlanTxt,
   exportBalanceTxt,
+  importAccountPlanRows,
   makeDossierCode,
   mapImportedRows,
   parseDelimited,
@@ -65,6 +69,19 @@ test('prépare un paramétrage CSR avec comptes et journaux', () => {
   assert.equal(setup.regime, 'SMT');
   assert.ok(setup.accounts.some((account) => account.id === '411000'));
   assert.ok(setup.journals.some((journal) => journal.id === 'VE'));
+});
+
+test('ajoute, modifie et importe des comptes sans doublon', () => {
+  const setup = createCsrSetup({ companyId: 'co-a' });
+  setup.accounts = addAccountToPlan(setup.accounts, { id: '411100', label: 'Clients secteur public', nature: 'Actif / tiers' });
+  assert.equal(setup.accounts.at(-1).isCustom, true);
+  setup.accounts = updateAccountInPlan(setup.accounts, '411100', { label: 'Clients administrations', nature: 'Actif / tiers' });
+  assert.equal(setup.accounts.at(-1).label, 'Clients administrations');
+  assert.throws(() => updateAccountInPlan(setup.accounts, '411000', { id: '411001' }, { usedAccountIds: ['411000'] }), (error) => error.code === 'USED_ACCOUNT_NUMBER_LOCKED');
+  assert.throws(() => addAccountToPlan(setup.accounts, { id: '411100', label: 'Doublon' }), (error) => error.code === 'DUPLICATE_ACCOUNT');
+  const imported = importAccountPlanRows([{ id: '512100', label: 'Banque locale', nature: 'Actif / trésorerie' }], { existingAccounts: setup.accounts });
+  assert.equal(imported.valid, true);
+  assert.match(exportAccountPlanTxt({ companyName: 'Acacia Conseil', accounts: imported.imported }), /512100/);
 });
 
 test('accepte une imputation multi-lignes équilibrée', () => {

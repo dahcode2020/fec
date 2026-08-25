@@ -1,4 +1,4 @@
-import { calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportBalanceTxt, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, validateJournalEntry, OPERATION_STATES } from './core.js';
+import { accountClass, addAccountToPlan, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, validateJournalEntry, OPERATION_STATES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -83,7 +83,13 @@ function hydrateAppState() {
     if (saved[key] !== undefined) appState[key] = saved[key];
   });
   Object.keys(appState.companies).forEach((companyId) => {
-    if (!appState.accountingSetups?.[companyId]) appState.accountingSetups[companyId] = createCsrSetup({ companyId });
+    const defaults = createCsrSetup({ companyId });
+    const existing = appState.accountingSetups?.[companyId];
+    if (!existing) appState.accountingSetups[companyId] = defaults;
+    else {
+      existing.accounts = Array.from(new Map([...defaults.accounts, ...(existing.accounts || [])].map((account) => [account.id, account])).values());
+      existing.journals = existing.journals?.length ? existing.journals : defaults.journals;
+    }
   });
   if (!appState.correctionWindows) appState.correctionWindows = {};
   if (!appState.recentEntries) appState.recentEntries = [];
@@ -177,9 +183,9 @@ const CONFIG_GROUPS = {
     label: 'Comptes généraux',
     description: 'Plan Comptable SYSCOHADA Révisé : complétez et adaptez vos comptes aux besoins de votre société.',
     actions: [
-      { label: 'Comptes Généraux (Plan Comptable Syscohada Révisé)', description: 'Consulter le plan et rechercher un compte', symbol: '▤', tone: 'green', action: 'placeholder' },
-      { label: 'Ajouter ou compléter un compte', description: 'Créer un sous-compte avec contrôle du référentiel', symbol: '+', tone: 'blue', action: 'placeholder' },
-      { label: 'Importer / exporter le plan comptable', description: 'Échanger vos comptes et vos personnalisations', symbol: '↕', tone: 'purple', action: 'imports' },
+      { label: 'Comptes Généraux (Plan Comptable Syscohada Révisé)', description: 'Consulter le plan et rechercher un compte', symbol: '▤', tone: 'green', action: 'accounts' },
+      { label: 'Ajouter ou compléter un compte', description: 'Créer un sous-compte avec contrôle du référentiel', symbol: '+', tone: 'blue', action: 'add-account' },
+      { label: 'Importer / exporter le plan comptable', description: 'Échanger vos comptes et vos personnalisations', symbol: '↕', tone: 'purple', action: 'import-accounts' },
       { label: 'Comptes favoris et règles par défaut', description: 'Accélérer la saisie des opérations courantes', symbol: '★', tone: 'amber', action: 'placeholder' }
     ]
   },
@@ -491,6 +497,7 @@ function setActiveCompany(companyId, notify = true) {
   renderIntegratedJournal();
   renderEntryQueue();
   renderCorrectionWindow();
+  renderAccountPlan();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -963,6 +970,155 @@ function validateImport() {
   showToast('48 lignes contrôlées : aucune anomalie bloquante.');
 }
 
+let accountShowInactive = false;
+let editingAccountId = null;
+let pendingAccountImport = null;
+
+function currentAccountSetup() {
+  const companyId = appState.activeCompany;
+  if (!appState.accountingSetups[companyId]) appState.accountingSetups[companyId] = createCsrSetup({ companyId });
+  return appState.accountingSetups[companyId];
+}
+
+function usedAccountIds() {
+  return new Set(appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany).flatMap((entry) => entry.lines?.map((line) => line.accountId) || entry.accountIds || []));
+}
+
+function renderAccountPlan(query = $('#accountSearch')?.value || '') {
+  const rows = $('#accountRows');
+  if (!rows) return;
+  const setup = currentAccountSetup();
+  const normalizedQuery = query.trim().toLowerCase();
+  const classFilter = $('#accountClassFilter')?.value || 'ALL';
+  const accounts = setup.accounts || [];
+  const filtered = accounts.filter((account) => {
+    const matchesQuery = !normalizedQuery || `${account.id} ${account.label} ${account.nature || ''}`.toLowerCase().includes(normalizedQuery);
+    const matchesClass = classFilter === 'ALL' || accountClass(account.id) === classFilter;
+    const matchesStatus = accountShowInactive || account.active !== false;
+    return matchesQuery && matchesClass && matchesStatus;
+  });
+  const usedIds = usedAccountIds();
+  rows.innerHTML = filtered.map((account) => {
+    const used = usedIds.has(account.id);
+    const nature = account.nature || 'À définir';
+    return `<tr><td><b class="account-number">${escapeHtml(account.id)}</b></td><td><span class="cell-title">${escapeHtml(account.label)}</span>${used ? '<small class="cell-subtitle">Utilisé dans le dossier</small>' : ''}</td><td><span class="account-nature">${escapeHtml(nature)}</span></td><td><span class="account-class-badge">Classe ${escapeHtml(accountClass(account.id))}</span></td><td><span class="account-origin ${account.isCustom ? 'origin-custom' : ''}">${account.isCustom ? 'Personnalisé' : 'SYSCOHADA'}</span></td><td><span class="status ${account.active === false ? 'status-muted' : used ? 'status-green' : 'status-blue'}">${account.active === false ? 'Inactif' : used ? 'Utilisé' : 'Actif'}</span></td><td><button class="icon-button small" type="button" data-action="edit-account" data-account-id="${escapeHtml(account.id)}" aria-label="Modifier le compte"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 20 8-8-4-4-8 8-1 5zM14 6l4 4M4 4h6"/></svg></button></td></tr>`;
+  }).join('');
+  if (!filtered.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun compte ne correspond à votre recherche.</td></tr>';
+  const active = accounts.filter((account) => account.active !== false).length;
+  const custom = accounts.filter((account) => account.isCustom).length;
+  const used = accounts.filter((account) => usedIds.has(account.id)).length;
+  $('#activeAccountCount').textContent = String(active);
+  $('#customAccountCount').textContent = String(custom);
+  $('#usedAccountCount').textContent = String(used);
+  $('#accountPlanVersion').textContent = setup.planVersion || 'SYSCOHADA Révisé';
+  $('#accountListSubtitle').textContent = `${accounts.length} comptes · recherchez, complétez ou adaptez vos comptes`;
+}
+
+function openAccountModal(accountId = null) {
+  editingAccountId = accountId;
+  const modalTitle = $('#accountModalTitle');
+  const submit = $('#accountSubmitButton');
+  const idField = $('#accountId');
+  const original = $('#accountOriginalId');
+  const label = $('#accountLabel');
+  const nature = $('#accountNature');
+  if (accountId) {
+    const account = currentAccountSetup().accounts.find((item) => item.id === accountId);
+    if (!account) return;
+    modalTitle.textContent = 'Modifier un compte';
+    submit.textContent = 'Enregistrer les modifications';
+    idField.value = account.id;
+    idField.disabled = usedAccountIds().has(account.id);
+    $('#accountNumberHelp').textContent = idField.disabled ? 'Numéro verrouillé : ce compte est déjà utilisé dans le dossier.' : 'Le numéro peut encore être adapté avant utilisation.';
+    original.value = account.id;
+    label.value = account.label;
+    nature.value = account.nature || 'À définir';
+  } else {
+    modalTitle.textContent = 'Ajouter un compte';
+    submit.textContent = 'Ajouter le compte';
+    idField.disabled = false;
+    $('#accountNumberHelp').textContent = 'Entre 1 et 8 chiffres. Un numéro utilisé sera protégé.';
+    original.value = '';
+    idField.value = '';
+    label.value = '';
+    nature.value = 'À définir';
+  }
+  openModal('accountModal');
+}
+
+function saveAccount(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const setup = currentAccountSetup();
+  const account = { id: formData.get('accountId'), label: formData.get('accountLabel'), nature: formData.get('accountNature'), isCustom: true, active: true };
+  try {
+    if (editingAccountId) setup.accounts = updateAccountInPlan(setup.accounts, editingAccountId, account, { usedAccountIds: [...usedAccountIds()] });
+    else setup.accounts = addAccountToPlan(setup.accounts, account);
+    appState.accountingSetups[appState.activeCompany] = setup;
+    appState.auditEvents.push({ type: editingAccountId ? 'ACCOUNT_UPDATED' : 'ACCOUNT_CREATED', companyId: appState.activeCompany, accountId: account.id, at: new Date().toISOString() });
+    persistAppState();
+    closeModal();
+    renderAccountPlan();
+    showToast(editingAccountId ? 'Compte mis à jour dans le plan de la société.' : 'Compte ajouté au plan de la société.');
+  } catch (error) { showToast(error.message); }
+}
+
+function exportAccountPlan() {
+  const setup = currentAccountSetup();
+  const company = appState.companies[appState.activeCompany];
+  const content = exportAccountPlanTxt({ companyName: company.name, planVersion: setup.planVersion, accounts: setup.accounts });
+  downloadText(`${company.code || company.shortName}-plan-comptable.txt`, content);
+  showToast('Le plan comptable de la société a été exporté.');
+}
+
+function openAccountImportModal() {
+  pendingAccountImport = null;
+  $('#accountImportFile').value = '';
+  $('#accountImportFileName').textContent = 'Déposez le fichier du plan comptable';
+  $('#accountImportPreview')?.setAttribute('hidden', '');
+  openModal('accountImportModal');
+}
+
+function parseAccountImportFile(file) {
+  if (!file) return;
+  const extension = file.name.toLowerCase().split('.').pop();
+  if (!['txt', 'csv'].includes(extension)) { showToast('Pour ce premier import, utilisez un fichier TXT ou CSV.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || '');
+    const delimiter = text.includes(';') ? ';' : text.includes('\t') ? '\t' : ',';
+    const parsed = parseDelimited(text, { delimiter });
+    const header = Object.fromEntries(parsed.headers.map((value) => [value.toLowerCase().replace(/[^a-zà-ÿ]/g, ''), value]));
+    const getHeader = (names) => names.map((name) => header[name]).find(Boolean);
+    const idHeader = getHeader(['compte', 'numero', 'numcompte', 'ncompte']) || parsed.headers[0];
+    const labelHeader = getHeader(['libelle', 'libellecompte', 'intitule', 'intitulecompte']) || parsed.headers[1];
+    const natureHeader = getHeader(['nature', 'naturecompte']) || parsed.headers[2];
+    const rows = parsed.rows.map((row) => ({ id: row[idHeader], label: row[labelHeader], nature: natureHeader ? row[natureHeader] : 'À définir' }));
+    pendingAccountImport = importAccountPlanRows(rows, { existingAccounts: currentAccountSetup().accounts });
+    $('#accountImportFileName').textContent = file.name;
+    $('#accountImportPreview').removeAttribute('hidden');
+    $('#accountImportSummary').textContent = `${pendingAccountImport.imported.length} compte${pendingAccountImport.imported.length > 1 ? 's' : ''} importable${pendingAccountImport.imported.length > 1 ? 's' : ''} sur ${pendingAccountImport.rowCount}`;
+    const status = $('#accountImportStatus');
+    status.textContent = pendingAccountImport.valid ? 'Prêt à intégrer' : `${pendingAccountImport.errors.length} erreur${pendingAccountImport.errors.length > 1 ? 's' : ''}`;
+    status.className = `status ${pendingAccountImport.valid ? 'status-green' : 'status-red'}`;
+    $('#accountImportList').innerHTML = pendingAccountImport.imported.slice(0, 8).map((account) => `<div class="account-import-row"><b>${escapeHtml(account.id)}</b><span>${escapeHtml(account.label)}</span><small>${escapeHtml(account.nature)}</small></div>`).join('') + (pendingAccountImport.errors.length ? `<div class="account-import-errors">${pendingAccountImport.errors.slice(0, 3).map((error) => `<span>Ligne ${error.row}: ${escapeHtml(error.message)}</span>`).join('')}</div>` : '');
+  };
+  reader.readAsText(file);
+}
+
+function applyAccountImport() {
+  if (!pendingAccountImport?.valid || !pendingAccountImport.imported.length) { showToast('Corrigez les erreurs avant d’intégrer le plan.'); return; }
+  const setup = currentAccountSetup();
+  setup.accounts = [...setup.accounts, ...pendingAccountImport.imported];
+  setup.planVersion = 'SYSCOHADA Révisé · personnalisé';
+  appState.accountingSetups[appState.activeCompany] = setup;
+  appState.auditEvents.push({ type: 'ACCOUNT_PLAN_IMPORTED', companyId: appState.activeCompany, count: pendingAccountImport.imported.length, at: new Date().toISOString() });
+  persistAppState();
+  closeModal();
+  renderAccountPlan();
+  showToast(`${pendingAccountImport.imported.length} comptes ajoutés au plan.`);
+}
+
 function currentDossierCode(companyId = appState.activeCompany) {
   const dossier = appState.dossiers.find((item) => item.companyId === companyId && item.moduleId === 'CSR' && item.status !== 'Archivé') || appState.dossiers.find((item) => item.companyId === companyId && item.status !== 'Archivé');
   return dossier?.dossier || `${appState.companies[companyId]?.code || 'DOSSIER'}-25`;
@@ -1322,6 +1478,9 @@ function renderConfigurationGroup(groupId = 'societe') {
 
 function handleConfigurationAction(action) {
   if (action === 'companies') openView('companies');
+  if (action === 'accounts') openView('accounts');
+  if (action === 'add-account') openAccountModal();
+  if (action === 'import-accounts') openAccountImportModal();
   if (action === 'sales') openView('sales');
   if (action === 'purchases') openView('purchases');
   if (action === 'journal') openView('journal');
@@ -1576,6 +1735,8 @@ function bindEvents() {
   $('#dossierSearch')?.addEventListener('input', (event) => renderDossiers(event.target.value));
   $('#integratedSearch')?.addEventListener('input', renderIntegratedJournal);
   $('#integratedCategoryFilter')?.addEventListener('change', renderIntegratedJournal);
+  $('#accountSearch')?.addEventListener('input', (event) => renderAccountPlan(event.target.value));
+  $('#accountClassFilter')?.addEventListener('change', () => renderAccountPlan());
   $('#dossiersScreen')?.addEventListener('keydown', (event) => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-dossier-id]')) {
       event.preventDefault();
@@ -1714,6 +1875,13 @@ function bindEvents() {
     }
     if (action === 'forgot-password') showToast('La récupération du mot de passe sera ajoutée avec l’authentification réelle.');
     if (action === 'show-company-modal') openModal('companyModal');
+    if (action === 'show-account-modal') openAccountModal();
+    if (action === 'edit-account') openAccountModal(actionTarget.dataset.accountId);
+    if (action === 'export-account-plan') exportAccountPlan();
+    if (action === 'show-account-import') openAccountImportModal();
+    if (action === 'apply-account-import') applyAccountImport();
+    if (action === 'toggle-inactive-accounts') { accountShowInactive = !accountShowInactive; actionTarget.childNodes[0].textContent = accountShowInactive ? 'Tous les comptes ' : 'Actifs uniquement '; renderAccountPlan(); }
+    if (action === 'show-account-help') showToast('Un compte utilisé conserve son numéro ; son libellé évolue avec traçabilité.');
     if (action === 'show-asset-modal') openModal('assetModal');
     if (action === 'close-modal') closeModal();
     if (action === 'show-quick') toggleQuickMenu();
@@ -1749,6 +1917,8 @@ function bindEvents() {
 
   $('#modalBackdrop')?.addEventListener('click', closeModal);
   $('#companyForm')?.addEventListener('submit', addCompany);
+  $('#accountForm')?.addEventListener('submit', saveAccount);
+  $('#accountImportFile')?.addEventListener('change', (event) => parseAccountImportFile(event.target.files?.[0]));
   $('#companyForm')?.addEventListener('input', updateDossierPreview);
   $('#companyForm')?.addEventListener('change', (event) => {
     if (event.target.id === 'legalForm') toggleOtherLegalForm();
@@ -1772,6 +1942,7 @@ function bindEvents() {
 
 document.addEventListener('DOMContentLoaded', () => {
   hydrateAppState();
+  persistAppState();
   renderCompanyMenu();
   setActiveCompany(appState.activeCompany, false);
   buildExportPane();
