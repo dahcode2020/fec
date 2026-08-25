@@ -28,6 +28,7 @@ import {
   evaluatePeriodClosure,
   finalizeFiscalYear,
   calculatePeriodResult,
+  createFinancialSnapshot,
   createDossier,
   createFecAnnualDemoEntries,
   createIntegratedJournal,
@@ -217,6 +218,16 @@ test('produit une balance et des états sur les écritures validées', () => {
   assert.equal(statements.incomeStatement.length, 2);
   assert.equal(statements.resultBeforeTax, 211500);
   assert.equal(statements.totalDebit, statements.totalCredit);
+});
+
+test('scelle un instantané annuel indépendant des données courantes', () => {
+  const statements = buildFinancialStatements([{ companyId: 'co-a', date: '2025-01-02', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 1000, credit: 0 }, { accountId: '7061', debit: 0, credit: 1000 }] }], { companyId: 'co-a', period: '2025' });
+  const snapshot = createFinancialSnapshot({ companyId: 'co-a', fiscalYear: '2025', statements, sourceEntryIds: ['entry-1'], planVersion: 'SYSCOHADA-RÉVISÉ', regime: 'NORMAL' });
+  assert.equal(snapshot.status, 'SEALED');
+  assert.equal(snapshot.immutable, true);
+  assert.deepEqual(snapshot.sourceEntryIds, ['entry-1']);
+  assert.notEqual(snapshot.statements, statements);
+  assert.throws(() => createFinancialSnapshot({ companyId: 'co-a', fiscalYear: '2025' }), (error) => error.code === 'INVALID_FINANCIAL_SNAPSHOT');
 });
 
 test('verrouille une période uniquement après les contrôles bloquants', () => {

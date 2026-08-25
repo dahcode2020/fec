@@ -29,7 +29,12 @@ Un état officiel n’est considéré comme définitif qu’après l’arrêté 
 - les totaux débit et crédit sont contrôlés ;
 - le résultat avant impôt est calculé à partir des comptes de charges et de produits ;
 - la période active accompagne l’état ;
-- un export conserve le périmètre utilisé.
+- un export conserve le périmètre utilisé ;
+- après l’arrêté, le mode Officiel restitue l’instantané annuel scellé plutôt qu’un recalcul silencieux des données courantes.
+
+## Instantané annuel
+
+L’instantané est préparé depuis l’écran **Arrêté de l’exercice**. Il conserve les états calculés, les écritures sources, la version du plan SYSCOHADA, le régime, les totaux et une empreinte SHA-256. La préparation de l’instantané ne verrouille pas encore l’exercice ; le verrouillage intervient uniquement après la validation de tous les contrôles annuels.
 
 ## Parcours
 

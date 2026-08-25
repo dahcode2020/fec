@@ -423,6 +423,23 @@ export function buildFinancialStatements(entries = [], { companyId, period = nul
   return { companyId, period, trialBalance, balanceSheet, incomeStatement, totalDebit: trialBalance.reduce((sum, line) => sum + line.debit, 0), totalCredit: trialBalance.reduce((sum, line) => sum + line.credit, 0), charges: round(charges), products: round(products), resultBeforeTax: round(products - charges), generatedAt: new Date().toISOString() };
 }
 
+export function createFinancialSnapshot({ companyId, fiscalYear, statements, sourceEntryIds = [], planVersion = '', regime = 'NORMAL', generatedAt = new Date().toISOString() } = {}) {
+  if (!companyId || !fiscalYear || !statements?.trialBalance) throw new DomainError('Un instantané financier doit contenir une société, un exercice et les états calculés.', 'INVALID_FINANCIAL_SNAPSHOT');
+  return {
+    id: `snapshot_${companyId}_${fiscalYear}`,
+    companyId,
+    fiscalYear: String(fiscalYear),
+    status: 'SEALED',
+    immutable: true,
+    planVersion,
+    regime,
+    sourceEntryIds: [...sourceEntryIds],
+    statements: JSON.parse(JSON.stringify(statements)),
+    generatedAt,
+    sealedAt: generatedAt
+  };
+}
+
 export function calculateFiscalResult({ accountingResult = 0, deductions = 0, reintegrations = 0, taxRate = 0, minimumTax = 0 } = {}) {
   const beforeTax = amount(accountingResult);
   const deductible = amount(deductions);
@@ -464,13 +481,14 @@ export function closePeriod(period, { checks = [], userId = null } = {}) {
   return { ...period, status: PERIOD_STATUSES.CLOSED, closedAt: new Date().toISOString(), closedBy: userId, closure: evaluation };
 }
 
-export function finalizeFiscalYear(year, { periods = [], checks = [], userId = null } = {}) {
+export function finalizeFiscalYear(year, { periods = [], checks = [], snapshot = null, userId = null } = {}) {
   if (!year?.id) throw new DomainError('Exercice comptable invalide.', 'INVALID_FISCAL_YEAR');
   if (year.status === 'FINALIZED') throw new DomainError('L’exercice est déjà arrêté.', 'FISCAL_YEAR_ALREADY_FINALIZED');
   if (periods.length !== 12) throw new DomainError('Les douze périodes de l’exercice doivent être créées avant l’arrêté.', 'FISCAL_YEAR_PERIODS_MISSING');
+  if (snapshot && (snapshot.status !== 'SEALED' || snapshot.immutable !== true || String(snapshot.fiscalYear) !== String(year.id))) throw new DomainError('L’instantané officiel ne correspond pas à l’exercice à arrêter.', 'INVALID_FINALIZATION_SNAPSHOT');
   const evaluation = evaluatePeriodClosure(checks);
   if (!evaluation.valid) throw new DomainError('L’exercice ne peut pas être arrêté : des contrôles restent à traiter.', 'FISCAL_YEAR_CLOSURE_BLOCKED');
-  return { ...year, status: 'FINALIZED', finalizedAt: new Date().toISOString(), finalizedBy: userId, closure: evaluation };
+  return { ...year, status: 'FINALIZED', finalizedAt: new Date().toISOString(), finalizedBy: userId, snapshotId: snapshot?.id || null, closure: evaluation };
 }
 
 export function requestPeriodReopen(period, { userId = null, reason = '' } = {}) {

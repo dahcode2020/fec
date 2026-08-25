@@ -28,9 +28,16 @@ L’arrêté définitif verrouille l’exercice après la clôture de toutes ses
 ## Effets
 
 - le statut de l’exercice devient `FINALIZED` ;
-- un instantané des états est associé à l’exercice ;
+- un instantané officiel des états est associé à l’exercice et scellé avec une empreinte ;
+- les périodes de l’exercice sont verrouillées ;
 - les écritures ne sont plus modifiables ;
-- l’événement est conservé dans l’audit ;
+- l’événement et le lien avec l’instantané sont conservés dans l’audit ;
 - une réouverture doit être autorisée et motivée.
+
+## Préparation de l’instantané
+
+Avant l’arrêté, l’utilisateur déclenche **Préparer l’instantané**. Le logiciel recalcule les états sur les écritures validées ou clôturées du seul exercice, en excluant les écritures techniques, les centralisations et les écritures de solde du résultat. Il conserve le référentiel, le régime, les écritures sources, les totaux et le résultat calculé.
+
+L’instantané est ensuite utilisé pour restituer les états officiels après l’arrêté. Une modification de la comptabilité ne remplace pas silencieusement cet instantané.
 
 Dans la maquette, l’arrêté annuel exige la présence des douze périodes et la résolution des contrôles bloquants. Les clôtures mensuelles restent facultatives ; l’arrêté annuel verrouille l’exercice et ses périodes.
