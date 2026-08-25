@@ -19,6 +19,7 @@ import {
   updateAccountInPlan,
   updateJournalInSetup,
   calculateDocumentTotals,
+  calculateFiscalResult,
   calculatePeriodResult,
   createDossier,
   createIntegratedJournal,
@@ -180,6 +181,17 @@ test('calcule le résultat d’une période à partir des comptes 6 et 7', () =>
   assert.equal(result.result, 211500);
   assert.equal(result.resultAccount, '131');
   assert.equal(result.totalDebit, result.totalCredit);
+});
+
+test('calcule le résultat fiscal et l’impôt sans taux implicite', () => {
+  const noTax = calculateFiscalResult({ accountingResult: 211500, deductions: 5000, reintegrations: 20000, taxRate: 0 });
+  assert.equal(noTax.taxableResult, 226500);
+  assert.equal(noTax.tax, 0);
+  assert.equal(noTax.netResult, 211500);
+  const taxed = calculateFiscalResult({ accountingResult: 211500, taxRate: 30 });
+  assert.equal(taxed.taxableResult, 211500);
+  assert.equal(taxed.tax, 63450);
+  assert.equal(taxed.netResult, 148050);
 });
 
 test('pointe et rapproche un mouvement bancaire avec une écriture', () => {

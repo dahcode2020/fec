@@ -43,7 +43,7 @@ Le système peut maintenant prévisualiser les écritures sources de la période
 
 ### Résultat
 
-Le système calcule maintenant le résultat provisoire à partir des lignes validées des comptes de charges et de produits. Il prépare une écriture technique dans `RP`, en choisissant le compte de bénéfice ou de perte approprié, avec la liste des écritures sources. Cette écriture reste à contrôler et ne vaut pas arrêté définitif de l’exercice.
+Le système calcule maintenant le résultat provisoire à partir des lignes validées des comptes de charges et de produits. Il prépare une écriture technique dans `RP`, en choisissant le compte de bénéfice ou de perte approprié, avec la liste des écritures sources. Cette écriture reste à contrôler et ne vaut pas arrêté définitif de l’exercice. Le calcul fiscal, l’impôt et le résultat net après impôt sont présentés dans le panneau séparé de résultat fiscal.
 
 ## Règles de sécurité
 

@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateFiscalResult, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -55,6 +55,9 @@ const appState = {
     { id: 'purchase-demo', companyId: 'acacia', type: 'PURCHASE', thirdPartyId: 'tp-cotonou-bureau', thirdPartyName: 'Cotonou Bureau', thirdPartyAccountId: '401101', date: '2025-06-12', reference: 'FA-0154', dueDate: '2025-07-12', lines: [{ description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500, total: 38500 }], taxRate: 0, totalExclTax: 38500, tax: 0, totalInclTax: 38500, paidAmount: 0, outstanding: 38500, allocations: [], status: 'POSTED' }
   ],
   payments: [],
+  fiscalSettings: {
+    acacia: { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 }
+  },
   bankMovements: [
     { id: 'bank-demo-1', companyId: 'acacia', date: '2025-06-16', reference: 'BQ-0012', label: 'Encaissement client Awa Concept', debit: 0, credit: 250000, amount: 250000, status: 'RECONCILED', matchedEntryId: 'sale-1', currency: 'XOF' },
     { id: 'bank-demo-2', companyId: 'acacia', date: '2025-06-15', reference: 'BQ-0011', label: 'Paiement Cotonou Bureau', debit: 38500, credit: 0, amount: 38500, status: 'POINTED', matchedEntryId: 'purchase-1', currency: 'XOF' },
@@ -102,7 +105,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -125,6 +128,8 @@ function hydrateAppState() {
   if (!appState.automaticSchedules) appState.automaticSchedules = [];
   if (!appState.automaticRuns) appState.automaticRuns = [];
   if (!appState.payments) appState.payments = [];
+  if (!appState.fiscalSettings) appState.fiscalSettings = {};
+  if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
   if (!appState.bankMovements) appState.bankMovements = [];
 }
 
@@ -578,6 +583,7 @@ function setActiveCompany(companyId, notify = true) {
   renderBankMovements();
   renderAutomaticTasks();
   renderAutomaticRuns();
+  renderFiscalPreview();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
 }
 
@@ -992,6 +998,52 @@ function setImportMode(mode) {
     importPane?.removeAttribute('hidden');
     exportPane?.setAttribute('hidden', '');
   }
+}
+
+function currentFiscalSettings() {
+  if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
+  return appState.fiscalSettings[appState.activeCompany];
+}
+
+function renderFiscalPreview() {
+  const beforeNode = $('#fiscalBeforeTax');
+  if (!beforeNode) return;
+  const settings = currentFiscalSettings();
+  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: '2025-06' });
+  const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
+  beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
+  $('#fiscalTaxableResult').innerHTML = `${numberLabel(fiscal.taxableResult)} <em>FCFA</em>`;
+  $('#fiscalTaxAmount').innerHTML = `${numberLabel(fiscal.tax)} <em>FCFA</em>`;
+  $('#fiscalNetResult').innerHTML = `${numberLabel(fiscal.netResult)} <em>FCFA</em>`;
+  const badge = $('#fiscalStatusBadge');
+  if (badge) { badge.innerHTML = `<i></i> ${fiscal.tax > 0 ? 'Impôt estimé' : 'À paramétrer'}`; badge.className = `fiscal-status-badge ${fiscal.tax > 0 ? 'is-ready' : ''}`; }
+  const note = $('#fiscalEntryNote');
+  if (note) note.innerHTML = fiscal.tax > 0 ? `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> L’écriture de ${numberLabel(fiscal.tax)} FCFA sera générée par le système dans le journal RP.` : `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Renseignez un taux validé pour préparer l’écriture fiscale.`;
+}
+
+function updateFiscalSetting(field, value) {
+  currentFiscalSettings()[field] = parseUiAmount(value) || 0;
+  if (field === 'taxRate') currentFiscalSettings()[field] = Number(value) || 0;
+  persistAppState();
+  renderFiscalPreview();
+}
+
+function generateFiscalResult() {
+  const settings = currentFiscalSettings();
+  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: '2025-06' });
+  const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
+  if (fiscal.tax <= 0) { showToast('Aucun impôt à générer : paramétrez un taux ou un minimum validé.'); return; }
+  const accountId = fiscal.calculatedTax >= fiscal.minimumTax ? '8911' : '895';
+  const taxEntry = createAutomaticJournalEntry({ companyId: appState.activeCompany, integrationCategory: 'RESULTAT', date: '2025-06-30', reference: 'RP-0002', label: `Impôt sur le résultat — juin 2025`, dossierId: currentDossierCode(appState.activeCompany), lines: [{ accountId, label: accountId === '895' ? 'Impôt minimum forfaitaire' : 'Impôts sur les bénéfices', debit: fiscal.tax, credit: 0 }, { accountId: '441', label: 'État, impôt sur les bénéfices', debit: 0, credit: fiscal.tax }] });
+  const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...taxEntry, id: `auto-tax-${appState.activeCompany}-2025-06`, amount: fiscal.tax, debit: fiscal.tax, credit: fiscal.tax, source: 'Calcul fiscal automatique', integrationCategory: 'RESULTAT', technicalOnly: true, status: OPERATION_STATES.TO_REVIEW }).entries[0];
+  const index = appState.integratedEntries.findIndex((entry) => entry.id === synced.id && entry.companyId === synced.companyId);
+  if (index >= 0) appState.integratedEntries[index] = synced; else appState.integratedEntries.unshift(synced);
+  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === 'FISCAL_TAX' && run.period === '2025-06'));
+  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category: 'FISCAL_TAX', period: '2025-06', count: 1, at: new Date().toISOString(), status: 'TO_REVIEW' });
+  persistAppState();
+  renderIntegratedJournal();
+  renderAutomaticRuns();
+  showToast(`Impôt de ${numberLabel(fiscal.tax)} FCFA généré dans le journal RP.`);
 }
 
 function automaticPreview(category) {
@@ -2489,6 +2541,10 @@ function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
+  ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax'].forEach((field) => {
+    const input = $(`#fiscal${field}`);
+    input?.addEventListener('input', () => updateFiscalSetting(field === 'TaxRate' ? 'taxRate' : field.charAt(0).toLowerCase() + field.slice(1), input.value));
+  });
   $('#paymentForm')?.addEventListener('input', updatePaymentPreview);
   $('#paymentForm')?.addEventListener('change', (event) => {
     if (event.target.id === 'paymentParty') { paymentAllocations = {}; renderPaymentDocuments(); }
@@ -2676,6 +2732,7 @@ function bindEvents() {
     if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
     if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
+    if (action === 'generate-fiscal-result') generateFiscalResult();
     if (action === 'sync-integrated') synchronizeIntegratedJournal();
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');

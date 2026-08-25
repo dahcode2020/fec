@@ -155,6 +155,9 @@ export const DEFAULT_CSR_ACCOUNTS = Object.freeze([
   Object.freeze({ id: '2844', label: 'Amortissements du matériel et mobilier', nature: 'Correctif d’actif' }),
   Object.freeze({ id: '4431', label: 'TVA facturée sur ventes', nature: 'Passif / taxe' }),
   Object.freeze({ id: '4452', label: 'TVA récupérable sur achats', nature: 'Actif / taxe' }),
+  Object.freeze({ id: '441', label: 'État, impôt sur les bénéfices', nature: 'Passif / État' }),
+  Object.freeze({ id: '8911', label: 'Impôts sur les bénéfices de l’exercice — activités dans l’État', nature: 'Charge fiscale' }),
+  Object.freeze({ id: '895', label: 'Impôt minimum forfaitaire', nature: 'Charge fiscale' }),
   Object.freeze({ id: '7061', label: 'Services vendus dans la Région', nature: 'Produit' })
 ]);
 
@@ -391,6 +394,19 @@ export function calculatePeriodResult(entries = [], { companyId, period = null }
   const resultLines = totalCharges ? [{ accountId: resultAccount, label: result >= 0 ? 'Résultat net — charges de la période' : 'Résultat net — charges de la période', debit: totalCharges, credit: 0 }] : [];
   if (totalProducts) resultLines.push({ accountId: resultAccount, label: result >= 0 ? 'Résultat net — produits de la période' : 'Résultat net — produits de la période', debit: 0, credit: totalProducts });
   return { companyId, period, sourceEntryIds, sourceCount: sourceEntryIds.length, charges: totalCharges, products: totalProducts, result, resultAccount, lines: [...productLines, ...chargeLines, ...resultLines], totalDebit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.debit, 0), totalCredit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.credit, 0) };
+}
+
+export function calculateFiscalResult({ accountingResult = 0, deductions = 0, reintegrations = 0, taxRate = 0, minimumTax = 0 } = {}) {
+  const beforeTax = amount(accountingResult);
+  const deductible = amount(deductions);
+  const taxable = amount(reintegrations);
+  const rate = Number(taxRate) || 0;
+  const minimum = amount(minimumTax);
+  if (![beforeTax, deductible, taxable, minimum].every(Number.isFinite) || deductible < 0 || taxable < 0 || minimum < 0 || rate < 0) throw new DomainError('Les paramètres fiscaux sont invalides.', 'INVALID_FISCAL_INPUT');
+  const taxableResult = round(Math.max(0, beforeTax + taxable - deductible));
+  const calculatedTax = round(taxableResult * rate / 100);
+  const tax = round(Math.max(calculatedTax, taxableResult > 0 ? minimum : 0));
+  return { accountingResult: beforeTax, deductions: deductible, reintegrations: taxable, taxableResult, taxRate: rate, calculatedTax, minimumTax: minimum, tax, netResult: round(beforeTax - tax) };
 }
 
 export function centralizeEntries(entries = [], { companyId, period = null, sourceJournalIds = [] } = {}) {
