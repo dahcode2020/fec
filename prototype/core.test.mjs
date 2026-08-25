@@ -38,6 +38,8 @@ import {
   depreciationEntry,
   exportAccountPlanTxt,
   exportBalanceTxt,
+  applyPaymentAllocations,
+  createPayment,
   importAccountPlanRows,
   makeDossierCode,
   nextAuxiliaryAccountId,
@@ -138,6 +140,17 @@ test('calcule et impute une facture client multi-lignes', () => {
   assert.equal(lines[0].debit, 295000);
   assert.equal(lines[1].credit, 250000);
   assert.equal(lines[2].credit, 45000);
+});
+
+test('affecte un encaissement à une facture et met à jour son solde', () => {
+  const payment = createPayment({ companyId: 'co-a', type: 'RECEIPT', thirdPartyId: 'tp-1', thirdPartyName: 'Client test', thirdPartyAccountId: '411101', date: '2025-06-16', reference: 'REG-001', amount: 150000, treasuryAccountId: '5211' });
+  const invoice = { id: 'invoice-1', companyId: 'co-a', type: 'SALE', thirdPartyId: 'tp-1', totalInclTax: 250000, paidAmount: 0, outstanding: 250000, status: 'POSTED' };
+  const result = applyPaymentAllocations(payment, [invoice], [{ documentId: 'invoice-1', amount: 150000 }]);
+  assert.equal(result.payment.allocatedAmount, 150000);
+  assert.equal(result.payment.unallocatedAmount, 0);
+  assert.equal(result.documents[0].outstanding, 100000);
+  assert.equal(result.documents[0].status, 'PARTIAL');
+  assert.equal(result.documents[0].lettered, false);
 });
 
 test('accepte une imputation multi-lignes équilibrée', () => {

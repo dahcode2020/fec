@@ -1,4 +1,4 @@
-import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, calculateDocumentTotals, calculateStraightLinePlan, canDeleteCorrectionCandidate, classifyIntegratedEntry, createAutomaticJournalEntry, createCorrectionWindow, createCsrSetup, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createPayment, deleteCorrectionCandidate, depreciationEntry, documentToJournalLines, exerciseYear, exportAccountPlanTxt, exportBalanceTxt, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 
 const appState = {
   authenticated: false,
@@ -48,8 +48,13 @@ const appState = {
     acacia: createCsrSetup({ companyId: 'acacia', regime: 'NORMAL' }),
     noria: createCsrSetup({ companyId: 'noria', regime: 'SMT' })
   },
-  invoices: [],
-  purchaseBills: [],
+  invoices: [
+    { id: 'invoice-demo', companyId: 'acacia', type: 'SALE', thirdPartyId: 'tp-awa', thirdPartyName: 'Awa Concept', thirdPartyAccountId: '411101', date: '2025-06-10', reference: 'FAC-2025-018', dueDate: '2025-07-10', lines: [{ description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000, total: 250000 }], taxRate: 0, totalExclTax: 250000, tax: 0, totalInclTax: 250000, paidAmount: 0, outstanding: 250000, allocations: [], status: 'POSTED' }
+  ],
+  purchaseBills: [
+    { id: 'purchase-demo', companyId: 'acacia', type: 'PURCHASE', thirdPartyId: 'tp-cotonou-bureau', thirdPartyName: 'Cotonou Bureau', thirdPartyAccountId: '401101', date: '2025-06-12', reference: 'FA-0154', dueDate: '2025-07-12', lines: [{ description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500, total: 38500 }], taxRate: 0, totalExclTax: 38500, tax: 0, totalInclTax: 38500, paidAmount: 0, outstanding: 38500, allocations: [], status: 'POSTED' }
+  ],
+  payments: [],
   thirdParties: {
     acacia: [
       { id: 'tp-awa', code: 'AWACONCEPT', name: 'Awa Concept', type: THIRD_PARTY_TYPES.CLIENT, collectiveAccountId: '4111', auxiliaryAccountId: '411101', ifu: '3201900045612', address: 'Cotonou, Littoral', phone: '+229 97 00 00 01', paymentTerms: '30 jours', currency: 'XOF', active: true },
@@ -92,7 +97,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'automaticSchedules', 'automaticRuns', 'dossiers', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -114,6 +119,7 @@ function hydrateAppState() {
   if (!appState.recentEntries) appState.recentEntries = [];
   if (!appState.automaticSchedules) appState.automaticSchedules = [];
   if (!appState.automaticRuns) appState.automaticRuns = [];
+  if (!appState.payments) appState.payments = [];
 }
 
 async function loadFullSyscohadaPlan() {
@@ -559,6 +565,10 @@ function setActiveCompany(companyId, notify = true) {
   renderInvoicePreview('PURCHASE');
   renderInvoiceHistory('SALE');
   renderInvoiceHistory('PURCHASE');
+  renderPaymentPartyOptions();
+  renderPaymentDocuments();
+  renderPaymentHistory();
+  renderLettering();
   renderAutomaticTasks();
   renderAutomaticRuns();
   if (notify) showToast(`${company.name} est maintenant la société active.`);
@@ -1132,6 +1142,8 @@ const invoiceDraftLines = {
   SALE: [{ id: 'sale-line-1', description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }],
   PURCHASE: [{ id: 'purchase-line-1', description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }]
 };
+let currentPaymentType = PAYMENT_TYPES.RECEIPT;
+let paymentAllocations = {};
 
 const THIRD_PARTY_TYPE_LABELS = { CLIENT: 'Clients', SUPPLIER: 'Fournisseurs', PERSONNEL: 'Personnel', OTHER: 'Débiteurs / créditeurs divers' };
 const THIRD_PARTY_DEFAULT_ACCOUNTS = { CLIENT: '4111', SUPPLIER: '4011', PERSONNEL: '421', OTHER: '4711' };
@@ -1239,6 +1251,154 @@ function exportThirdParties() {
   showToast('Les tiers de la société ont été exportés.');
 }
 
+const PAYMENT_TYPE_LABELS = { RECEIPT: 'Encaissement client', PAYMENT: 'Paiement fournisseur' };
+
+function paymentDocuments() {
+  const type = currentPaymentType === PAYMENT_TYPES.RECEIPT ? 'SALE' : 'PURCHASE';
+  const partyId = $('#paymentParty')?.value;
+  const collection = type === 'SALE' ? appState.invoices : appState.purchaseBills;
+  return collection.filter((document) => document.companyId === appState.activeCompany && document.thirdPartyId === partyId && ['POSTED', 'PARTIAL'].includes(document.status) && (document.outstanding ?? document.totalInclTax) > 0);
+}
+
+function renderPaymentPartyOptions() {
+  const select = $('#paymentParty');
+  if (!select) return;
+  const type = currentPaymentType === PAYMENT_TYPES.RECEIPT ? THIRD_PARTY_TYPES.CLIENT : THIRD_PARTY_TYPES.SUPPLIER;
+  const parties = currentThirdParties().filter((thirdParty) => thirdParty.type === type && thirdParty.active !== false);
+  select.innerHTML = `${parties.map((party) => `<option value="${escapeHtml(party.id)}">${escapeHtml(party.name)} · ${escapeHtml(party.auxiliaryAccountId)}</option>`).join('')}<option value="none">+ Ajouter un tiers</option>`;
+  if (parties.length) select.value = parties[0].id;
+}
+
+function renderPaymentDocuments() {
+  const container = $('#paymentDocuments');
+  if (!container) return;
+  const documents = paymentDocuments();
+  const hasAmount = parseUiAmount($('#paymentAmount')?.value || '') || 0;
+  if (!documents.length) { container.innerHTML = '<div class="payment-documents-empty">Aucune facture ouverte pour ce tiers.</div>'; updatePaymentPreview(); return; }
+  container.innerHTML = documents.map((document) => {
+    const outstanding = document.outstanding ?? document.totalInclTax;
+    const allocation = paymentAllocations[document.id] ?? Math.min(outstanding, hasAmount);
+    const checked = paymentAllocations[document.id] !== undefined || (documents.length === 1 && hasAmount > 0);
+    if (checked && paymentAllocations[document.id] === undefined) paymentAllocations[document.id] = allocation;
+    return `<label class="payment-document-row"><input class="payment-allocation-check" type="checkbox" data-payment-document="${escapeHtml(document.id)}" ${checked ? 'checked' : ''}><span class="payment-document-copy"><strong>${escapeHtml(document.reference)}</strong><small>${escapeHtml(document.thirdPartyName)} · Échéance ${escapeHtml(displayDate(document.dueDate))}</small></span><span class="payment-document-outstanding"><small>À régler</small><b>${numberLabel(outstanding)} FCFA</b></span><span class="payment-allocation-input"><input type="text" value="${checked ? escapeHtml(allocation) : ''}" placeholder="0" data-payment-allocation="${escapeHtml(document.id)}"><small>FCFA</small></span></label>`;
+  }).join('');
+  updatePaymentPreview();
+}
+
+function readPaymentAllocations() {
+  const allocations = [];
+  $$('.payment-allocation-check:checked').forEach((checkbox) => {
+    const id = checkbox.dataset.paymentDocument;
+    const field = $(`[data-payment-allocation="${id}"]`);
+    const value = parseUiAmount(field?.value || '');
+    if (Number.isFinite(value) && value > 0) allocations.push({ documentId: id, amount: value });
+  });
+  return allocations;
+}
+
+function buildPaymentDraft() {
+  const party = currentThirdParties().find((thirdParty) => thirdParty.id === $('#paymentParty')?.value);
+  if (!party) throw new Error('Sélectionnez un tiers pour le règlement.');
+  return createPayment({ companyId: appState.activeCompany, type: currentPaymentType, thirdPartyId: party.id, thirdPartyName: party.name, thirdPartyAccountId: party.auxiliaryAccountId, date: $('#paymentDate').value, reference: $('#paymentReference').value.trim(), amount: $('#paymentAmount').value, method: $('#paymentMethod').value, treasuryAccountId: $('#paymentTreasuryAccount').value });
+}
+
+function updatePaymentPreview() {
+  const party = currentThirdParties().find((thirdParty) => thirdParty.id === $('#paymentParty')?.value);
+  const amount = parseUiAmount($('#paymentAmount')?.value || '') || 0;
+  const previewLines = party && amount > 0 ? paymentToJournalLines({ type: currentPaymentType, amount, method: $('#paymentMethod')?.value || 'Virement', thirdPartyName: party.name, thirdPartyAccountId: party.auxiliaryAccountId, treasuryAccountId: $('#paymentTreasuryAccount')?.value || '5211' }) : [];
+  const lines = $('#paymentPostingLines');
+  if (lines) lines.innerHTML = previewLines.length ? previewLines.map((line) => `<div class="document-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${numberLabel(line.debit || line.credit)}</strong><em class="${line.debit ? '' : 'credit'}">${line.debit ? 'D' : 'C'}</em></div>`).join('') : '<div class="payment-documents-empty">Saisissez un montant pour voir l’imputation.</div>';
+  if ($('#paymentPostingTotal')) $('#paymentPostingTotal').innerHTML = `${numberLabel(amount)} <small>FCFA</small>`;
+  const allocated = readPaymentAllocations().reduce((sum, allocation) => sum + allocation.amount, 0);
+  if ($('#paymentUnallocated')) $('#paymentUnallocated').textContent = `Non affecté : ${numberLabel(Math.max(0, amount - allocated))} FCFA`;
+  if ($('#paymentPreviewNote')) $('#paymentPreviewNote').textContent = allocated ? `${numberLabel(allocated)} FCFA affectés · le solde sera mis à jour après insertion.` : 'L’affectation sera proposée à partir du règlement saisi.';
+}
+
+function renderPaymentHistory() {
+  const rows = $('#paymentRows');
+  if (!rows) return;
+  const payments = (appState.payments || []).filter((payment) => payment.companyId === appState.activeCompany);
+  rows.innerHTML = payments.slice().reverse().map((payment) => `<tr><td><b>${escapeHtml(payment.reference)}</b></td><td>${escapeHtml(displayDate(payment.date))}</td><td>${escapeHtml(payment.thirdPartyName)}</td><td><span class="journal-badge ${payment.type === PAYMENT_TYPES.RECEIPT ? 'journal-badge-teal' : 'journal-badge-blue'}">${payment.type === PAYMENT_TYPES.RECEIPT ? 'Encaissement' : 'Paiement'}</span></td><td class="align-right">${numberLabel(payment.amount)} FCFA</td><td>${numberLabel(payment.allocatedAmount || 0)} FCFA</td><td><span class="status ${payment.status === 'ALLOCATED' ? 'status-green' : 'status-amber'}">${payment.status === 'ALLOCATED' ? 'Affecté' : 'Partiel'}</span></td></tr>`).join('');
+  if (!payments.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun règlement enregistré.</td></tr>';
+  if ($('#paymentCount')) $('#paymentCount').textContent = String(payments.length);
+}
+
+function renderLettering() {
+  const rows = $('#letteringRows');
+  if (!rows) return;
+  const documents = [...appState.invoices, ...appState.purchaseBills].filter((document) => document.companyId === appState.activeCompany && document.status !== 'DRAFT');
+  const content = documents.map((document) => `<div class="lettering-row"><span class="lettering-status ${document.lettered ? 'is-lettered' : ''}">${document.lettered ? '✓' : '·'}</span><span><strong>${escapeHtml(document.reference)}</strong><small>${escapeHtml(document.thirdPartyName)} · ${document.type === 'SALE' ? 'Client' : 'Fournisseur'}</small></span><span><small>Facture</small><b>${numberLabel(document.totalInclTax)} FCFA</b></span><span><small>Solde</small><b>${numberLabel(document.outstanding ?? document.totalInclTax)} FCFA</b></span><span class="status ${document.lettered ? 'status-green' : 'status-amber'}">${document.lettered ? 'Lettrée' : 'En attente'}</span></div>`).join('');
+  rows.innerHTML = content || '<div class="payment-documents-empty">Aucune facture à lettrer.</div>';
+}
+
+function setPaymentType(type) {
+  $$('.payment-tab').forEach((tab) => { const active = tab.dataset.paymentType === type; tab.classList.toggle('is-active', active); tab.setAttribute('aria-selected', String(active)); });
+  if (type === 'LETTERING') {
+    $('#paymentEntryPane')?.setAttribute('hidden', '');
+    $('#letteringPane')?.removeAttribute('hidden');
+    renderLettering();
+    return;
+  }
+  currentPaymentType = type;
+  $('#paymentEntryPane')?.removeAttribute('hidden');
+  $('#letteringPane')?.setAttribute('hidden', '');
+  const isReceipt = type === PAYMENT_TYPES.RECEIPT;
+  $('#paymentTypeTitle').textContent = PAYMENT_TYPE_LABELS[type];
+  $('#paymentPartyLabel').innerHTML = `${isReceipt ? 'Client' : 'Fournisseur'} <b>*</b>`;
+  $('#paymentJournalLabel').textContent = isReceipt ? 'BQ · Banque' : 'BQ · Banque';
+  $('#paymentPreviewTitle').textContent = PAYMENT_TYPE_LABELS[type];
+  renderPaymentPartyOptions();
+  paymentAllocations = {};
+  renderPaymentDocuments();
+  renderPaymentHistory();
+}
+
+function resetPayment() {
+  paymentAllocations = {};
+  $('#paymentForm')?.reset();
+  $('#paymentDate').value = '2025-06-16';
+  $('#paymentReference').value = `REG-2025-${String((appState.payments?.length || 0) + 1).padStart(3, '0')}`;
+  $('#paymentAmount').value = '';
+  renderPaymentPartyOptions();
+  renderPaymentDocuments();
+  updatePaymentPreview();
+  showToast('Nouveau règlement prêt à être saisi.');
+}
+
+function clearPayment() {
+  paymentAllocations = {};
+  $('#paymentAmount').value = '';
+  renderPaymentDocuments();
+  updatePaymentPreview();
+}
+
+function postPayment() {
+  try {
+    const payment = buildPaymentDraft();
+    const documents = paymentDocuments();
+    const result = applyPaymentAllocations(payment, documents, readPaymentAllocations());
+    const setup = currentAccountSetup();
+    const journalEntry = createJournalEntry({ companyId: appState.activeCompany, journalId: 'BQ', date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, lines: paymentToJournalLines(payment) }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
+    const workflowEntry = transitionOperation(transitionOperation(journalEntry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
+    const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id };
+    appState.payments.push(updatedPayment);
+    const collectionKey = payment.type === PAYMENT_TYPES.RECEIPT ? 'invoices' : 'purchaseBills';
+    appState[collectionKey] = appState[collectionKey].map((document) => result.documents.find((updated) => updated.id === document.id) || document);
+    const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: payment.amount, debit: payment.amount, credit: payment.amount, source: PAYMENT_TYPE_LABELS[payment.type], integrationCategory: 'GENERAL' }).entries[0];
+    appState.integratedEntries.unshift(synced);
+    appState.recentEntries.unshift({ ...workflowEntry, amount: payment.amount, accountIds: paymentToJournalLines(payment).map((line) => line.accountId) });
+    persistAppState();
+    renderPaymentHistory();
+    renderPaymentDocuments();
+    renderInvoiceHistory('SALE');
+    renderInvoiceHistory('PURCHASE');
+    renderIntegratedJournal();
+    renderEntryQueue();
+    showToast(`${PAYMENT_TYPE_LABELS[payment.type]} inséré dans le brouillard.`);
+    resetPayment();
+  } catch (error) { showToast(error.message); }
+}
+
 function invoiceConfig(type) {
   return type === 'PURCHASE' ? { partyLabel: 'Fournisseur', formPrefix: 'purchase', collection: 'purchaseBills', journalId: 'AC', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4452', title: 'Facture fournisseur' } : { partyLabel: 'Client', formPrefix: 'sales', collection: 'invoices', journalId: 'VE', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4431', title: 'Facture client' };
 }
@@ -1304,7 +1464,7 @@ function renderInvoiceHistory(type) {
   const entries = collection.filter((document) => document.companyId === appState.activeCompany);
   const rows = $(`#${config.formPrefix}InvoiceRows`);
   if (!rows) return;
-  rows.innerHTML = entries.slice().reverse().map((document) => `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${document.status === 'POSTED' ? 'status-purple' : 'status-amber'}">${document.status === 'POSTED' ? 'À contrôler' : 'Brouillon'}</span></td></tr>`).join('');
+  rows.innerHTML = entries.slice().reverse().map((document) => { const settled = (document.outstanding ?? document.totalInclTax) === 0; const partial = !settled && (document.paidAmount || 0) > 0; const documentStatus = settled ? ['Réglée', 'status-green'] : partial ? ['Partielle', 'status-amber'] : document.status === 'POSTED' ? ['À contrôler', 'status-purple'] : ['Brouillon', 'status-amber']; return `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${documentStatus[1]}">${documentStatus[0]}</span></td></tr>`; }).join('');
   if (!entries.length) rows.innerHTML = `<tr><td colspan="5" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
   const count = $(`#${config.formPrefix}InvoiceCount`);
   if (count) count.textContent = String(entries.length);
@@ -1324,7 +1484,7 @@ function saveInvoiceDocument(type, post = false) {
     const document = buildInvoice(type);
     const setup = currentAccountSetup();
     const accountLines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
-    let stored = { ...document, status: post ? 'POSTED' : 'DRAFT' };
+    let stored = { ...document, paidAmount: 0, outstanding: document.totalInclTax, allocations: [], status: post ? 'POSTED' : 'DRAFT' };
     if (post) {
       const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: config.journalId, date: document.date, reference: document.reference, label: `${config.title} — ${document.thirdPartyName}`, lines: accountLines }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
       const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
@@ -2203,6 +2363,16 @@ function handleEditionAction(action, title) {
 function bindEvents() {
   $('#authForm')?.addEventListener('submit', authenticate);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
+  $('#paymentForm')?.addEventListener('input', updatePaymentPreview);
+  $('#paymentForm')?.addEventListener('change', (event) => {
+    if (event.target.id === 'paymentParty') { paymentAllocations = {}; renderPaymentDocuments(); }
+    else if (event.target.classList.contains('payment-allocation-check')) {
+      const id = event.target.dataset.paymentDocument;
+      if (!event.target.checked) delete paymentAllocations[id];
+      else paymentAllocations[id] = parseUiAmount($(`[data-payment-allocation="${id}"]`)?.value || '') || 0;
+    }
+    updatePaymentPreview();
+  });
   ['SALE', 'PURCHASE'].forEach((type) => {
     const form = $(`#${invoiceConfig(type).formPrefix}InvoiceForm`);
     form?.addEventListener('input', (event) => {
@@ -2298,6 +2468,9 @@ function bindEvents() {
     const parameterAction = event.target.closest('[data-parameter-action]');
     if (parameterAction) { handleParameterAction(parameterAction.dataset.parameterAction); return; }
 
+    const paymentTab = event.target.closest('.payment-tab[data-payment-type]');
+    if (paymentTab) { setPaymentType(paymentTab.dataset.paymentType); return; }
+
     const editionTab = event.target.closest('.edition-tab[data-edition-group]');
     if (editionTab) {
       $$('.edition-tab').forEach((item) => {
@@ -2349,6 +2522,10 @@ function bindEvents() {
     if (!actionTarget) return;
     const action = actionTarget.dataset.action;
     if (action === 'open-view') openView(actionTarget.dataset.view);
+    if (action === 'reset-payment') { setPaymentType(PAYMENT_TYPES.RECEIPT); resetPayment(); }
+    if (action === 'clear-payment') clearPayment();
+    if (action === 'post-payment') postPayment();
+    if (action === 'auto-lettering') { renderLettering(); showToast('Les lettrages complets sont proposés à partir des factures soldées.'); }
     if (action === 'reset-invoice') { resetInvoice(actionTarget.dataset.invoiceType); showToast('Nouvelle facture prête à être saisie.'); }
     if (action === 'add-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].push({ id: `line-${Date.now()}`, description: '', quantity: 1, unitPrice: 0 }); renderInvoiceLines(type); renderInvoicePreview(type); window.setTimeout(() => $(`#${invoiceConfig(type).formPrefix}InvoiceLines [data-invoice-field="description"]:last-of-type`)?.focus(), 0); }
     if (action === 'remove-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].splice(Number(actionTarget.dataset.lineIndex), 1); renderInvoiceLines(type); renderInvoicePreview(type); }

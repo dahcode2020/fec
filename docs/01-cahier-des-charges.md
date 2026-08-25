@@ -428,17 +428,18 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 8. **Vente** — client, lignes, taxe, échéance, aperçu et validation.
 9. **Achat** — fournisseur, pièce, ventilation et paiement.
 10. **Trésorerie** — mouvements, solde et filtres.
-11. **Livre journal intégré** — écritures, catégories automatiques, synchronisation et détail de la piste d’audit.
-12. **Tiers** — fiches et soldes clients/fournisseurs.
-13. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
-14. **Rapports** — états, période, société, export et impression.
-15. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
-16. **Éditions CSR** — informations exploitables, impressions, contrôles et exports.
-17. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
-18. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
-19. **Paramétrage CSR** — sections analytiques, engagements, cadres d’états, devises et droits opérationnels.
-20. **Outils CSR** — capture d’écran, calculatrice, contrôles et aides comptables.
-21. **Travaux périodiques CSR** — amortissements, abonnements, centralisations, résultat et traitements de période.
+11. **Règlements & lettrage** — encaissements, paiements, affectations et rapprochement des factures.
+12. **Livre journal intégré** — écritures, catégories automatiques, synchronisation et détail de la piste d’audit.
+13. **Tiers** — fiches et soldes clients/fournisseurs.
+14. **Immobilisations** — registre, fiche, plan d’amortissement et dotations à valider.
+15. **Rapports** — états, période, société, export et impression.
+16. **Import / export** — assistant TXT/Excel, profils de colonnes, aperçu, contrôles et historique.
+17. **Éditions CSR** — informations exploitables, impressions, contrôles et exports.
+18. **Fichier CSR** — dossiers, sauvegardes, restaurations et échanges ;
+19. **Configuration CSR** — société, exercice, comptes généraux, tiers, journaux, taxes, immobilisations, imputations, trésorerie, utilisateurs, documents et sauvegarde.
+20. **Paramétrage CSR** — sections analytiques, engagements, cadres d’états, devises et droits opérationnels.
+21. **Outils CSR** — capture d’écran, calculatrice, contrôles et aides comptables.
+22. **Travaux périodiques CSR** — amortissements, abonnements, centralisations, résultat et traitements de période.
 
 ### Règles UX
 

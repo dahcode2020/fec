@@ -307,6 +307,49 @@ export function updateThirdPartyInDirectory(thirdParties, thirdPartyId, patch) {
   return thirdParties.map((thirdParty, thirdPartyIndex) => thirdPartyIndex === index ? updated : thirdParty);
 }
 
+export const PAYMENT_TYPES = Object.freeze({ RECEIPT: 'RECEIPT', PAYMENT: 'PAYMENT' });
+
+export function createPayment({ id, companyId, type, thirdPartyId, thirdPartyName, thirdPartyAccountId, date, reference, amount: paymentAmount, method = 'Virement', treasuryAccountId = '5211' } = {}) {
+  const value = amount(paymentAmount);
+  if (!companyId || !thirdPartyId || !thirdPartyAccountId) throw new DomainError('La société et le tiers sont obligatoires pour un règlement.', 'INVALID_PAYMENT');
+  if (!Object.values(PAYMENT_TYPES).includes(type)) throw new DomainError('Type de règlement inconnu.', 'INVALID_PAYMENT_TYPE');
+  if (!date || !reference || !Number.isFinite(value) || value <= 0) throw new DomainError('Date, référence et montant du règlement sont obligatoires.', 'INVALID_PAYMENT');
+  if (!treasuryAccountId) throw new DomainError('Le compte de trésorerie est obligatoire.', 'INVALID_TREASURY_ACCOUNT');
+  return { id: id || `payment_${Date.now()}`, companyId, type, thirdPartyId, thirdPartyName, thirdPartyAccountId, date, reference, amount: value, method, treasuryAccountId, allocations: [], allocatedAmount: 0, unallocatedAmount: value, status: 'DRAFT', createdAt: new Date().toISOString() };
+}
+
+export function applyPaymentAllocations(payment, documents = [], allocations = []) {
+  if (!payment?.companyId || !payment.thirdPartyId) throw new DomainError('Règlement invalide.', 'INVALID_PAYMENT');
+  const relevantType = payment.type === PAYMENT_TYPES.RECEIPT ? 'SALE' : 'PURCHASE';
+  let allocatedAmount = 0;
+  const updatedDocuments = documents.map((document) => {
+    const requested = allocations.find((allocation) => allocation.documentId === document.id)?.amount || 0;
+    if (!requested) return document;
+    if (document.companyId !== payment.companyId || document.type !== relevantType || document.thirdPartyId !== payment.thirdPartyId) throw new DomainError('La facture ne correspond pas au règlement.', 'PAYMENT_SCOPE_VIOLATION');
+    const outstanding = document.outstanding ?? Math.max(0, document.totalInclTax - (document.paidAmount || 0));
+    const value = amount(requested);
+    if (!Number.isFinite(value) || value <= 0 || value > outstanding) throw new DomainError(`Le montant affecté dépasse le solde de ${document.reference}.`, 'ALLOCATION_EXCEEDS_OUTSTANDING');
+    allocatedAmount += value;
+    const paidAmount = round((document.paidAmount || 0) + value);
+    const nextOutstanding = round(Math.max(0, document.totalInclTax - paidAmount));
+    return { ...document, paidAmount, outstanding: nextOutstanding, status: nextOutstanding === 0 ? 'PAID' : 'PARTIAL', lettered: nextOutstanding === 0 ? true : Boolean(document.lettered) };
+  });
+  if (allocatedAmount > payment.amount) throw new DomainError('Le total affecté dépasse le montant du règlement.', 'ALLOCATION_EXCEEDS_PAYMENT');
+  const normalizedAllocations = allocations.filter((allocation) => Number(allocation.amount) > 0).map((allocation) => ({ documentId: allocation.documentId, amount: amount(allocation.amount) }));
+  return { payment: { ...payment, allocations: normalizedAllocations, allocatedAmount: round(allocatedAmount), unallocatedAmount: round(payment.amount - allocatedAmount), status: allocatedAmount === payment.amount ? 'ALLOCATED' : 'PARTIAL' }, documents: updatedDocuments };
+}
+
+export function paymentToJournalLines(payment) {
+  if (payment.type === PAYMENT_TYPES.RECEIPT) return [
+    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, debit: payment.amount, credit: 0 },
+    { accountId: payment.thirdPartyAccountId, label: `Règlement client — ${payment.thirdPartyName}`, debit: 0, credit: payment.amount }
+  ];
+  return [
+    { accountId: payment.thirdPartyAccountId, label: `Règlement fournisseur — ${payment.thirdPartyName}`, debit: payment.amount, credit: 0 },
+    { accountId: payment.treasuryAccountId, label: `${payment.method} — ${payment.thirdPartyName}`, debit: 0, credit: payment.amount }
+  ];
+}
+
 export function calculateDocumentTotals(lines = [], taxRate = 0) {
   const normalizedTaxRate = Number(taxRate) || 0;
   const normalizedLines = lines.map((line, index) => {

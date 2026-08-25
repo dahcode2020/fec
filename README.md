@@ -17,6 +17,7 @@ Le périmètre initial est décrit dans [`docs/01-cahier-des-charges.md`](docs/0
 - menu opérationnel « Saisie et insertion » avec recalcul en temps réel et imputations multi-lignes ;
 - menu « Paramétrage » pour organiser les règles opérationnelles du dossier ;
 - menu « Outils » avec capture d’écran, calculatrice et aides comptables ;
+- règlements clients/fournisseurs, affectation aux factures et lettrage ;
 - travaux périodiques pour générer les écritures système ;
 - livre journal intégré, catégorisé et synchronisé automatiquement ;
 - section Éditions pour exploiter, imprimer et exporter les informations ;
@@ -40,7 +41,7 @@ La structure des menus **Fichier** et **Configuration** du module CSR est décri
 
 Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-insertion-csr.md`](docs/08-saisie-insertion-csr.md). Le menu **Paramétrage** est décrit dans [`docs/11-parametrage-operationnel.md`](docs/11-parametrage-operationnel.md). Le menu **Outils** est décrit dans [`docs/12-outils-csr.md`](docs/12-outils-csr.md). Les traitements système sont décrits dans [`docs/15-travaux-periodiques-csr.md`](docs/15-travaux-periodiques-csr.md).
 
-L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). L’écran **Configuration → Journaux** est décrit dans [`docs/14-journaux-csr.md`](docs/14-journaux-csr.md). L’écran **Configuration → Tiers** est décrit dans [`docs/16-tiers-csr.md`](docs/16-tiers-csr.md). Les factures clients et fournisseurs sont décrites dans [`docs/17-factures-clients-fournisseurs-csr.md`](docs/17-factures-clients-fournisseurs-csr.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
+L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). L’écran **Configuration → Journaux** est décrit dans [`docs/14-journaux-csr.md`](docs/14-journaux-csr.md). L’écran **Configuration → Tiers** est décrit dans [`docs/16-tiers-csr.md`](docs/16-tiers-csr.md). Les factures clients et fournisseurs sont décrites dans [`docs/17-factures-clients-fournisseurs-csr.md`](docs/17-factures-clients-fournisseurs-csr.md). Les règlements et le lettrage sont décrits dans [`docs/18-reglements-lettrage-csr.md`](docs/18-reglements-lettrage-csr.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
 
 La section **Éditions** du module CSR est décrite dans [`docs/10-editions-csr.md`](docs/10-editions-csr.md).
 
