@@ -399,6 +399,27 @@ export function calculatePeriodResult(entries = [], { companyId, period = null }
   return { companyId, period, sourceEntryIds, sourceCount: sourceEntryIds.length, charges: totalCharges, products: totalProducts, result, resultAccount, lines: [...productLines, ...chargeLines, ...resultLines], totalDebit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.debit, 0), totalCredit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.credit, 0) };
 }
 
+export function buildTrialBalance(entries = [], { companyId, period = null, includeTechnical = false, statuses = [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] } = {}) {
+  const byAccount = new Map();
+  entries.filter((entry) => entry.companyId === companyId && (includeTechnical || !entry.technicalOnly) && entry.status !== OPERATION_STATES.CANCELLED && statuses.includes(entry.status) && (!period || String(entry.date).startsWith(period)) && Array.isArray(entry.lines)).forEach((entry) => entry.lines.forEach((line) => {
+    const accountId = normalizeAccountNumber(line.accountId);
+    const current = byAccount.get(accountId) || { accountId, label: line.label || '', debit: 0, credit: 0 };
+    current.debit += amount(line.debit || 0);
+    current.credit += amount(line.credit || 0);
+    byAccount.set(accountId, current);
+  }));
+  return [...byAccount.values()].map((line) => ({ ...line, debit: round(line.debit), credit: round(line.credit), balance: round(line.debit - line.credit) })).sort((left, right) => left.accountId.localeCompare(right.accountId, 'fr', { numeric: true }));
+}
+
+export function buildFinancialStatements(entries = [], { companyId, period = null, includeTechnical = false, statuses = [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] } = {}) {
+  const trialBalance = buildTrialBalance(entries, { companyId, period, includeTechnical, statuses });
+  const balanceSheet = trialBalance.filter((line) => /^[1-5]/.test(line.accountId));
+  const incomeStatement = trialBalance.filter((line) => /^[6-8]/.test(line.accountId));
+  const charges = incomeStatement.filter((line) => line.accountId.startsWith('6') || line.accountId.startsWith('8')).reduce((sum, line) => sum + line.debit - line.credit, 0);
+  const products = incomeStatement.filter((line) => line.accountId.startsWith('7') || line.accountId.startsWith('8')).reduce((sum, line) => sum + line.credit - line.debit, 0);
+  return { companyId, period, trialBalance, balanceSheet, incomeStatement, totalDebit: trialBalance.reduce((sum, line) => sum + line.debit, 0), totalCredit: trialBalance.reduce((sum, line) => sum + line.credit, 0), charges: round(charges), products: round(products), resultBeforeTax: round(products - charges), generatedAt: new Date().toISOString() };
+}
+
 export function calculateFiscalResult({ accountingResult = 0, deductions = 0, reintegrations = 0, taxRate = 0, minimumTax = 0 } = {}) {
   const beforeTax = amount(accountingResult);
   const deductible = amount(deductions);

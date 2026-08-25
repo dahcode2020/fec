@@ -18,6 +18,8 @@ import {
   transitionOperation,
   updateAccountInPlan,
   updateJournalInSetup,
+  buildFinancialStatements,
+  buildTrialBalance,
   calculateDocumentTotals,
   calculateFiscalResult,
   calculateOpeningBalances,
@@ -186,6 +188,19 @@ test('calcule le résultat d’une période à partir des comptes 6 et 7', () =>
   assert.equal(result.result, 211500);
   assert.equal(result.resultAccount, '131');
   assert.equal(result.totalDebit, result.totalCredit);
+});
+
+test('produit une balance et des états sur les écritures validées', () => {
+  const entries = [
+    { id: 'sale', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '4111', label: 'Clients', debit: 250000, credit: 0 }, { accountId: '7061', label: 'Services vendus', debit: 0, credit: 250000 }] },
+    { id: 'purchase', companyId: 'co-a', date: '2025-06-10', status: 'TO_REVIEW', lines: [{ accountId: '6047', label: 'Fournitures', debit: 38500, credit: 0 }, { accountId: '4011', label: 'Fournisseur', debit: 0, credit: 38500 }] }
+  ];
+  assert.equal(buildTrialBalance(entries, { companyId: 'co-a', period: '2025-06', statuses: ['VALIDATED'] }).length, 2);
+  const statements = buildFinancialStatements(entries, { companyId: 'co-a', period: '2025-06', statuses: ['VALIDATED', 'TO_REVIEW'] });
+  assert.equal(statements.balanceSheet.length, 2);
+  assert.equal(statements.incomeStatement.length, 2);
+  assert.equal(statements.resultBeforeTax, 211500);
+  assert.equal(statements.totalDebit, statements.totalCredit);
 });
 
 test('verrouille une période uniquement après les contrôles bloquants', () => {

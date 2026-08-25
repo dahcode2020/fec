@@ -443,6 +443,7 @@ Le premier prototype peut simuler ces rôles avec un seul utilisateur, mais le m
 23. **Clôture périodique CSR** — checklist, verrouillage et réouverture contrôlée.
 24. **Arrêté définitif CSR** — contrôle annuel, archivage des états et préparation des reports à nouveau.
 25. **Reports à nouveau CSR** — soldes d’ouverture et ouverture contrôlée de l’exercice suivant.
+26. **États financiers CSR** — balance, compte de résultat, bilan, flux de trésorerie et notes.
 
 ### Règles UX
 
