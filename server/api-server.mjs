@@ -188,6 +188,218 @@ async function userContext(userId) {
   };
 }
 
+const SYNC_ENTITY_TYPES = new Set(['COMPANY', 'DOSSIER', 'FISCAL_YEAR', 'PERIOD', 'JOURNAL_ENTRY', 'FINANCIAL_SNAPSHOT', 'FEC_ARCHIVE', 'AUDIT_EVENT']);
+const SYNC_MAX_EVENTS = 100;
+const SYNC_MAX_PAYLOAD_BYTES = 500_000;
+
+function hashPayload(value) {
+  return createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
+}
+
+function normalizeSyncEvent(input, deviceId) {
+  const payload = typeof input.payload_json === 'string' ? JSON.parse(input.payload_json) : (input.payload ?? {});
+  const entityType = String(input.entityType || input.entity_type || '').trim().toUpperCase();
+  const entityId = String(input.entityId || input.entity_id || payload.id || '').trim();
+  const companyId = input.companyId || input.company_id || payload.companyId || payload.company_id || null;
+  const payloadJson = JSON.stringify(payload);
+  const computedHash = hashPayload(payload);
+  if ((input.payloadHash && input.payloadHash !== computedHash) || (input.payload_hash && input.payload_hash !== computedHash)) throw new Error('L’empreinte de l’événement ne correspond pas à son contenu.');
+  if (!input.id || String(input.id).length > 200) throw new Error('Un identifiant d’événement est obligatoire et limité à 200 caractères.');
+  if (!SYNC_ENTITY_TYPES.has(entityType)) throw new Error(`Type d’entité non synchronisable : ${entityType || 'inconnu'}.`);
+  if (!entityId || entityId.length > 200) throw new Error('L’identifiant de l’entité est obligatoire et limité à 200 caractères.');
+  if (!companyId) throw new Error('Une société est obligatoire pour un événement synchronisé.');
+  if (Buffer.byteLength(payloadJson, 'utf8') > SYNC_MAX_PAYLOAD_BYTES) throw new Error('Le contenu de l’événement dépasse la taille autorisée.');
+  return {
+    id: String(input.id),
+    deviceId: String(input.deviceId || input.device_id || deviceId),
+    workspaceId: input.workspaceId || input.workspace_id || payload.workspaceId || payload.workspace_id || null,
+    companyId: String(companyId),
+    moduleId: input.moduleId || input.module_id || payload.moduleId || payload.module_id || null,
+    entityType,
+    entityId,
+    operation: String(input.operation || 'UPSERT').toUpperCase(),
+    payload,
+    payloadJson,
+    payloadHash: input.payloadHash || input.payload_hash || hashPayload(payload),
+    baseHash: input.baseHash || input.base_hash || null,
+    baseCursor: input.baseCursor || input.base_cursor || null
+  };
+}
+
+async function assertSyncAccess(tx, userId, event) {
+  const result = await tx.query(
+    `SELECT c.id, c.workspace_id AS "workspaceId"
+       FROM companies c
+       INNER JOIN memberships m ON m.company_id=c.id
+      WHERE c.id=$1 AND m.user_id=$2 AND m.active=1
+        AND ($3::text IS NULL OR m.module_id=$3)`,
+    [event.companyId, userId, event.moduleId]
+  );
+  const company = result.rows[0];
+  if (!company) throw new Error('Accès refusé à la société pour cet événement.');
+  if (event.workspaceId && event.workspaceId !== company.workspaceId) throw new Error('L’espace de travail de l’événement ne correspond pas à la société.');
+  return company;
+}
+
+async function applySyncEntity(tx, event, userId) {
+  if (event.operation !== 'UPSERT') throw new Error('Les suppressions synchronisées sont désactivées pour protéger les données comptables.');
+  const payload = event.payload;
+  const companyId = event.companyId;
+  switch (event.entityType) {
+    case 'COMPANY': {
+      await tx.query(
+        `UPDATE companies SET name=$1, short_name=$2, legal_form=$3, address=$4, ifu=$5,
+                activity=$6, country=$7, currency=$8, archived=$9
+           WHERE id=$10`,
+        [payload.name, payload.shortName || payload.short_name || null, payload.legalForm || payload.legal_form || null, payload.address || null, payload.ifu || null, payload.activity || null, payload.country || 'BJ', payload.currency || 'XOF', payload.archived ? 1 : 0, companyId]
+      );
+      break;
+    }
+    case 'DOSSIER': {
+      await tx.query(
+        `INSERT INTO dossiers (id, company_id, code, module_id, exercise_year, exercise_start, exercise_end, status, archived, data_json, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (id) DO UPDATE SET code=EXCLUDED.code, module_id=EXCLUDED.module_id,
+           exercise_year=EXCLUDED.exercise_year, exercise_start=EXCLUDED.exercise_start,
+           exercise_end=EXCLUDED.exercise_end, status=EXCLUDED.status, archived=EXCLUDED.archived,
+           data_json=EXCLUDED.data_json`,
+        [event.entityId, companyId, payload.dossier || payload.code || event.entityId, payload.moduleId || payload.module_id || null, payload.exerciseYear || payload.exercise_year || null, payload.exerciseStart || payload.exercise_start || null, payload.exerciseEnd || payload.exercise_end || null, payload.status || 'Disponible', payload.archived ? 1 : 0, event.payloadJson, payload.createdAt || payload.created_at || now()]
+      );
+      break;
+    }
+    case 'FISCAL_YEAR': {
+      const year = String(payload.year || payload.id || '');
+      await tx.query(
+        `INSERT INTO fiscal_years (id, company_id, year, label, status, snapshot_id, opened_at, finalized_at, data_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (company_id, year) DO UPDATE SET label=EXCLUDED.label, status=EXCLUDED.status,
+           snapshot_id=EXCLUDED.snapshot_id, opened_at=EXCLUDED.opened_at, finalized_at=EXCLUDED.finalized_at,
+           data_json=EXCLUDED.data_json`,
+        [event.entityId, companyId, year, payload.label || `Exercice ${year}`, payload.status || 'OPEN', payload.snapshotId || payload.snapshot_id || null, payload.openedAt || payload.opened_at || null, payload.finalizedAt || payload.finalized_at || null, event.payloadJson]
+      );
+      break;
+    }
+    case 'PERIOD': {
+      const fiscalYear = String(payload.fiscalYear || payload.fiscal_year || '');
+      const periodCode = String(payload.periodCode || payload.period_code || payload.id || event.entityId);
+      await tx.query(
+        `INSERT INTO periods (id, company_id, fiscal_year, period_code, start_date, end_date, status, data_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (company_id, fiscal_year, period_code) DO UPDATE SET start_date=EXCLUDED.start_date,
+           end_date=EXCLUDED.end_date, status=EXCLUDED.status, data_json=EXCLUDED.data_json`,
+        [event.entityId, companyId, fiscalYear, periodCode, payload.start || payload.startDate || payload.start_date, payload.end || payload.endDate || payload.end_date, payload.status || 'OPEN', event.payloadJson]
+      );
+      break;
+    }
+    case 'JOURNAL_ENTRY': {
+      const lines = Array.isArray(payload.lines) ? payload.lines : [];
+      if (lines.length < 2) throw new Error('Une écriture synchronisée doit comporter au moins deux lignes.');
+      const debitCents = lines.reduce((sum, line) => sum + Math.round(Number(line.debit || 0) * 100), 0);
+      const creditCents = lines.reduce((sum, line) => sum + Math.round(Number(line.credit || 0) * 100), 0);
+      if (debitCents !== creditCents) throw new Error('Une écriture synchronisée doit être équilibrée.');
+      const existing = await tx.query('SELECT status FROM journal_entries WHERE id=$1 FOR UPDATE', [event.entityId]);
+      if (existing.rows[0] && ['VALIDATED', 'CLOSED'].includes(String(existing.rows[0].status).toUpperCase())) throw new Error('Une écriture validée ou clôturée ne peut pas être remplacée par synchronisation.');
+      await tx.query(
+        `INSERT INTO journal_entries (id, company_id, fiscal_year, journal_id, entry_date, piece_date, reference, label, status, integration_category, validated_at, data_json, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         ON CONFLICT (id) DO UPDATE SET fiscal_year=EXCLUDED.fiscal_year, journal_id=EXCLUDED.journal_id,
+           entry_date=EXCLUDED.entry_date, piece_date=EXCLUDED.piece_date, reference=EXCLUDED.reference,
+           label=EXCLUDED.label, status=EXCLUDED.status, integration_category=EXCLUDED.integration_category,
+           validated_at=EXCLUDED.validated_at, data_json=EXCLUDED.data_json`,
+        [event.entityId, companyId, payload.fiscalYear || payload.fiscal_year || null, payload.journalId || payload.journal_id || 'OD', payload.date || payload.entryDate || payload.entry_date, payload.pieceDate || payload.piece_date || payload.date || payload.entryDate, payload.reference || null, payload.label || '', payload.status || 'DRAFT', payload.integrationCategory || payload.integration_category || null, payload.validatedAt || payload.validated_at || null, event.payloadJson, payload.createdAt || payload.created_at || now()]
+      );
+      await tx.query('DELETE FROM journal_entry_lines WHERE entry_id=$1', [event.entityId]);
+      for (const [index, line] of lines.entries()) {
+        await tx.query(
+          `INSERT INTO journal_entry_lines (entry_id, line_number, account_id, label, debit, credit, data_json)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [event.entityId, index + 1, line.accountId || line.account_id, line.label || '', Number(line.debit || 0), Number(line.credit || 0), JSON.stringify(line)]
+        );
+      }
+      break;
+    }
+    case 'FINANCIAL_SNAPSHOT': {
+      await tx.query(
+        `INSERT INTO financial_snapshots (id, company_id, fiscal_year, status, immutable, snapshot_hash, source_count, line_count, data_json, sealed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (id) DO NOTHING`,
+        [event.entityId, companyId, String(payload.fiscalYear || payload.fiscal_year), payload.status || 'SEALED', payload.immutable === false ? 0 : 1, payload.snapshotHash || payload.snapshot_hash || event.payloadHash, Number(payload.sourceCount || payload.source_count || 0), Number(payload.lineCount || payload.line_count || 0), event.payloadJson, payload.sealedAt || payload.sealed_at || now()]
+      );
+      break;
+    }
+    case 'FEC_ARCHIVE': {
+      await tx.query(
+        `INSERT INTO fec_archives (id, company_id, fiscal_year, package_file, package_sha256, mode, regime, data_json, sealed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (id) DO NOTHING`,
+        [event.entityId, companyId, String(payload.fiscalYear || payload.exercise || payload.exerciseYear), payload.packageFile || payload.package_file || '', payload.packageSha256 || payload.package_sha256 || '', payload.mode || 'OFFICIAL', payload.regime || 'NORMAL', event.payloadJson, payload.sealedAt || payload.sealed_at || now()]
+      );
+      break;
+    }
+    case 'AUDIT_EVENT': {
+      await tx.query(
+        `INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (id) DO NOTHING`,
+        [event.entityId, companyId, userId, payload.action || payload.type || 'SYNC_EVENT', payload.at || payload.occurredAt || payload.occurred_at || now(), event.payloadJson]
+      );
+      break;
+    }
+    default: throw new Error(`Type d’entité non pris en charge : ${event.entityType}`);
+  }
+}
+
+async function processSyncEvent(tx, userId, event) {
+  const company = await assertSyncAccess(tx, userId, event);
+  // Serialize versions of the same entity. Without an advisory lock, two
+  // devices could both observe "no current row" and silently overwrite one
+  // another before either transaction inserts its version.
+  await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${event.companyId}:${event.entityType}:${event.entityId}`]);
+  const existingEvent = await tx.query('SELECT cursor, payload_hash AS "payloadHash" FROM sync_events WHERE id=$1', [event.id]);
+  if (existingEvent.rows[0]) {
+    if (existingEvent.rows[0].payloadHash === event.payloadHash) return { kind: 'ACK', cursor: String(existingEvent.rows[0].cursor) };
+    await tx.query(
+      `INSERT INTO sync_conflicts (id, outbox_id, workspace_id, company_id, entity_type, entity_id, local_json, remote_json, reason, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'OPEN',$10)`,
+      [`conflict-${randomUUID()}`, event.id, company.workspaceId, event.companyId, event.entityType, event.entityId, event.payloadJson, existingEvent.rows[0].payloadHash, 'Le même identifiant d’événement a reçu deux contenus différents.', now()]
+    );
+    return { kind: 'CONFLICT', reason: 'Le même identifiant d’événement a reçu deux contenus différents.' };
+  }
+
+  const currentResult = await tx.query(
+    `SELECT payload_json AS "payloadJson", payload_hash AS "payloadHash", cursor
+       FROM sync_entities WHERE company_id=$1 AND entity_type=$2 AND entity_id=$3 FOR UPDATE`,
+    [event.companyId, event.entityType, event.entityId]
+  );
+  const current = currentResult.rows[0];
+  if (current && current.payloadHash !== event.payloadHash && event.baseHash !== current.payloadHash && String(event.baseCursor || '') !== String(current.cursor)) {
+    await tx.query(
+      `INSERT INTO sync_conflicts (id, outbox_id, workspace_id, company_id, entity_type, entity_id, local_json, remote_json, reason, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'OPEN',$10)`,
+      [`conflict-${randomUUID()}`, event.id, company.workspaceId, event.companyId, event.entityType, event.entityId, event.payloadJson, current.payloadJson, 'La version distante a changé depuis la dernière base connue.', now()]
+    );
+    return { kind: 'CONFLICT', reason: 'La version distante a changé depuis la dernière base connue.', remote: JSON.parse(current.payloadJson) };
+  }
+  if (current && current.payloadHash === event.payloadHash) return { kind: 'ACK', cursor: String(current.cursor) };
+
+  await applySyncEntity(tx, event, userId);
+  const inserted = await tx.query(
+    `INSERT INTO sync_events (id, device_id, workspace_id, company_id, module_id, entity_type, entity_id, operation, payload_json, payload_hash, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING cursor`,
+    [event.id, event.deviceId, company.workspaceId, event.companyId, event.moduleId, event.entityType, event.entityId, event.operation, event.payloadJson, event.payloadHash, now()]
+  );
+  const cursor = String(inserted.rows[0].cursor);
+  await tx.query(
+    `INSERT INTO sync_entities (entity_type, entity_id, workspace_id, company_id, module_id, payload_json, payload_hash, cursor, deleted, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9)
+     ON CONFLICT (company_id, entity_type, entity_id) DO UPDATE SET workspace_id=EXCLUDED.workspace_id,
+       company_id=EXCLUDED.company_id, module_id=EXCLUDED.module_id, payload_json=EXCLUDED.payload_json, payload_hash=EXCLUDED.payload_hash,
+       cursor=EXCLUDED.cursor, deleted=0, updated_at=EXCLUDED.updated_at`,
+    [event.entityType, event.entityId, company.workspaceId, event.companyId, event.moduleId, event.payloadJson, event.payloadHash, cursor, now()]
+  );
+  return { kind: 'ACK', cursor };
+}
+
 async function createOneTimeToken(tx, table, userId, minutes) {
   const raw = randomBytes(32).toString('base64url');
   const createdAt = new Date();
@@ -235,6 +447,83 @@ async function api(request, response, pathname) {
     } catch (error) {
       return jsonResponse(request, response, 503, { ok: false, ready: false, code: 'API_NOT_READY', message: error.message });
     }
+  }
+
+  if (request.method === 'POST' && pathname === '/api/sync/push') {
+    const current = await sessionUser(request);
+    if (!current) return jsonResponse(request, response, 401, { code: 'AUTH_REQUIRED', message: 'Connectez-vous avant de synchroniser.' });
+    try {
+      const input = await readJson(request);
+      const deviceId = String(input.deviceId || input.device_id || '').trim();
+      const rawEvents = Array.isArray(input.events) ? input.events : [];
+      if (!deviceId || deviceId.length > 200) return jsonResponse(request, response, 400, { code: 'INVALID_DEVICE', message: 'Un identifiant d’appareil valide est obligatoire.' });
+      if (rawEvents.length > SYNC_MAX_EVENTS) return jsonResponse(request, response, 413, { code: 'SYNC_BATCH_TOO_LARGE', message: `Un lot ne peut pas dépasser ${SYNC_MAX_EVENTS} événements.` });
+      const events = rawEvents.map((event) => normalizeSyncEvent(event, deviceId));
+      const acknowledgements = [];
+      const conflicts = [];
+      const errors = [];
+      const registeredDevice = await store.query('SELECT user_id AS "userId" FROM sync_devices WHERE id=$1', [deviceId]);
+      if (registeredDevice.rows[0]?.userId && registeredDevice.rows[0].userId !== current.user.id) return jsonResponse(request, response, 403, { code: 'DEVICE_OWNED_BY_ANOTHER_USER', message: 'Cet appareil est déjà associé à un autre compte EMRYS.' });
+      await store.query(
+        `INSERT INTO sync_devices (id, user_id, name, last_seen_at, created_at)
+         VALUES ($1,$2,$3,$4,$4)
+         ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id, last_seen_at=EXCLUDED.last_seen_at`,
+        [deviceId, current.user.id, String(input.deviceName || deviceId).slice(0, 200), now()]
+      );
+      for (const event of events) {
+        try {
+          const result = await store.transaction((tx) => processSyncEvent(tx, current.user.id, event));
+          if (result.kind === 'ACK') acknowledgements.push({ id: event.id, cursor: result.cursor });
+          else conflicts.push({ outboxId: event.id, companyId: event.companyId, entityType: event.entityType, entityId: event.entityId, local: event.payload, remote: result.remote || null, reason: result.reason });
+        } catch (error) {
+          errors.push({ id: event.id, entityType: event.entityType, entityId: event.entityId, code: error.code || 'SYNC_EVENT_REJECTED', message: error.message });
+        }
+      }
+      const cursorResult = await store.query('SELECT COALESCE(MAX(cursor), 0)::text AS cursor FROM sync_events');
+      return jsonResponse(request, response, 200, { ok: errors.length === 0 && conflicts.length === 0, acknowledgements, conflicts, errors, cursor: cursorResult.rows[0]?.cursor || '0' });
+    } catch (error) {
+      return jsonResponse(request, response, 400, { code: 'SYNC_PUSH_INVALID', message: error.message });
+    }
+  }
+
+  if (request.method === 'GET' && pathname === '/api/sync/pull') {
+    const current = await sessionUser(request);
+    if (!current) return jsonResponse(request, response, 401, { code: 'AUTH_REQUIRED', message: 'Connectez-vous avant de synchroniser.' });
+    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    const afterCursor = Number(url.searchParams.get('cursor') || 0);
+    const requestedLimit = Number(url.searchParams.get('limit') || SYNC_MAX_EVENTS);
+    const limit = Math.min(SYNC_MAX_EVENTS, Math.max(1, requestedLimit));
+    const companyId = url.searchParams.get('companyId') || url.searchParams.get('company_id') || null;
+    if (!Number.isSafeInteger(afterCursor) || afterCursor < 0 || !Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || (companyId && companyId.length > 200)) return jsonResponse(request, response, 400, { code: 'INVALID_SYNC_CURSOR', message: 'Curseur ou société invalide.' });
+    const result = await store.query(
+      `SELECT e.cursor, e.id, e.device_id AS "deviceId", e.workspace_id AS "workspaceId",
+              e.company_id AS "companyId", e.module_id AS "moduleId", e.entity_type AS "entityType", e.entity_id AS "entityId",
+              e.operation, e.payload_json AS "payloadJson", e.payload_hash AS "payloadHash", e.created_at AS "createdAt"
+         FROM sync_events e
+        WHERE e.cursor > $1
+          AND ($2::text IS NULL OR e.company_id=$2)
+          AND EXISTS (SELECT 1 FROM memberships m WHERE m.company_id=e.company_id AND m.user_id=$3 AND m.active=1)
+        ORDER BY e.cursor ASC LIMIT $4`,
+      [afterCursor, companyId, current.user.id, limit]
+    );
+    const events = result.rows.map((event) => ({ id: event.id, deviceId: event.deviceId, workspaceId: event.workspaceId, companyId: event.companyId, moduleId: event.moduleId, entityType: event.entityType, entityId: event.entityId, operation: event.operation, payload: JSON.parse(event.payloadJson), payloadHash: event.payloadHash, cursor: String(event.cursor), createdAt: event.createdAt }));
+    return jsonResponse(request, response, 200, { ok: true, events, cursor: events.length ? events[events.length - 1].cursor : String(afterCursor) });
+  }
+
+  if (request.method === 'GET' && pathname === '/api/sync/status') {
+    const current = await sessionUser(request);
+    if (!current) return jsonResponse(request, response, 401, { code: 'AUTH_REQUIRED', message: 'Connectez-vous avant de synchroniser.' });
+    const result = await store.query(
+      `SELECT
+         (SELECT COUNT(*)::integer FROM sync_conflicts c
+           WHERE c.status='OPEN' AND c.company_id IN
+             (SELECT company_id FROM memberships WHERE user_id=$1 AND active=1)) AS conflicts,
+         (SELECT COALESCE(MAX(e.cursor), 0)::text FROM sync_events e
+           WHERE e.company_id IN
+             (SELECT company_id FROM memberships WHERE user_id=$1 AND active=1)) AS cursor`,
+      [current.user.id]
+    );
+    return jsonResponse(request, response, 200, { ok: true, conflicts: result.rows[0]?.conflicts || 0, cursor: result.rows[0]?.cursor || '0' });
   }
 
   if (request.method === 'GET' && pathname === '/api/me') {

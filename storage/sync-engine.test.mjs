@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSqliteWorkspaceStore } from './sqlite-store.mjs';
 import { createInMemorySyncRemote, createSyncEngine } from './sync-engine.mjs';
+import { createHttpSyncRemote } from './http-sync-remote.mjs';
 
 const date = '2026-08-26T10:00:00.000Z';
 

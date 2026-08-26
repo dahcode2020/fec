@@ -37,6 +37,9 @@ Le fichier `vercel.json` réécrit `/api/*` vers `https://api.emrys-saas.com/api
 
 - `GET /api/health` : santé de l’API et de la base ;
 - `GET /api/ready` : migrations prêtes ;
+- `POST /api/sync/push` : dépôt transactionnel d’un lot d’événements locaux ;
+- `GET /api/sync/pull?cursor=...` : reprise des événements visibles depuis un curseur ;
+- `GET /api/sync/status` : état des conflits et du dernier curseur connu ;
 - `POST /api/signup` : utilisateur, espace, société CSR, exercice, 12 périodes et essai ;
 - `GET /api/auth/verify` : vérification d’e-mail ;
 - `POST /api/login`, `GET /api/me`, `GET /api/trial`, `POST /api/logout` ;
@@ -54,7 +57,7 @@ Le store [`storage/postgres-store.mjs`](../storage/postgres-store.mjs) :
 
 - utilise un pool PostgreSQL ;
 - applique le schéma dans une transaction ;
-- enregistre la version de socle `5` ;
+- enregistre la version de socle `6` ;
 - expose des transactions pour les inscriptions et les opérations sensibles ;
 - refuse de démarrer sans `DATABASE_URL` ;
 - accepte SSL pour Neon ;
@@ -132,7 +135,49 @@ Pour l’expérimentation en ligne :
 
 Les secrets Neon, Google, e-mail et paiement ne doivent jamais être committés, ni placés dans le code du site public.
 
-## 4. Déployer l’API
+## 4. Contrat de synchronisation
+
+Le moteur local utilise [`storage/http-sync-remote.mjs`](../storage/http-sync-remote.mjs) comme adaptateur HTTP du contrat défini dans [`storage/sync-engine.mjs`](../storage/sync-engine.mjs).
+
+### Push
+
+`POST /api/sync/push` reçoit au maximum 100 événements et un `deviceId`. Chaque événement contient notamment :
+
+```json
+{
+  "id": "sync-…",
+  "companyId": "company-…",
+  "moduleId": "CSR",
+  "entityType": "JOURNAL_ENTRY",
+  "entityId": "entry-…",
+  "operation": "UPSERT",
+  "payload": {},
+  "payloadHash": "sha256…",
+  "baseHash": "sha256…"
+}
+```
+
+L’API :
+
+1. vérifie la session et l’appartenance à la société ;
+2. vérifie l’empreinte du contenu reçu ;
+3. refuse qu’un appareil déjà enregistré soit repris par un autre compte ;
+4. traite chaque événement dans sa propre transaction ;
+5. inscrit l’événement dans un journal distant append-only ;
+6. conserve la dernière version par entité ;
+7. renvoie un acquittement, un conflit ou une erreur explicite.
+
+Un événement portant un identifiant déjà connu et un contenu identique est acquitté sans être rejoué. Une version distante différente exige un `baseHash` ou un `baseCursor` correspondant à la version courante. Sinon le conflit est conservé dans `sync_conflicts` et aucune version n’écrase l’autre.
+
+Les écritures `VALIDATED` ou `CLOSED` sont protégées contre le remplacement par synchronisation. Les suppressions synchronisées restent désactivées à ce stade afin de respecter le principe « aucune perte silencieuse ».
+
+### Pull
+
+`GET /api/sync/pull?cursor=42&limit=100` renvoie les événements accessibles à l’utilisateur, dans l’ordre du curseur PostgreSQL. Le curseur est monotone et peut être repris après une coupure réseau. La réponse ne contient jamais les événements d’une société à laquelle l’utilisateur n’a pas accès.
+
+Le journal distant et les versions courantes sont portés par `sync_events` et `sync_entities`. Les tables `sync_inbox`, `sync_outbox` et `sync_conflicts` restent nécessaires côté SQLite pour la reprise et la présentation des erreurs dans l’application.
+
+## 5. Déployer l’API
 
 L’image est construite à la racine du dépôt :
 
@@ -163,7 +208,7 @@ En hébergement réel, le conteneur doit être placé derrière HTTPS, avec :
 
 Le serveur Docker actuel est le socle d’expérimentation. Il ne prétend pas encore fournir l’ensemble des règles métier CSR, GP, GCSF et GC ni le connecteur de synchronisation complet.
 
-## 5. Déployer le site sur Vercel
+## 6. Déployer le site sur Vercel
 
 Le build public rassemble :
 
@@ -197,7 +242,7 @@ Dans Vercel :
 
 Tant que `api.emrys-saas.com` n’est pas réellement déployé, le site Vercel peut s’afficher mais son inscription en ligne ne doit pas être annoncée comme active.
 
-## 6. Données et changement d’hébergeur
+## 7. Données et changement d’hébergeur
 
 Neon n’est pas une dépendance propriétaire du modèle métier. Le contrat de stockage repose sur PostgreSQL standard :
 
@@ -219,10 +264,10 @@ Avant un changement d’hébergeur :
 
 Aucune mise à jour, synchronisation ou migration ne devra supprimer automatiquement les données d’un espace EMRYS.
 
-## 7. Ce qui reste à construire avant la production
+## 8. Ce qui reste à construire avant la production
 
 - migration contrôlée des données SQLite vers PostgreSQL ;
-- endpoints de synchronisation push/pull avec curseurs, outbox, inbox et conflits ;
+- intégration de l’adaptateur HTTP dans Tauri et application des événements métier côté client ;
 - application Tauri et sauvegarde locale avant mise à jour ;
 - Google OAuth avec callback, vérification du jeton et liaison d’identité ;
 - fournisseur réel d’e-mails ;

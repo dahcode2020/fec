@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS sync_outbox (
   operation TEXT NOT NULL,
   payload_json TEXT NOT NULL,
   payload_hash TEXT NOT NULL,
+  base_hash TEXT,
   created_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'PENDING',
   attempts INTEGER NOT NULL DEFAULT 0,

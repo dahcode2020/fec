@@ -27,11 +27,13 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
   db.exec(SCHEMA_TEXT);
   try { db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT'); } catch { /* Colonne déjà présente sur une base existante. */ }
   try { db.exec('ALTER TABLE companies ADD COLUMN workspace_id TEXT REFERENCES workspace(id) ON DELETE CASCADE'); } catch { /* Colonne déjà présente sur une base existante. */ }
+  try { db.exec('ALTER TABLE sync_outbox ADD COLUMN base_hash TEXT'); } catch { /* Colonne déjà présente ou table créée par le schéma. */ }
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(1, 'initial-domain-schema', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(2, 'offline-sync-and-backups', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(3, 'trials-and-billing', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(4, 'authentication-security', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(5, 'workspace-company-isolation', now());
+  db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(6, 'sync-base-hash', now());
 
   const transaction = (callback) => {
     db.exec('BEGIN IMMEDIATE');
@@ -44,10 +46,20 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
       throw error;
     }
   };
-  const enqueueInternal = ({ id, companyId = null, entityType, entityId, operation = 'UPSERT', payload }) => {
+  const previousSyncHash = (entityType, entityId) => {
+    const outgoing = db.prepare('SELECT payload_hash AS payloadHash, created_at AS createdAt FROM sync_outbox WHERE entity_type=? AND entity_id=? ORDER BY created_at DESC LIMIT 1').get(entityType, entityId);
+    const incoming = db.prepare('SELECT payload_json AS payloadJson, received_at AS receivedAt FROM sync_inbox WHERE entity_type=? AND entity_id=? ORDER BY received_at DESC LIMIT 1').get(entityType, entityId);
+    const incomingHash = incoming ? hash(JSON.parse(incoming.payloadJson)) : null;
+    if (!outgoing) return incomingHash;
+    if (!incoming) return outgoing.payloadHash;
+    return outgoing.createdAt >= incoming.receivedAt ? outgoing.payloadHash : incomingHash;
+  };
+  const enqueueInternal = ({ id, companyId = null, entityType, entityId, operation = 'UPSERT', payload, baseHash = null }) => {
     const eventId = id || `sync-${entityType}-${entityId}-${randomUUID()}`;
-    db.prepare(`INSERT OR IGNORE INTO sync_outbox (id, company_id, entity_type, entity_id, operation, payload_json, payload_hash, created_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`).run(eventId, companyId, entityType, entityId, operation, json(payload), hash(payload), now());
+    const payloadHash = hash(payload);
+    const effectiveBaseHash = baseHash || previousSyncHash(entityType, entityId);
+    db.prepare(`INSERT OR IGNORE INTO sync_outbox (id, company_id, entity_type, entity_id, operation, payload_json, payload_hash, base_hash, created_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`).run(eventId, companyId, entityType, entityId, operation, json(payload), payloadHash, effectiveBaseHash, now());
     return eventId;
   };
 

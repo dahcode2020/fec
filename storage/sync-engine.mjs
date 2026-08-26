@@ -61,11 +61,13 @@ export function createSyncEngine({ store, remote, deviceId = `device-${Date.now(
           result.acknowledgements.forEach((acknowledgement) => { store.acknowledgeSyncEvent(acknowledgement.id); pushedCursor = Math.max(pushedCursor, Number(acknowledgement.cursor) || 0); summary.pushed += 1; });
           if (pushedCursor > 0) { summary.cursorAfter = String(pushedCursor); store.setSyncCursor(scope, summary.cursorAfter); }
           result.conflicts.forEach((conflict) => { store.recordConflict(conflict); const event = pending.find((item) => item.id === conflict.outboxId); if (event) store.markSyncEventFailed(event.id, conflict.reason); summary.conflicts += 1; });
+          (result.errors || []).forEach((failure) => { const event = pending.find((item) => item.id === failure.id); if (event) store.markSyncEventFailed(event.id, failure.message || failure.code || 'Événement rejeté.'); summary.failed += 1; });
+          if ((result.errors || []).length) summary.status = 'PARTIAL';
         }
         const cursor = store.getSyncCursor(scope) || '0';
         const incoming = remote.pull(cursor, { limit });
         incoming.forEach((event) => {
-          if (!store.receiveSyncEvent(event)) { summary.duplicates += 1; return; }
+          if (!store.receiveSyncEvent(event)) { summary.duplicates += 1; summary.cursorAfter = String(event.cursor); return; }
           try { store.applySyncEvent(event); summary.applied += 1; }
           catch (error) { summary.failed += 1; store.markSyncEventFailed(event.id, error.message); }
           summary.pulled += 1;

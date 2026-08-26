@@ -31,7 +31,7 @@ Les relations utilisateur-société-module et les clés étrangères sont garant
 Le schéma comprend aussi les tables de fiabilité :
 
 - `schema_migrations` pour versionner le schéma ;
-- `sync_outbox` pour les changements locaux non encore envoyés ;
+- `sync_outbox` pour les changements locaux non encore envoyés, avec l’empreinte de la base de comparaison ;
 - `sync_inbox` pour dédupliquer les changements reçus ;
 - `sync_cursors` pour reprendre une synchronisation interrompue ;
 - `sync_conflicts` pour empêcher la résolution silencieuse d’un conflit ;

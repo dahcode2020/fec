@@ -7,7 +7,7 @@ import pg from 'pg';
 const { Pool } = pg;
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)));
 const SCHEMA = readFileSync(resolve(ROOT, 'schema.postgres.sql'), 'utf8');
-const POSTGRES_SCHEMA_VERSION = 5;
+const POSTGRES_SCHEMA_VERSION = 6;
 
 const now = () => new Date().toISOString();
 const hash = (value) => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
@@ -43,6 +43,9 @@ export function createPostgresWorkspaceStore(options = {}) {
         try {
           await client.query('BEGIN');
           await client.query(SCHEMA);
+          // The first PostgreSQL foundation had sync_devices without ownership.
+          // Keep upgrades additive so a restart never destroys existing data.
+          await client.query('ALTER TABLE sync_devices ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE SET NULL');
           await client.query(
             `INSERT INTO schema_migrations (version, name, applied_at)
              VALUES ($1, $2, $3)
