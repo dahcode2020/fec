@@ -1161,6 +1161,24 @@ async function authenticate(event) {
   }
 }
 
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const email = String(new FormData(form).get('email') || '').trim().toLowerCase();
+  try {
+    const response = await fetch('/api/password/reset/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ email }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || 'La demande n’a pas pu être traitée.');
+    const result = $('#passwordResetResult');
+    if (result) {
+      result.innerHTML = payload.resetUrl ? `En développement : <a href="${escapeHtml(payload.resetUrl)}" target="_self">Ouvrir le lien de réinitialisation</a>` : escapeHtml(payload.message || 'Si le compte existe, un lien sera envoyé.');
+      result.removeAttribute('hidden');
+    }
+    showToast(payload.resetUrl ? 'Lien de réinitialisation prêt.' : 'Si cette adresse existe, un lien sera envoyé.');
+  } catch (error) { showToast(error.message || 'Service de réinitialisation indisponible.'); }
+}
+
 function openView(viewName) {
   $$('.view').forEach((view) => view.classList.toggle('is-visible', view.dataset.viewPanel === viewName));
   $$('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === viewName));
@@ -4091,6 +4109,7 @@ function handleEditionAction(action, title) {
 
 function bindEvents() {
   bindAuthForm();
+  $('#passwordResetForm')?.addEventListener('submit', requestPasswordReset);
   window.addEventListener('online', refreshSyncStatus);
   window.addEventListener('offline', refreshSyncStatus);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
@@ -4349,7 +4368,7 @@ function bindEvents() {
       const password = actionTarget.closest('.password-field')?.querySelector('input');
       if (password) { password.type = password.type === 'password' ? 'text' : 'password'; actionTarget.textContent = password.type === 'password' ? 'Voir' : 'Masquer'; }
     }
-    if (action === 'forgot-password') showToast('La récupération du mot de passe sera ajoutée avec l’authentification réelle.');
+    if (action === 'forgot-password') { $('#passwordResetEmail').value = $('#authForm input[name="email"]')?.value || ''; $('#passwordResetResult')?.setAttribute('hidden', ''); openModal('passwordResetModal'); }
     if (action === 'show-company-modal') openModal('companyModal');
     if (action === 'show-account-modal') openAccountModal();
     if (action === 'edit-account') openAccountModal(actionTarget.dataset.accountId);

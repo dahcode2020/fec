@@ -12,6 +12,10 @@ Avec `npm run preview-site`, le serveur de développement sert la one page et ex
 - `GET /api/me` — vérifie la session courante et renvoie l’utilisateur et son essai ;
 - `GET /api/trial` — renvoie l’état et les limites de l’essai courant ;
 - `POST /api/logout` — révoque la session de développement ;
+- `GET /api/auth/verify?token=...` — confirme une adresse e-mail ;
+- `POST /api/password/reset/request` — prépare une demande de réinitialisation ;
+- `GET /api/password/reset?token=...` — page de saisie du nouveau mot de passe en développement ;
+- `POST /api/password/reset/confirm` — applique un nouveau mot de passe et révoque les sessions ;
 - `GET /api/auth/google/start` — démarre Google OAuth lorsqu’il est configuré ;
 - `POST /api/payment/checkout` — valide la demande de paiement et attend le connecteur marchand.
 
@@ -33,7 +37,7 @@ Le serveur crée une ligne `trials` avec les limites de découverte :
 - 50 documents GC ;
 - 30 jours.
 
-Les mots de passe sont dérivés avec PBKDF2 côté serveur et ne sont jamais conservés en clair.
+Les mots de passe sont dérivés avec PBKDF2 côté serveur et ne sont jamais conservés en clair. Les sessions sont désormais enregistrées avec une empreinte de jeton dans SQLite, expirent après huit heures en développement et peuvent être révoquées à la déconnexion ou après une réinitialisation du mot de passe. Les liens de vérification et de réinitialisation expirent et sont utilisables une seule fois.
 
 ## Google
 

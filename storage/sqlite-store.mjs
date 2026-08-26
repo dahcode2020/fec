@@ -22,9 +22,11 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
   ensureParent(filename);
   const db = new DatabaseSync(filename);
   db.exec(SCHEMA_TEXT);
+  try { db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT'); } catch { /* Colonne déjà présente sur une base existante. */ }
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(1, 'initial-domain-schema', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(2, 'offline-sync-and-backups', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(3, 'trials-and-billing', now());
+  db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(4, 'authentication-security', now());
 
   const transaction = (callback) => {
     db.exec('BEGIN IMMEDIATE');
@@ -95,9 +97,9 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
     },
     saveUser(user, { enqueue = true } = {}) {
       return transaction(() => {
-        db.prepare(`INSERT INTO users (id, name, email, active, password_hash, password_salt, last_login_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, active=excluded.active, password_hash=excluded.password_hash, password_salt=excluded.password_salt, last_login_at=excluded.last_login_at`).run(user.id, user.name, user.email, flag(user.active !== false), user.passwordHash || null, user.passwordSalt || null, user.lastLoginAt || null, user.createdAt || now());
+        db.prepare(`INSERT INTO users (id, name, email, active, password_hash, password_salt, email_verified_at, last_login_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, active=excluded.active, password_hash=excluded.password_hash, password_salt=excluded.password_salt, email_verified_at=excluded.email_verified_at, last_login_at=excluded.last_login_at`).run(user.id, user.name, user.email, flag(user.active !== false), user.passwordHash || null, user.passwordSalt || null, user.emailVerifiedAt || null, user.lastLoginAt || null, user.createdAt || now());
         if (enqueue) enqueueInternal({ companyId: null, entityType: 'USER', entityId: user.id, payload: user });
       });
     },

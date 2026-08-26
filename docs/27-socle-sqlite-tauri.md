@@ -35,7 +35,10 @@ Le schéma comprend aussi les tables de fiabilité :
 - `sync_inbox` pour dédupliquer les changements reçus ;
 - `sync_cursors` pour reprendre une synchronisation interrompue ;
 - `sync_conflicts` pour empêcher la résolution silencieuse d’un conflit ;
-- `data_snapshots` et `backup_manifests` pour vérifier les copies.
+- `data_snapshots` et `backup_manifests` pour vérifier les copies ;
+- `sessions` pour les sessions révoquables ;
+- `email_verification_tokens` pour l’activation des comptes ;
+- `password_reset_tokens` pour la récupération contrôlée des mots de passe.
 
 ## Adaptateur de développement
 

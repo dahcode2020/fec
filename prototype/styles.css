@@ -962,3 +962,6 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 .sync-modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
 @media (max-width:920px) { .sync-status { min-width:auto; } .sync-status small { display:none; } }
 @media (max-width:620px) { .sync-status { padding:7px; } .sync-status > span { display:none; } .sync-metrics { grid-template-columns:1fr; } .sync-modal-actions { flex-direction:column; } .sync-modal-actions .button { width:100%; } }
+.password-reset-modal { width:min(480px, calc(100% - 30px)); }
+.password-reset-result { margin-top:12px; padding:11px 12px; border:1px solid #d8f1e9; background:#f5fcf9; border-radius:8px; color:#5c8779; font-size:9px; line-height:1.4; }
+.password-reset-result a { color:var(--green-dark); font-weight:800; text-decoration:underline; }

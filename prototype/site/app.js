@@ -61,6 +61,8 @@ function renderPricing(moduleId = 'CSR') {
 
 function openSignup(plan = '') {
   const modal = $('#signupModal');
+  $('#signupForm')?.removeAttribute('hidden');
+  $('#signupVerification')?.setAttribute('hidden', '');
   $('#signupPlan')?.remove();
   if (plan) {
     const hidden = document.createElement('input');
@@ -101,9 +103,18 @@ async function handleSignup(event) {
     const response = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: String(data.get('name')).trim(), companyName: String(data.get('companyName') || '').trim(), email: String(data.get('email')).trim().toLowerCase(), password: String(data.get('password') || ''), plan: String(data.get('plan') || '') }) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || 'L’inscription n’a pas pu être finalisée.');
-    closeSignup();
-    showToast(`Votre essai de 30 jours est créé, ${payload.user?.name || 'bienvenue'}. Vérifiez votre e-mail lorsque l’authentification sera activée.`);
-    form.reset();
+    if (payload.verificationUrl) {
+      form.setAttribute('hidden', '');
+      const verification = $('#signupVerification');
+      const link = $('#signupVerificationLink');
+      if (link) link.href = payload.verificationUrl;
+      verification?.removeAttribute('hidden');
+      showToast('Compte créé. Ouvrez le lien de vérification pour activer l’essai.');
+    } else {
+      closeSignup();
+      showToast(`Votre essai de 30 jours est créé, ${payload.user?.name || 'bienvenue'}. Un e-mail de vérification va être envoyé.`);
+      form.reset();
+    }
   } catch (error) {
     showToast(error.message || 'Le service d’inscription est momentanément indisponible.');
   } finally {

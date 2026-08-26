@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, randomUUID, pbkdf2, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, pbkdf2, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createSqliteWorkspaceStore } from '../storage/sqlite-store.mjs';
 import { createMonthlyPeriods, createUser, makeDossierCode } from '../prototype/core.js';
@@ -14,6 +14,9 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.EMRYS_DB_PATH || '/tmp/emrys-dev.sqlite';
 const hashPassword = promisify(pbkdf2);
 const sessions = new Map();
+const hashToken = (token) => createHash('sha256').update(String(token)).digest('hex');
+const isProduction = process.env.NODE_ENV === 'production';
+const cookieSecurity = isProduction ? '; Secure' : '';
 const store = createSqliteWorkspaceStore({ filename: DB_FILE });
 const allowedProviders = new Set(['FEDAPAY', 'MOBILE_MONEY', 'BANK_TRANSFER', 'CHEQUE', 'CARD']);
 
@@ -45,8 +48,11 @@ function trialLimits() {
 function sessionFromRequest(request) {
   const cookie = String(request.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('emrys_session='));
   const token = cookie?.slice('emrys_session='.length);
-  const session = token ? sessions.get(token) : null;
-  if (!session || session.expiresAt < Date.now()) { if (token) sessions.delete(token); return null; }
+  if (!token) return null;
+  const session = store.db.prepare("SELECT id, user_id AS userId, expires_at AS expiresAt FROM sessions WHERE token_hash=? AND revoked_at IS NULL").get(hashToken(token));
+  if (!session) return null;
+  if (new Date(session.expiresAt).getTime() < Date.now()) { store.db.prepare('UPDATE sessions SET revoked_at=? WHERE id=?').run(new Date().toISOString(), session.id); return null; }
+  store.db.prepare('UPDATE sessions SET last_seen_at=? WHERE id=?').run(new Date().toISOString(), session.id);
   return { token, ...session };
 }
 
@@ -72,6 +78,15 @@ function sessionUser(request) {
   return user ? { session, user } : null;
 }
 
+function createOneTimeToken(table, userId, minutes) {
+  const raw = randomBytes(32).toString('base64url');
+  const id = `${table}-${randomUUID()}`;
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + minutes * 60000);
+  store.db.prepare(`INSERT INTO ${table} (id, user_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`).run(id, userId, hashToken(raw), createdAt.toISOString(), expiresAt.toISOString());
+  return { raw, id, expiresAt: expiresAt.toISOString() };
+}
+
 function userContext(userId) {
   const companies = store.db.prepare(`SELECT c.* FROM companies c INNER JOIN memberships m ON m.company_id=c.id WHERE m.user_id=? AND m.active=1 GROUP BY c.id ORDER BY c.name`).all(userId).map((company) => ({ id: company.id, name: company.name, shortName: company.short_name || 'EM', legalForm: company.legal_form || 'À configurer', type: company.legal_form || 'À configurer', address: company.address || '', activity: company.activity || '', code: company.short_name || 'EMRYS', exerciseStart: `${new Date().getUTCFullYear()}-01-01`, exerciseEnd: `${new Date().getUTCFullYear()}-12-31`, meta: `${company.legal_form || 'À configurer'} · ${company.currency || 'XOF'}`, ifu: company.ifu || '', color: 'teal', currency: company.currency || 'XOF' }));
   const memberships = store.db.prepare('SELECT id, user_id AS userId, company_id AS companyId, module_id AS moduleId, role, active, created_at AS createdAt FROM memberships WHERE user_id=? AND active=1').all(userId);
@@ -94,8 +109,8 @@ async function api(request, response, pathname) {
   }
   if (request.method === 'POST' && pathname === '/api/logout') {
     const session = sessionFromRequest(request);
-    if (session) sessions.delete(session.token);
-    return jsonResponse(response, 200, { ok: true }, { 'Set-Cookie': 'emrys_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' });
+    if (session) store.db.prepare('UPDATE sessions SET revoked_at=? WHERE id=?').run(new Date().toISOString(), session.id);
+    return jsonResponse(response, 200, { ok: true }, { 'Set-Cookie': `emrys_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${cookieSecurity}` });
   }
   if (request.method === 'POST' && pathname === '/api/signup') {
     try {
@@ -119,8 +134,10 @@ async function api(request, response, pathname) {
       const expiresAt = new Date(startedAt.getTime() + 30 * 86400000);
       const trial = { id: `trial-${randomUUID()}`, userId, workspaceId, planCode: input.plan || null, startedAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits(), createdAt: startedAt.toISOString() };
       const audit = { id: `audit-${randomUUID()}`, userId, action: 'TRIAL_CREATED', at: startedAt.toISOString(), data: { workspaceId, plan: input.plan || null } };
+      let verification;
       store.transaction(() => {
-        store.db.prepare(`INSERT INTO users (id, name, email, active, password_hash, password_salt, last_login_at, created_at) VALUES (?, ?, ?, 1, ?, ?, NULL, ?)`).run(user.id, user.name, user.email, user.passwordHash, user.passwordSalt, user.createdAt);
+        store.db.prepare(`INSERT INTO users (id, name, email, active, password_hash, password_salt, email_verified_at, last_login_at, created_at) VALUES (?, ?, ?, 1, ?, ?, NULL, NULL, ?)`).run(user.id, user.name, user.email, user.passwordHash, user.passwordSalt, user.createdAt);
+        verification = createOneTimeToken('email_verification_tokens', userId, 60);
         store.db.prepare('INSERT INTO workspace (id, name, created_at) VALUES (?, ?, ?)').run(workspaceId, `${name} — EMRYS`, startedAt.toISOString());
         store.db.prepare('INSERT INTO companies (id, name, short_name, legal_form, address, ifu, activity, country, currency, archived, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)').run(companyId, companyName, 'EMRYS', 'À configurer', null, null, null, 'BJ', 'XOF', startedAt.toISOString());
         store.db.prepare('INSERT INTO memberships (id, user_id, company_id, module_id, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)').run(`membership-${randomUUID()}`, userId, companyId, 'CSR', 'ADMIN', startedAt.toISOString());
@@ -130,10 +147,65 @@ async function api(request, response, pathname) {
         store.db.prepare('INSERT INTO trials (id, user_id, workspace_id, plan_code, started_at, expires_at, status, limits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(trial.id, trial.userId, trial.workspaceId, trial.planCode, trial.startedAt, trial.expiresAt, trial.status, JSON.stringify(trial.limits), trial.createdAt);
         store.db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, NULL, ?, ?, ?, ?)').run(audit.id, audit.userId, audit.action, audit.at, JSON.stringify(audit));
       });
-      const token = randomBytes(32).toString('base64url');
-      sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
-      return jsonResponse(response, 201, { ok: true, user: publicUser(user), trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits() }, context: userContext(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
+      const origin = `${isProduction ? 'https' : 'http'}://${request.headers.host || 'localhost'}`;
+      const verificationPayload = { emailVerified: false, verificationRequired: true };
+      if (!isProduction) verificationPayload.verificationUrl = `${origin}/api/auth/verify?token=${encodeURIComponent(verification.raw)}`;
+      return jsonResponse(response, 201, { ok: true, user: publicUser(user), trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits() }, context: userContext(user.id), ...verificationPayload });
     } catch (error) { return jsonResponse(response, 500, { code: 'SIGNUP_FAILED', message: error.message }); }
+  }
+  if (request.method === 'GET' && pathname === '/api/auth/verify') {
+    const token = new URL(request.url, `http://${request.headers.host || 'localhost'}`).searchParams.get('token') || '';
+    const row = store.db.prepare("SELECT id, user_id AS userId, expires_at AS expiresAt FROM email_verification_tokens WHERE token_hash=? AND used_at IS NULL").get(hashToken(token));
+    if (!row || new Date(row.expiresAt).getTime() < Date.now()) {
+      response.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return response.end('<h1>Lien invalide ou expiré</h1><p>Demandez un nouveau lien depuis EMRYS.</p>');
+    }
+    const verifiedAt = new Date().toISOString();
+    store.transaction(() => {
+      store.db.prepare('UPDATE users SET email_verified_at=? WHERE id=?').run(verifiedAt, row.userId);
+      store.db.prepare('UPDATE email_verification_tokens SET used_at=? WHERE id=?').run(verifiedAt, row.id);
+      store.db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, NULL, ?, ?, ?, ?)').run(`audit-${randomUUID()}`, row.userId, 'EMAIL_VERIFIED', verifiedAt, JSON.stringify({ userId: row.userId }));
+    });
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return response.end('<h1>Adresse e-mail vérifiée</h1><p>Votre compte EMRYS est activé.</p><p><a href="/app/">Accéder à EMRYS</a></p>');
+  }
+  if (request.method === 'POST' && pathname === '/api/password/reset/request') {
+    try {
+      const input = await readJson(request);
+      const email = String(input.email || '').trim().toLowerCase();
+      const user = store.db.prepare('SELECT id FROM users WHERE email=? AND active=1').get(email);
+      const result = { ok: true, message: 'Si cette adresse existe, un lien de réinitialisation sera envoyé.' };
+      if (user) {
+        const token = createOneTimeToken('password_reset_tokens', user.id, 30);
+        if (!isProduction) result.resetUrl = `${`${isProduction ? 'https' : 'http'}://${request.headers.host || 'localhost'}`}/api/password/reset?token=${encodeURIComponent(token.raw)}`;
+      }
+      return jsonResponse(response, 200, result);
+    } catch (error) { return jsonResponse(response, 400, { code: 'PASSWORD_RESET_REQUEST_INVALID', message: error.message }); }
+  }
+  if (request.method === 'GET' && pathname === '/api/password/reset') {
+    const token = new URL(request.url, `http://${request.headers.host || 'localhost'}`).searchParams.get('token') || '';
+    const safeToken = JSON.stringify(token).replace(/</g, '\\u003c');
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return response.end(`<!doctype html><html lang="fr"><meta charset="utf-8"><title>Réinitialiser le mot de passe — EMRYS</title><body style="font-family:system-ui;max-width:420px;margin:60px auto;padding:20px"><h1>Réinitialiser votre mot de passe</h1><p>Choisissez un nouveau mot de passe EMRYS.</p><form id="form"><input id="password" type="password" minlength="8" required placeholder="8 caractères minimum" style="display:block;width:100%;padding:10px;margin:15px 0"><button type="submit">Enregistrer</button></form><p id="message"></p><script>const token=${safeToken};document.querySelector('#form').addEventListener('submit',async(e)=>{e.preventDefault();const r=await fetch('/api/password/reset/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password:document.querySelector('#password').value})});const p=await r.json();document.querySelector('#message').textContent=p.message||'Opération terminée.';if(r.ok)document.querySelector('#form').remove()});</script></body></html>`);
+  }
+  if (request.method === 'POST' && pathname === '/api/password/reset/confirm') {
+    try {
+      const input = await readJson(request);
+      const token = String(input.token || '');
+      const password = String(input.password || '');
+      if (password.length < 8) return jsonResponse(response, 400, { code: 'INVALID_PASSWORD', message: 'Le mot de passe doit contenir au moins huit caractères.' });
+      const row = store.db.prepare("SELECT id, user_id AS userId, expires_at AS expiresAt FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL").get(hashToken(token));
+      if (!row || new Date(row.expiresAt).getTime() < Date.now()) return jsonResponse(response, 400, { code: 'INVALID_RESET_TOKEN', message: 'Lien de réinitialisation invalide ou expiré.' });
+      const record = await passwordRecord(password);
+      const updatedAt = new Date().toISOString();
+      store.transaction(() => {
+        store.db.prepare('UPDATE users SET password_hash=?, password_salt=? WHERE id=?').run(record.hash, record.salt, row.userId);
+        store.db.prepare('UPDATE password_reset_tokens SET used_at=? WHERE id=?').run(updatedAt, row.id);
+        store.db.prepare('UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(updatedAt, row.userId);
+        store.db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, NULL, ?, ?, ?, ?)').run(`audit-${randomUUID()}`, row.userId, 'PASSWORD_RESET', updatedAt, JSON.stringify({ userId: row.userId }));
+      });
+      return jsonResponse(response, 200, { ok: true, message: 'Mot de passe réinitialisé. Reconnectez-vous.' });
+    } catch (error) { return jsonResponse(response, 400, { code: 'PASSWORD_RESET_FAILED', message: error.message }); }
   }
   if (request.method === 'POST' && pathname === '/api/login') {
     try {
@@ -142,10 +214,14 @@ async function api(request, response, pathname) {
       const password = String(input.password || '');
       const user = store.db.prepare('SELECT * FROM users WHERE email=? AND active=1').get(email);
       if (!user || !(await passwordMatches(password, user))) return jsonResponse(response, 401, { code: 'INVALID_CREDENTIALS', message: 'Adresse e-mail ou mot de passe incorrect.' });
+      if (!user.email_verified_at) return jsonResponse(response, 403, { code: 'EMAIL_NOT_VERIFIED', message: 'Vérifiez votre adresse e-mail avant de vous connecter.' });
       const token = randomBytes(32).toString('base64url');
-      sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
-      store.db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(new Date().toISOString(), user.id);
-      return jsonResponse(response, 200, { ok: true, user: publicUser(user), trial: trialForUser(user.id), context: userContext(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
+      const sessionId = `session-${randomUUID()}`;
+      const loggedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 8 * 3600000).toISOString();
+      store.db.prepare('INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(sessionId, user.id, hashToken(token), loggedAt, loggedAt, expiresAt);
+      store.db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(loggedAt, user.id);
+      return jsonResponse(response, 200, { ok: true, user: publicUser(user), trial: trialForUser(user.id), context: userContext(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}${cookieSecurity}` });
     } catch (error) { return jsonResponse(response, 500, { code: 'LOGIN_FAILED', message: error.message }); }
   }
   if (request.method === 'GET' && pathname === '/api/auth/google/start') {
