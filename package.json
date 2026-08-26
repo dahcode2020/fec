@@ -10,7 +10,7 @@
     "build:site": "node scripts/build-site.mjs",
     "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype",
     "preview-site": "node server/dev-server.mjs",
-    "preview-site-neon": "EMRYS_API_ORIGIN=http://localhost:8080 node server/dev-server.mjs",
+    "preview-site-neon": "EMRYS_API_ORIGIN=http://127.0.0.1:8080 node server/dev-server.mjs",
     "preview-api": "node server/api-server.mjs"
   },
   "dependencies": {
