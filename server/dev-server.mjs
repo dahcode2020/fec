@@ -8,6 +8,7 @@ import { createSqliteWorkspaceStore } from '../storage/sqlite-store.mjs';
 import { createUser } from '../prototype/core.js';
 
 const ROOT = resolve(fileURLToPath(new URL('../prototype/site/', import.meta.url)));
+const APP_ROOT = resolve(fileURLToPath(new URL('../prototype/', import.meta.url)));
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.EMRYS_DB_PATH || '/tmp/emrys-dev.sqlite';
@@ -41,8 +42,53 @@ function trialLimits() {
   return { companies: 1, users: 1, csrEntries: 100, invoices: 20, thirdParties: 20, gpEmployees: 10, gcsfItems: 20, gcDocuments: 50, days: 30 };
 }
 
+function sessionFromRequest(request) {
+  const cookie = String(request.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('emrys_session='));
+  const token = cookie?.slice('emrys_session='.length);
+  const session = token ? sessions.get(token) : null;
+  if (!session || session.expiresAt < Date.now()) { if (token) sessions.delete(token); return null; }
+  return { token, ...session };
+}
+
+function publicUser(user) {
+  return user ? { id: user.id, name: user.name, email: user.email } : null;
+}
+
+function trialForUser(userId) {
+  const trial = store.db.prepare('SELECT * FROM trials WHERE user_id=? ORDER BY expires_at DESC LIMIT 1').get(userId);
+  if (!trial) return null;
+  const expired = trial.status === 'ACTIVE' && new Date(trial.expires_at).getTime() <= Date.now();
+  if (expired) {
+    store.db.prepare("UPDATE trials SET status='EXPIRED' WHERE id=?").run(trial.id);
+    trial.status = 'EXPIRED';
+  }
+  return { id: trial.id, startsAt: trial.started_at, expiresAt: trial.expires_at, status: trial.status, limits: JSON.parse(trial.limits_json || '{}') };
+}
+
+function sessionUser(request) {
+  const session = sessionFromRequest(request);
+  if (!session) return null;
+  const user = store.db.prepare('SELECT * FROM users WHERE id=? AND active=1').get(session.userId);
+  return user ? { session, user } : null;
+}
+
 async function api(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/health') return jsonResponse(response, 200, { ok: true, service: 'emrys-dev-api', database: DB_FILE, schemaVersion: store.schemaVersion() });
+  if (request.method === 'GET' && pathname === '/api/me') {
+    const current = sessionUser(request);
+    if (!current) return jsonResponse(response, 401, { code: 'AUTH_REQUIRED', message: 'Session absente ou expirée.' });
+    return jsonResponse(response, 200, { ok: true, user: publicUser(current.user), trial: trialForUser(current.user.id) });
+  }
+  if (request.method === 'GET' && pathname === '/api/trial') {
+    const current = sessionUser(request);
+    if (!current) return jsonResponse(response, 401, { code: 'AUTH_REQUIRED', message: 'Session absente ou expirée.' });
+    return jsonResponse(response, 200, { ok: true, trial: trialForUser(current.user.id) });
+  }
+  if (request.method === 'POST' && pathname === '/api/logout') {
+    const session = sessionFromRequest(request);
+    if (session) sessions.delete(session.token);
+    return jsonResponse(response, 200, { ok: true }, { 'Set-Cookie': 'emrys_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' });
+  }
   if (request.method === 'POST' && pathname === '/api/signup') {
     try {
       const input = await readJson(request);
@@ -66,7 +112,9 @@ async function api(request, response, pathname) {
         store.db.prepare('INSERT INTO trials (id, user_id, workspace_id, plan_code, started_at, expires_at, status, limits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(trial.id, trial.userId, trial.workspaceId, trial.planCode, trial.startedAt, trial.expiresAt, trial.status, JSON.stringify(trial.limits), trial.createdAt);
         store.db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, NULL, ?, ?, ?, ?)').run(audit.id, audit.userId, audit.action, audit.at, JSON.stringify(audit));
       });
-      return jsonResponse(response, 201, { ok: true, user: { id: user.id, name: user.name, email: user.email }, trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), limits: trialLimits() } });
+      const token = randomBytes(32).toString('base64url');
+      sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
+      return jsonResponse(response, 201, { ok: true, user: publicUser(user), trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits() }, session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
     } catch (error) { return jsonResponse(response, 500, { code: 'SIGNUP_FAILED', message: error.message }); }
   }
   if (request.method === 'POST' && pathname === '/api/login') {
@@ -79,7 +127,7 @@ async function api(request, response, pathname) {
       const token = randomBytes(32).toString('base64url');
       sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
       store.db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(new Date().toISOString(), user.id);
-      return jsonResponse(response, 200, { ok: true, user: { id: user.id, name: user.name, email: user.email }, session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
+      return jsonResponse(response, 200, { ok: true, user: publicUser(user), trial: trialForUser(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
     } catch (error) { return jsonResponse(response, 500, { code: 'LOGIN_FAILED', message: error.message }); }
   }
   if (request.method === 'GET' && pathname === '/api/auth/google/start') {
@@ -103,11 +151,17 @@ async function api(request, response, pathname) {
 }
 
 function staticFile(pathname, response) {
-  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  const file = resolve(join(ROOT, normalize(relative)));
-  if (!file.startsWith(ROOT) || !existsSync(file)) return jsonResponse(response, 404, { code: 'NOT_FOUND', message: 'Page inconnue.' });
+  if (pathname === '/app') {
+    response.writeHead(302, { Location: '/app/' });
+    return response.end();
+  }
+  const isApp = pathname.startsWith('/app/');
+  const base = isApp ? APP_ROOT : ROOT;
+  const relativePath = isApp ? (pathname.slice('/app/'.length) || 'index.html') : (pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, ''));
+  const file = resolve(join(base, normalize(relativePath)));
+  if (!file.startsWith(`${base}/`) && file !== base || !existsSync(file)) return jsonResponse(response, 404, { code: 'NOT_FOUND', message: 'Page inconnue.' });
   const type = ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.xml': 'application/xml; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8' })[extname(file)] || 'application/octet-stream';
-  response.writeHead(200, { 'Content-Type': type, 'Cache-Control': pathname === '/' ? 'no-store' : 'public, max-age=300' });
+  response.writeHead(200, { 'Content-Type': type, 'Cache-Control': pathname === '/' || isApp ? 'no-store' : 'public, max-age=300' });
   response.end(readFileSync(file));
 }
 

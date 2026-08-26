@@ -144,6 +144,7 @@ function handleAction(event) {
   if (action === 'google-signup') handleGoogleSignup();
   if (action === 'install-pwa') installPwa();
   if (action === 'desktop-download') showToast('L’installateur Windows sera publié avec la première version Tauri d’EMRYS.');
+  if (action === 'go-app') window.location.assign('/app/');
   if (action === 'toggle-nav') return;
 }
 

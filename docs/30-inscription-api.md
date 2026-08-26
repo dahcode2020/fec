@@ -9,6 +9,9 @@ Avec `npm run preview-site`, le serveur de développement sert la one page et ex
 - `GET /api/health` — état de l’API et version du schéma ;
 - `POST /api/signup` — crée un utilisateur, un espace et un essai de 30 jours ;
 - `POST /api/login` — vérifie un compte créé par l’API et crée une session de développement ;
+- `GET /api/me` — vérifie la session courante et renvoie l’utilisateur et son essai ;
+- `GET /api/trial` — renvoie l’état et les limites de l’essai courant ;
+- `POST /api/logout` — révoque la session de développement ;
 - `GET /api/auth/google/start` — démarre Google OAuth lorsqu’il est configuré ;
 - `POST /api/payment/checkout` — valide la demande de paiement et attend le connecteur marchand.
 
