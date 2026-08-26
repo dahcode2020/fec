@@ -1,5 +1,5 @@
 import { copyFileSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -37,7 +37,7 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
     }
   };
   const enqueueInternal = ({ id, companyId = null, entityType, entityId, operation = 'UPSERT', payload }) => {
-    const eventId = id || `sync-${entityType}-${entityId}-${Date.now()}`;
+    const eventId = id || `sync-${entityType}-${entityId}-${randomUUID()}`;
     db.prepare(`INSERT OR IGNORE INTO sync_outbox (id, company_id, entity_type, entity_id, operation, payload_json, payload_hash, created_at, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`).run(eventId, companyId, entityType, entityId, operation, json(payload), hash(payload), now());
     return eventId;
@@ -49,7 +49,7 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
     schemaVersion() { return db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get().version; },
     enqueueSyncEvent(event) { return transaction(() => enqueueInternal(event)); },
     pendingSyncEvents({ companyId = null, limit = 100 } = {}) {
-      return companyId ? db.prepare("SELECT * FROM sync_outbox WHERE company_id = ? AND status IN ('PENDING', 'FAILED') ORDER BY created_at LIMIT ?").all(companyId, limit) : db.prepare("SELECT * FROM sync_outbox WHERE status IN ('PENDING', 'FAILED') ORDER BY created_at LIMIT ?").all(limit);
+      return companyId ? db.prepare("SELECT * FROM sync_outbox WHERE (company_id = ? OR company_id IS NULL) AND status IN ('PENDING', 'FAILED') ORDER BY created_at LIMIT ?").all(companyId, limit) : db.prepare("SELECT * FROM sync_outbox WHERE status IN ('PENDING', 'FAILED') ORDER BY created_at LIMIT ?").all(limit);
     },
     acknowledgeSyncEvent(id, cursor = null) {
       db.prepare("UPDATE sync_outbox SET status='ACKED', acknowledged_at=? WHERE id=?").run(now(), id);

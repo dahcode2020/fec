@@ -6,6 +6,7 @@
   "description": "Socle de prototype pour une gestion comptable SYSCOHADA adaptée au Bénin",
   "scripts": {
     "test": "node --test prototype/core.test.mjs prototype/app-load.test.mjs storage/sqlite-store.test.mjs storage/sync-engine.test.mjs",
-    "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype"
+    "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype",
+    "preview-site": "python3 -m http.server 4174 --bind 0.0.0.0 --directory prototype/site"
   }
 }

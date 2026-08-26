@@ -89,4 +89,4 @@ Le moteur ne résout jamais silencieusement une divergence entre deux versions d
 
 Le prototype affiche désormais l’état du transport dans la barre supérieure et dans le centre de synchronisation : données locales, hors ligne, à synchroniser ou conflit. Le bouton de coupure simulée sert à tester le parcours utilisateur sans prétendre synchroniser avec un serveur.
 
-Le socle SQLite actuel et ce moteur de synchronisation sont des adaptateurs de développement. Ils ne doivent pas encore être présentés comme une solution de production ou comme une authentification serveur complète.
+Le socle SQLite actuel et ce moteur de synchronisation sont des adaptateurs de développement. La prochaine intégration remplacera le service distant en mémoire par des commandes Tauri et une API authentifiée sans changer le contrat de l’outbox/inbox. Ils ne doivent pas encore être présentés comme une solution de production ou comme une authentification serveur complète.
