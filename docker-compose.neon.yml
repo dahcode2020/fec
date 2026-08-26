@@ -1,0 +1,19 @@
+services:
+  # Variante explicite : API uniquement, connectée à Neon.
+  # Elle ne démarre aucun PostgreSQL local et n’utilise aucun volume local.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      HOST: "${HOST:-0.0.0.0}"
+      PORT: "${PORT:-8080}"
+      NODE_ENV: "${NODE_ENV:-development}"
+      DATABASE_SSL: "${DATABASE_SSL:-true}"
+      EMRYS_PUBLIC_URL: "${EMRYS_PUBLIC_URL:-http://localhost:4174}"
+      DEV_EXPOSE_TOKENS: "${DEV_EXPOSE_TOKENS:-true}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:4174}"
+    ports:
+      - "8080:8080"

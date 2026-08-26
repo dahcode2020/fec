@@ -91,7 +91,13 @@ cp .env.example .env
 docker compose up --build
 ```
 
-L’API est alors accessible sur :
+Si votre environnement conserve encore une ancienne configuration Compose ou un ancien service `postgres`, utilisez la variante explicite API + Neon :
+
+```bash
+docker compose -f docker-compose.neon.yml up --build
+```
+
+Cette variante ne démarre aucun conteneur PostgreSQL local et ne monte aucun volume local. L’API est alors accessible sur :
 
 ```text
 http://localhost:8080/api/health
