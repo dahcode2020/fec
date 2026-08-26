@@ -137,6 +137,14 @@ L’API de démonstration avec SQLite reste disponible séparément :
 npm run preview-site
 ```
 
+Pour ouvrir le site public et l’application web en les faisant passer par l’API Neon lancée sur le port 8080 :
+
+```bash
+EMRYS_API_ORIGIN=http://localhost:8080 npm run preview-site
+```
+
+Le navigateur continue d’appeler le même domaine `4174`; le serveur public relaie les appels `/api/*` vers l’API PostgreSQL.
+
 ## 3. Préparer Neon
 
 Pour l’expérimentation en ligne :

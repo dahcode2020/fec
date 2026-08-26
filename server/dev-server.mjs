@@ -12,6 +12,7 @@ const APP_ROOT = resolve(fileURLToPath(new URL('../prototype/', import.meta.url)
 const PORT = Number(process.env.PORT || 4174);
 const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.EMRYS_DB_PATH || '/tmp/emrys-dev.sqlite';
+const API_ORIGIN = String(process.env.EMRYS_API_ORIGIN || '').replace(/\/$/, '');
 const hashPassword = promisify(pbkdf2);
 const sessions = new Map();
 const hashToken = (token) => createHash('sha256').update(String(token)).digest('hex');
@@ -244,6 +245,31 @@ async function api(request, response, pathname) {
   return jsonResponse(response, 404, { code: 'NOT_FOUND', message: 'Ressource inconnue.' });
 }
 
+async function proxyApiRequest(request, response) {
+  const target = new URL(request.url, `${API_ORIGIN}/`);
+  const headers = new Headers(request.headers);
+  headers.delete('host');
+  headers.delete('content-length');
+  headers.set('x-forwarded-host', request.headers.host || 'localhost');
+  try {
+    const upstream = await fetch(target, {
+      method: request.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request,
+      duplex: 'half',
+      redirect: 'manual'
+    });
+    const responseHeaders = {};
+    upstream.headers.forEach((value, key) => { responseHeaders[key] = value; });
+    const setCookies = typeof upstream.headers.getSetCookie === 'function' ? upstream.headers.getSetCookie() : [];
+    if (setCookies.length) responseHeaders['set-cookie'] = setCookies;
+    response.writeHead(upstream.status, responseHeaders);
+    response.end(Buffer.from(await upstream.arrayBuffer()));
+  } catch (error) {
+    jsonResponse(response, 503, { code: 'API_PROXY_UNAVAILABLE', message: 'L’API EMRYS est momentanément indisponible.', detail: error.message });
+  }
+}
+
 function staticFile(pathname, response) {
   if (pathname === '/app') {
     response.writeHead(302, { Location: '/app/' });
@@ -261,11 +287,11 @@ function staticFile(pathname, response) {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
-  if (url.pathname.startsWith('/api/')) return api(request, response, url.pathname);
+  if (url.pathname.startsWith('/api/')) return API_ORIGIN ? proxyApiRequest(request, response) : api(request, response, url.pathname);
   if (request.method !== 'GET' && request.method !== 'HEAD') return jsonResponse(response, 405, { code: 'METHOD_NOT_ALLOWED', message: 'Méthode non autorisée.' });
   return staticFile(url.pathname, response);
 });
 
-server.listen(PORT, HOST, () => console.log(`EMRYS site + API de développement sur http://${HOST}:${PORT} · SQLite ${DB_FILE}`));
+server.listen(PORT, HOST, () => console.log(`EMRYS site de développement sur http://${HOST}:${PORT} · API ${API_ORIGIN || `locale SQLite ${DB_FILE}`}`));
 process.on('SIGTERM', () => { store.close(); server.close(() => process.exit(0)); });
 process.on('SIGINT', () => { store.close(); server.close(() => process.exit(0)); });
