@@ -1066,18 +1066,56 @@ async function passwordDigest(password, salt) {
   return new Uint8Array(bits);
 }
 
-async function verifyOrSeedPassword(user, password) {
+async function verifyOrSeedPassword(user, password, { allowAnySeed = false } = {}) {
   if (user.passwordHash && user.passwordSalt) {
     const digest = await passwordDigest(password, base64ToBytes(user.passwordSalt));
     return bytesToBase64(digest) === user.passwordHash;
   }
-  if (password !== AUTH_DEMO_PASSWORD) return false;
+  if (!allowAnySeed && password !== AUTH_DEMO_PASSWORD) return false;
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
   const digest = await passwordDigest(password, salt);
   user.passwordSalt = bytesToBase64(salt);
   user.passwordHash = bytesToBase64(digest);
   user.passwordSeededAt = new Date().toISOString();
   return true;
+}
+
+async function authenticateAgainstServer(email, password) {
+  if (typeof window === 'undefined' || !window.location.pathname.startsWith('/app')) return { available: false };
+  try {
+    const response = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ email, password }) });
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 404) return { available: false };
+    return { available: true, ok: response.ok, payload };
+  } catch {
+    return { available: false };
+  }
+}
+
+function mergeRemoteContext(context, userId) {
+  if (!context) return;
+  const remoteCompanies = context.companies || [];
+  remoteCompanies.forEach((company) => {
+    appState.companies[company.id] = { ...company, color: company.color || 'teal' };
+    if (!appState.accountingSetups[company.id]) appState.accountingSetups[company.id] = createCsrSetup({ companyId: company.id });
+    appState.periods[company.id] = appState.periods[company.id] || createMonthlyPeriods(Number(context.fiscalYears?.find((year) => year.companyId === company.id)?.id || new Date().getUTCFullYear()));
+    appState.activePeriodIds[company.id] = appState.activePeriodIds[company.id] || appState.periods[company.id][0]?.id;
+  });
+  appState.memberships = [...(appState.memberships || []).filter((membership) => membership.userId !== userId), ...(context.memberships || [])];
+  const remoteCompanyIds = new Set(remoteCompanies.map((company) => company.id));
+  appState.dossiers = [...(appState.dossiers || []).filter((dossier) => !remoteCompanyIds.has(dossier.companyId)), ...(context.dossiers || [])];
+  (context.fiscalYears || []).forEach((fiscalYear) => {
+    appState.fiscalYears[fiscalYear.companyId] = { ...fiscalYear, id: String(fiscalYear.id) };
+    if (!appState.fiscalYearCatalog[fiscalYear.companyId]) appState.fiscalYearCatalog[fiscalYear.companyId] = [];
+    if (!appState.fiscalYearCatalog[fiscalYear.companyId].some((item) => String(item.id) === String(fiscalYear.id))) appState.fiscalYearCatalog[fiscalYear.companyId].push({ ...fiscalYear, id: String(fiscalYear.id) });
+    if (!appState.fiscalYearPeriods[fiscalYear.companyId]) appState.fiscalYearPeriods[fiscalYear.companyId] = {};
+    if (!appState.fiscalYearPeriods[fiscalYear.companyId][String(fiscalYear.id)]) appState.fiscalYearPeriods[fiscalYear.companyId][String(fiscalYear.id)] = createMonthlyPeriods(Number(fiscalYear.id), { status: fiscalYear.status === 'FINALIZED' ? 'CLOSED' : 'OPEN' });
+    appState.periods[fiscalYear.companyId] = appState.fiscalYearPeriods[fiscalYear.companyId][String(fiscalYear.id)];
+  });
+  const firstCompany = remoteCompanies[0];
+  if (firstCompany) appState.activeCompany = firstCompany.id;
+  const firstDossier = (context.dossiers || []).find((dossier) => dossier.moduleId === 'CSR');
+  if (firstDossier) appState.selectedDossier = firstDossier.id;
 }
 
 async function authenticate(event) {
@@ -1090,8 +1128,21 @@ async function authenticate(event) {
     const formData = new FormData(form);
     const email = String(formData.get('email') || '').trim().toLowerCase();
     const password = String(formData.get('password') || '');
-    const user = appState.users.find((item) => item.email === email && item.active !== false);
-    if (!user || !(await verifyOrSeedPassword(user, password))) { showToast('Adresse e-mail ou mot de passe incorrect.'); return; }
+    const localUser = appState.users.find((item) => item.email === email && item.active !== false);
+    const remote = await authenticateAgainstServer(email, password);
+    let user = localUser;
+    if (remote.ok && remote.payload?.user) {
+      user = localUser || createUser({ id: remote.payload.user.id, name: remote.payload.user.name, email: remote.payload.user.email });
+      if (!localUser) appState.users.push(user);
+      if (!user.passwordHash) { try { await verifyOrSeedPassword(user, password, { allowAnySeed: true }); } catch { /* La session distante reste utilisable même sans cache hors ligne. */ } }
+      mergeRemoteContext(remote.payload.context, user.id);
+    } else if (!localUser || remote.available && remote.payload?.code === 'INVALID_CREDENTIALS' && !localUser) {
+      showToast(remote.payload?.message || 'Adresse e-mail ou mot de passe incorrect.');
+      return;
+    } else if (!user || !(await verifyOrSeedPassword(user, password))) {
+      showToast('Adresse e-mail ou mot de passe incorrect.');
+      return;
+    }
     appState.currentUserId = user.id;
     user.lastLoginAt = new Date().toISOString();
     const firstAccessibleMembership = (appState.memberships || []).find((membership) => membership.userId === user.id && membership.active !== false);

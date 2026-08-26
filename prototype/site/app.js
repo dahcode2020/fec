@@ -98,7 +98,7 @@ async function handleSignup(event) {
   if (submit) { submit.disabled = true; submit.textContent = 'Création en cours…'; }
   try {
     const data = new FormData(form);
-    const response = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: String(data.get('name')).trim(), email: String(data.get('email')).trim().toLowerCase(), password: String(data.get('password') || ''), plan: String(data.get('plan') || '') }) });
+    const response = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: String(data.get('name')).trim(), companyName: String(data.get('companyName') || '').trim(), email: String(data.get('email')).trim().toLowerCase(), password: String(data.get('password') || ''), plan: String(data.get('plan') || '') }) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || 'L’inscription n’a pas pu être finalisée.');
     closeSignup();

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID, pbkdf2, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createSqliteWorkspaceStore } from '../storage/sqlite-store.mjs';
-import { createUser } from '../prototype/core.js';
+import { createMonthlyPeriods, createUser, makeDossierCode } from '../prototype/core.js';
 
 const ROOT = resolve(fileURLToPath(new URL('../prototype/site/', import.meta.url)));
 const APP_ROOT = resolve(fileURLToPath(new URL('../prototype/', import.meta.url)));
@@ -72,12 +72,20 @@ function sessionUser(request) {
   return user ? { session, user } : null;
 }
 
+function userContext(userId) {
+  const companies = store.db.prepare(`SELECT c.* FROM companies c INNER JOIN memberships m ON m.company_id=c.id WHERE m.user_id=? AND m.active=1 GROUP BY c.id ORDER BY c.name`).all(userId).map((company) => ({ id: company.id, name: company.name, shortName: company.short_name || 'EM', legalForm: company.legal_form || 'À configurer', type: company.legal_form || 'À configurer', address: company.address || '', activity: company.activity || '', code: company.short_name || 'EMRYS', exerciseStart: `${new Date().getUTCFullYear()}-01-01`, exerciseEnd: `${new Date().getUTCFullYear()}-12-31`, meta: `${company.legal_form || 'À configurer'} · ${company.currency || 'XOF'}`, ifu: company.ifu || '', color: 'teal', currency: company.currency || 'XOF' }));
+  const memberships = store.db.prepare('SELECT id, user_id AS userId, company_id AS companyId, module_id AS moduleId, role, active, created_at AS createdAt FROM memberships WHERE user_id=? AND active=1').all(userId);
+  const dossiers = store.db.prepare('SELECT id, company_id AS companyId, code AS dossier, module_id AS moduleId, exercise_year AS exerciseYear, exercise_start AS exerciseStart, exercise_end AS exerciseEnd, status FROM dossiers WHERE company_id IN (SELECT company_id FROM memberships WHERE user_id=? AND active=1)').all(userId);
+  const fiscalYears = store.db.prepare('SELECT company_id AS companyId, year AS id, label, status, snapshot_id AS snapshotId, opened_at AS openedAt, finalized_at AS finalizedAt FROM fiscal_years WHERE company_id IN (SELECT company_id FROM memberships WHERE user_id=? AND active=1)').all(userId);
+  return { companies, memberships, dossiers, fiscalYears };
+}
+
 async function api(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/health') return jsonResponse(response, 200, { ok: true, service: 'emrys-dev-api', database: DB_FILE, schemaVersion: store.schemaVersion() });
   if (request.method === 'GET' && pathname === '/api/me') {
     const current = sessionUser(request);
     if (!current) return jsonResponse(response, 401, { code: 'AUTH_REQUIRED', message: 'Session absente ou expirée.' });
-    return jsonResponse(response, 200, { ok: true, user: publicUser(current.user), trial: trialForUser(current.user.id) });
+    return jsonResponse(response, 200, { ok: true, user: publicUser(current.user), trial: trialForUser(current.user.id), context: userContext(current.user.id) });
   }
   if (request.method === 'GET' && pathname === '/api/trial') {
     const current = sessionUser(request);
@@ -100,6 +108,11 @@ async function api(request, response, pathname) {
       if (existing) return jsonResponse(response, 409, { code: 'EMAIL_EXISTS', message: 'Cette adresse e-mail est déjà utilisée.' });
       const userId = `user-${randomUUID()}`;
       const workspaceId = `workspace-${randomUUID()}`;
+      const companyId = `company-${randomUUID()}`;
+      const companyName = String(input.companyName || '').trim() || `${name} — Entreprise`;
+      const exerciseYear = String(new Date().getUTCFullYear());
+      const dossierId = `dossier-${randomUUID()}`;
+      const dossierCode = makeDossierCode('EMRYS', `${exerciseYear}-01-01`);
       const record = await passwordRecord(password);
       const user = createUser({ id: userId, name, email, passwordHash: record.hash, passwordSalt: record.salt });
       const startedAt = new Date();
@@ -109,12 +122,17 @@ async function api(request, response, pathname) {
       store.transaction(() => {
         store.db.prepare(`INSERT INTO users (id, name, email, active, password_hash, password_salt, last_login_at, created_at) VALUES (?, ?, ?, 1, ?, ?, NULL, ?)`).run(user.id, user.name, user.email, user.passwordHash, user.passwordSalt, user.createdAt);
         store.db.prepare('INSERT INTO workspace (id, name, created_at) VALUES (?, ?, ?)').run(workspaceId, `${name} — EMRYS`, startedAt.toISOString());
+        store.db.prepare('INSERT INTO companies (id, name, short_name, legal_form, address, ifu, activity, country, currency, archived, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)').run(companyId, companyName, 'EMRYS', 'À configurer', null, null, null, 'BJ', 'XOF', startedAt.toISOString());
+        store.db.prepare('INSERT INTO memberships (id, user_id, company_id, module_id, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)').run(`membership-${randomUUID()}`, userId, companyId, 'CSR', 'ADMIN', startedAt.toISOString());
+        store.db.prepare('INSERT INTO dossiers (id, company_id, code, module_id, exercise_year, exercise_start, exercise_end, status, archived, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)').run(dossierId, companyId, dossierCode, 'CSR', exerciseYear, `${exerciseYear}-01-01`, `${exerciseYear}-12-31`, 'Actif', JSON.stringify({ trial: true }), startedAt.toISOString());
+        store.db.prepare('INSERT INTO fiscal_years (id, company_id, year, label, status, data_json) VALUES (?, ?, ?, ?, ?, ?)').run(`fy-${companyId}-${exerciseYear}`, companyId, exerciseYear, `Exercice ${exerciseYear}`, 'OPEN', JSON.stringify({ trial: true }));
+        createMonthlyPeriods(Number(exerciseYear)).forEach((period) => store.db.prepare('INSERT INTO periods (id, company_id, fiscal_year, period_code, start_date, end_date, status, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(`${companyId}-${period.id}`, companyId, exerciseYear, period.id, period.start, period.end, 'OPEN', JSON.stringify(period)));
         store.db.prepare('INSERT INTO trials (id, user_id, workspace_id, plan_code, started_at, expires_at, status, limits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(trial.id, trial.userId, trial.workspaceId, trial.planCode, trial.startedAt, trial.expiresAt, trial.status, JSON.stringify(trial.limits), trial.createdAt);
         store.db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, NULL, ?, ?, ?, ?)').run(audit.id, audit.userId, audit.action, audit.at, JSON.stringify(audit));
       });
       const token = randomBytes(32).toString('base64url');
       sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
-      return jsonResponse(response, 201, { ok: true, user: publicUser(user), trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits() }, session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
+      return jsonResponse(response, 201, { ok: true, user: publicUser(user), trial: { startsAt: startedAt.toISOString(), expiresAt: expiresAt.toISOString(), status: 'ACTIVE', limits: trialLimits() }, context: userContext(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
     } catch (error) { return jsonResponse(response, 500, { code: 'SIGNUP_FAILED', message: error.message }); }
   }
   if (request.method === 'POST' && pathname === '/api/login') {
@@ -127,7 +145,7 @@ async function api(request, response, pathname) {
       const token = randomBytes(32).toString('base64url');
       sessions.set(token, { userId: user.id, expiresAt: Date.now() + 8 * 3600000 });
       store.db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(new Date().toISOString(), user.id);
-      return jsonResponse(response, 200, { ok: true, user: publicUser(user), trial: trialForUser(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
+      return jsonResponse(response, 200, { ok: true, user: publicUser(user), trial: trialForUser(user.id), context: userContext(user.id), session: { expiresIn: 8 * 3600 } }, { 'Set-Cookie': `emrys_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${8 * 3600}` });
     } catch (error) { return jsonResponse(response, 500, { code: 'LOGIN_FAILED', message: error.message }); }
   }
   if (request.method === 'GET' && pathname === '/api/auth/google/start') {
