@@ -768,6 +768,9 @@ async function api(request, response, pathname) {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+  if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/api')) {
+    return jsonResponse(request, response, 200, { ok: true, service: 'emrys-api', message: 'API EMRYS opérationnelle. Utilisez /api/health pour le contrôle de santé.', endpoints: ['/api/health', '/api/ready', '/api/signup', '/api/login', '/api/sync/push', '/api/sync/pull'] });
+  }
   if (!url.pathname.startsWith('/api/')) return jsonResponse(request, response, 404, { code: 'NOT_FOUND', message: 'Cette API ne sert pas de pages publiques.' });
   try {
     await api(request, response, url.pathname);

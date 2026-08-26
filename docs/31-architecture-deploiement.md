@@ -104,6 +104,8 @@ http://localhost:8080/api/health
 http://localhost:8080/api/ready
 ```
 
+La racine `http://localhost:8080/` affiche uniquement une fiche JSON de l’API : elle ne sert pas le site public. Le site et l’API sont deux processus séparés en développement.
+
 Pour arrêter le conteneur API sans effacer les données Neon :
 
 ```bash
