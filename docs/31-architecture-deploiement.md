@@ -95,7 +95,7 @@ http://localhost:8080/api/health
 http://localhost:8080/api/ready
 ```
 
-La base PostgreSQL est conservée dans le volume Docker `emrys-postgres-data`. Pour arrêter les conteneurs sans effacer les données :
+La base PostgreSQL est conservée dans le volume Docker `emrys-postgres-data`. Avec PostgreSQL 18, le volume est monté sur `/var/lib/postgresql` (et non plus directement sur `/var/lib/postgresql/data`) afin de conserver la structure de données par version. Pour arrêter les conteneurs sans effacer les données :
 
 ```bash
 docker compose down

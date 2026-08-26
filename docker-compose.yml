@@ -8,7 +8,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - emrys-postgres-data:/var/lib/postgresql/data
+      # PostgreSQL 18 crée un sous-dossier par version sous ce point de montage.
+      - emrys-postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U emrys -d emrys"]
       interval: 5s
