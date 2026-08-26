@@ -238,3 +238,50 @@ CREATE INDEX IF NOT EXISTS idx_outbox_status ON sync_outbox(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_company ON sync_outbox(company_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_inbox_status ON sync_inbox(status, received_at);
 CREATE INDEX IF NOT EXISTS idx_conflicts_status ON sync_conflicts(status, created_at);
+
+CREATE TABLE IF NOT EXISTS trials (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id TEXT,
+  plan_code TEXT,
+  started_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  limits_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,
+  module_id TEXT,
+  plan_code TEXT NOT NULL,
+  amount_xof INTEGER,
+  currency TEXT NOT NULL DEFAULT 'XOF',
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  payment_provider TEXT,
+  payment_reference TEXT,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payment_orders (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_code TEXT NOT NULL,
+  amount_xof INTEGER NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'XOF',
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  provider_reference TEXT,
+  created_at TEXT NOT NULL,
+  paid_at TEXT,
+  data_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_trials_user_status ON trials(user_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_status ON subscriptions(user_id, status, ends_at);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_user_status ON payment_orders(user_id, status, created_at);

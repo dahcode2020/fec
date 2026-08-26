@@ -24,6 +24,7 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
   db.exec(SCHEMA_TEXT);
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(1, 'initial-domain-schema', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(2, 'offline-sync-and-backups', now());
+  db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(3, 'trials-and-billing', now());
 
   const transaction = (callback) => {
     db.exec('BEGIN IMMEDIATE');
@@ -171,6 +172,13 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
         db.prepare('INSERT INTO audit_events (id, company_id, user_id, action, occurred_at, data_json) VALUES (?, ?, ?, ?, ?, ?)').run(event.id, event.companyId || null, event.userId || null, event.action || event.type || 'UNKNOWN', event.at || event.occurredAt || now(), json(event));
         if (enqueue) enqueueInternal({ companyId: event.companyId || null, entityType: 'AUDIT_EVENT', entityId: event.id, payload: event });
       });
+    },
+    saveTrial(trial) {
+      db.prepare(`INSERT INTO trials (id, user_id, workspace_id, plan_code, started_at, expires_at, status, limits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET expires_at=excluded.expires_at, status=excluded.status, limits_json=excluded.limits_json`).run(trial.id, trial.userId, trial.workspaceId || null, trial.planCode || null, trial.startedAt, trial.expiresAt, trial.status || 'ACTIVE', json(trial.limits), trial.createdAt || now());
+    },
+    getActiveTrial(userId) { return db.prepare("SELECT * FROM trials WHERE user_id=? AND status='ACTIVE' ORDER BY expires_at DESC LIMIT 1").get(userId) || null; },
+    savePaymentOrder(order) {
+      db.prepare(`INSERT INTO payment_orders (id, user_id, plan_code, amount_xof, currency, provider, status, provider_reference, created_at, paid_at, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=excluded.status, provider_reference=excluded.provider_reference, paid_at=excluded.paid_at, data_json=excluded.data_json`).run(order.id, order.userId, order.planCode, Number(order.amountXof), order.currency || 'XOF', order.provider, order.status || 'PENDING', order.providerReference || null, order.createdAt || now(), order.paidAt || null, json(order));
     },
     listUsers() { return db.prepare('SELECT * FROM users ORDER BY name').all(); },
     listCompanies() { return db.prepare('SELECT * FROM companies ORDER BY name').all(); },

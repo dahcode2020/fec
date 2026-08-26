@@ -89,25 +89,37 @@ function toggleNav() {
   button?.setAttribute('aria-expanded', String(Boolean(open)));
 }
 
-function handleSignup(event) {
+async function handleSignup(event) {
   event.preventDefault();
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
-  const data = new FormData(form);
-  const trial = { name: String(data.get('name')).trim(), email: String(data.get('email')).trim().toLowerCase(), plan: String(data.get('plan') || ''), startedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() };
+  const submit = form.querySelector('button[type="submit"]');
+  const originalLabel = submit?.textContent;
+  if (submit) { submit.disabled = true; submit.textContent = 'Création en cours…'; }
   try {
-    localStorage.setItem('emrys.trial.request.v1', JSON.stringify(trial));
-  } catch {
-    showToast('Le navigateur ne permet pas de conserver la demande localement. Vous pouvez contacter le support.');
-    return;
+    const data = new FormData(form);
+    const response = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: String(data.get('name')).trim(), email: String(data.get('email')).trim().toLowerCase(), password: String(data.get('password') || ''), plan: String(data.get('plan') || '') }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || 'L’inscription n’a pas pu être finalisée.');
+    closeSignup();
+    showToast(`Votre essai de 30 jours est créé, ${payload.user?.name || 'bienvenue'}. Vérifiez votre e-mail lorsque l’authentification sera activée.`);
+    form.reset();
+  } catch (error) {
+    showToast(error.message || 'Le service d’inscription est momentanément indisponible.');
+  } finally {
+    if (submit) { submit.disabled = false; submit.textContent = originalLabel || 'Démarrer mon essai'; }
   }
-  closeSignup();
-  showToast(`Votre demande d’essai de 30 jours est prête, ${trial.name}. Le branchement du compte en ligne sera activé avec le service d’authentification.`);
-  form.reset();
 }
 
-function handleGoogleSignup() {
-  showToast('L’inscription Google sera activée avec Google Identity Services et la validation côté serveur.');
+async function handleGoogleSignup() {
+  try {
+    const response = await fetch('/api/auth/google/start', { headers: { Accept: 'application/json' } });
+    if (response.redirected) { window.location.assign(response.url); return; }
+    const payload = await response.json().catch(() => ({}));
+    showToast(payload.message || 'L’authentification Google n’est pas encore configurée.');
+  } catch {
+    showToast('Le service Google est indisponible. Vous pouvez utiliser l’inscription par e-mail.');
+  }
 }
 
 function installPwa() {
