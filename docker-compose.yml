@@ -20,14 +20,14 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      NODE_ENV: development
-      PORT: 8080
-      HOST: 0.0.0.0
-      DATABASE_URL: postgresql://emrys:emrys_dev_password@postgres:5432/emrys
-      DATABASE_SSL: "false"
-      EMRYS_PUBLIC_URL: http://localhost:4174
-      DEV_EXPOSE_TOKENS: "true"
-      CORS_ORIGINS: http://localhost:4174
+      NODE_ENV: "${NODE_ENV:-development}"
+      PORT: "${PORT:-8080}"
+      HOST: "${HOST:-0.0.0.0}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://emrys:emrys_dev_password@postgres:5432/emrys}"
+      DATABASE_SSL: "${DATABASE_SSL:-false}"
+      EMRYS_PUBLIC_URL: "${EMRYS_PUBLIC_URL:-http://localhost:4174}"
+      DEV_EXPOSE_TOKENS: "${DEV_EXPOSE_TOKENS:-true}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:4174}"
     ports:
       - "8080:8080"
     depends_on:
