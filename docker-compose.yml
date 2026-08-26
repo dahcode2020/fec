@@ -1,21 +1,6 @@
 services:
-  postgres:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_DB: emrys
-      POSTGRES_USER: emrys
-      POSTGRES_PASSWORD: emrys_dev_password
-    ports:
-      - "5432:5432"
-    volumes:
-      # PostgreSQL 18 crée un sous-dossier par version sous ce point de montage.
-      - emrys-postgres-data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emrys -d emrys"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
+  # L’environnement par défaut utilise la base centrale Neon configurée dans .env.
+  # Le PostgreSQL local optionnel se trouve dans docker-compose.local.yml.
   api:
     build:
       context: .
@@ -24,16 +9,10 @@ services:
       NODE_ENV: "${NODE_ENV:-development}"
       PORT: "${PORT:-8080}"
       HOST: "${HOST:-0.0.0.0}"
-      DATABASE_URL: "${DATABASE_URL:-postgresql://emrys:emrys_dev_password@postgres:5432/emrys}"
-      DATABASE_SSL: "${DATABASE_SSL:-false}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+      DATABASE_SSL: "${DATABASE_SSL:-true}"
       EMRYS_PUBLIC_URL: "${EMRYS_PUBLIC_URL:-http://localhost:4174}"
       DEV_EXPOSE_TOKENS: "${DEV_EXPOSE_TOKENS:-true}"
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:4174}"
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-volumes:
-  emrys-postgres-data:

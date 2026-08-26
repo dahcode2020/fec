@@ -82,8 +82,11 @@ Le navigateur actuel reste un prototype utilisant son adaptateur local. Le branc
 
 Prérequis : Docker et Docker Compose.
 
+L’environnement par défaut utilise **Neon**. Créez `.env` à partir du modèle puis renseignez `DATABASE_URL` avec la chaîne Neon :
+
 ```bash
 cp .env.example .env
+# éditez .env et renseignez DATABASE_URL, puis laissez DATABASE_SSL=true
 
 docker compose up --build
 ```
@@ -95,13 +98,19 @@ http://localhost:8080/api/health
 http://localhost:8080/api/ready
 ```
 
-La base PostgreSQL est conservée dans le volume Docker `emrys-postgres-data`. Avec PostgreSQL 18, le volume est monté sur `/var/lib/postgresql` (et non plus directement sur `/var/lib/postgresql/data`) afin de conserver la structure de données par version. Pour arrêter les conteneurs sans effacer les données :
+Pour arrêter le conteneur API sans effacer les données Neon :
 
 ```bash
 docker compose down
 ```
 
-Ne pas utiliser `docker compose down -v` sauf pour supprimer volontairement la base d’expérimentation.
+Un PostgreSQL local reste disponible uniquement pour des tests sans Neon :
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+```
+
+Sa base est conservée dans le volume Docker `emrys-postgres-data`. Avec PostgreSQL 18, ce volume est monté sur `/var/lib/postgresql` (et non plus directement sur `/var/lib/postgresql/data`). Ne pas utiliser `docker compose down -v` avec le profil local sauf pour supprimer volontairement cette base d’expérimentation. La suppression de ce volume local ne supprime jamais la base Neon.
 
 Pour lancer l’API hors Docker, Node et la dépendance `pg` doivent être installés :
 
