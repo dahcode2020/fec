@@ -95,7 +95,12 @@ function handleSignup(event) {
   if (!form.reportValidity()) return;
   const data = new FormData(form);
   const trial = { name: String(data.get('name')).trim(), email: String(data.get('email')).trim().toLowerCase(), plan: String(data.get('plan') || ''), startedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() };
-  localStorage.setItem('emrys.trial.request.v1', JSON.stringify(trial));
+  try {
+    localStorage.setItem('emrys.trial.request.v1', JSON.stringify(trial));
+  } catch {
+    showToast('Le navigateur ne permet pas de conserver la demande localement. Vous pouvez contacter le support.');
+    return;
+  }
   closeSignup();
   showToast(`Votre demande d’essai de 30 jours est prête, ${trial.name}. Le branchement du compte en ligne sera activé avec le service d’authentification.`);
   form.reset();
