@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: emrys
+      POSTGRES_USER: emrys
+      POSTGRES_PASSWORD: emrys_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - emrys-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emrys -d emrys"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://emrys:emrys_dev_password@postgres:5432/emrys
+      DATABASE_SSL: "false"
+      EMRYS_PUBLIC_URL: http://localhost:4174
+      DEV_EXPOSE_TOKENS: "true"
+      CORS_ORIGINS: http://localhost:4174
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  emrys-postgres-data:

@@ -2,6 +2,8 @@
 
 **Statut :** squelette d’API local, non destiné à la production
 
+> Le socle de déploiement PostgreSQL/Docker séparé est maintenant documenté dans [`31-architecture-deploiement.md`](31-architecture-deploiement.md). Ce document continue de décrire l’API SQLite de démonstration lancée par `npm run preview-site`.
+
 ## Endpoints disponibles
 
 Avec `npm run preview-site`, le serveur de développement sert la one page et expose :

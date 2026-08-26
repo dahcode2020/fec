@@ -1,0 +1,22 @@
+# Dependencies and local build output
+node_modules/
+dist/
+.vercel/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local databases and backups
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+backups/
+
+# Logs
+*.log
+npm-debug.log*

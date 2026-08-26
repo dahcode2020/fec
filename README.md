@@ -50,15 +50,27 @@ Le menu opérationnel **Saisie et insertion** est décrit dans [`docs/08-saisie-
 
 L’écran fonctionnel **Comptes généraux** est décrit dans [`docs/13-comptes-generaux.md`](docs/13-comptes-generaux.md). Les états financiers sont décrits dans [`docs/25-etats-financiers-csr.md`](docs/25-etats-financiers-csr.md). L’écran **Configuration → Journaux** est décrit dans [`docs/14-journaux-csr.md`](docs/14-journaux-csr.md). L’écran **Configuration → Tiers** est décrit dans [`docs/16-tiers-csr.md`](docs/16-tiers-csr.md). Les factures clients et fournisseurs sont décrites dans [`docs/17-factures-clients-fournisseurs-csr.md`](docs/17-factures-clients-fournisseurs-csr.md). Les règlements et le lettrage sont décrits dans [`docs/18-reglements-lettrage-csr.md`](docs/18-reglements-lettrage-csr.md). La banque, la caisse et le rapprochement sont décrits dans [`docs/19-banque-rapprochement-csr.md`](docs/19-banque-rapprochement-csr.md). Le fonctionnement du livre journal intégré est décrit dans [`docs/09-livre-journal-integre.md`](docs/09-livre-journal-integre.md).
 
-La section **Éditions** du module CSR est décrite dans [`docs/10-editions-csr.md`](docs/10-editions-csr.md). L’export fiscal FEC selon l’arrêté béninois est décrit dans [`docs/26-fec-benin.md`](docs/26-fec-benin.md). La one page publique EMRYS et son parcours d’essai sont décrits dans [`docs/28-site-public-emrys.md`](docs/28-site-public-emrys.md). La base SEO et les contenus publicitaires sont décrits dans [`docs/29-seo-publicite-emrys.md`](docs/29-seo-publicite-emrys.md). Le squelette de l’inscription et de l’API est décrit dans [`docs/30-inscription-api.md`](docs/30-inscription-api.md).
+La section **Éditions** du module CSR est décrite dans [`docs/10-editions-csr.md`](docs/10-editions-csr.md). L’export fiscal FEC selon l’arrêté béninois est décrit dans [`docs/26-fec-benin.md`](docs/26-fec-benin.md). La one page publique EMRYS et son parcours d’essai sont décrits dans [`docs/28-site-public-emrys.md`](docs/28-site-public-emrys.md). La base SEO et les contenus publicitaires sont décrits dans [`docs/29-seo-publicite-emrys.md`](docs/29-seo-publicite-emrys.md). Le squelette de l’inscription et de l’API est décrit dans [`docs/30-inscription-api.md`](docs/30-inscription-api.md). L’architecture Vercel, API Docker, Neon PostgreSQL et SQLite local est décrite dans [`docs/31-architecture-deploiement.md`](docs/31-architecture-deploiement.md).
 
-Pour l’ouvrir localement :
+Pour l’ouvrir localement dans le prototype historique :
 
 ```bash
 npm run preview
 ```
 
 Puis ouvrir `http://localhost:4173` dans un navigateur.
+
+## Architecture en ligne validée
+
+Le site public est prévu pour Vercel. L’API ne stocke pas les données dans Vercel : elle est empaquetée dans Docker et utilise PostgreSQL central, avec Neon comme base d’expérimentation. SQLite reste le stockage local du futur shell Windows/Tauri pour le hors ligne.
+
+```bash
+npm run build:site       # construit dist/ pour Vercel
+npm run check:api        # vérifie la syntaxe du socle API PostgreSQL
+docker compose up --build
+```
+
+Le détail du déploiement, des variables et des sauvegardes se trouve dans [`docs/31-architecture-deploiement.md`](docs/31-architecture-deploiement.md).
 
 Le premier noyau métier est décrit dans [`docs/03-socle-technique.md`](docs/03-socle-technique.md). Le contrat SQLite/Tauri en préparation est décrit dans [`docs/27-socle-sqlite-tauri.md`](docs/27-socle-sqlite-tauri.md). Les tests se lancent avec :
 

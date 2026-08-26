@@ -1,0 +1,234 @@
+# Architecture de déploiement EMRYS
+
+**Statut :** socle d’expérimentation en ligne, non encore destiné à la production
+
+Cette étape concrétise le choix validé pour EMRYS :
+
+```text
+Vercel
+└── site public + PWA statique + application web
+
+API Docker indépendante
+└── authentification, essais, sessions, paiements à venir, synchronisation à venir
+
+Neon PostgreSQL
+└── base centrale en ligne, durable et portable
+
+SQLite local
+└── application Windows/Tauri, travail hors ligne, outbox/inbox
+```
+
+## 1. Responsabilité de chaque brique
+
+### Vercel
+
+Vercel ne contient pas la base métier. Il sert les fichiers construits par `npm run build:site` :
+
+- page publique EMRYS ;
+- manifest et service worker PWA ;
+- application web sous `/app/` ;
+- ressources statiques et référencement.
+
+Le fichier `vercel.json` réécrit `/api/*` vers `https://api.emrys-saas.com/api/*`. Le domaine API devra être remplacé si un autre sous-domaine est retenu.
+
+### API Docker
+
+`server/api-server.mjs` est un premier serveur HTTP indépendant du site. Il utilise le même contrat d’authentification que l’API de développement, mais ses données sont stockées dans PostgreSQL :
+
+- `GET /api/health` : santé de l’API et de la base ;
+- `GET /api/ready` : migrations prêtes ;
+- `POST /api/signup` : utilisateur, espace, société CSR, exercice, 12 périodes et essai ;
+- `GET /api/auth/verify` : vérification d’e-mail ;
+- `POST /api/login`, `GET /api/me`, `GET /api/trial`, `POST /api/logout` ;
+- réinitialisation de mot de passe ;
+- expose un point d’entrée Google OAuth qui reste explicitement en attente tant que le callback, la vérification du jeton et la liaison d’identité ne sont pas finalisés ;
+- enregistrement contrôlé d’une commande de paiement.
+
+Les sessions sont conservées dans PostgreSQL sous forme d’empreinte de jeton. Elles ne dépendent donc pas de la mémoire d’un conteneur et restent compatibles avec plusieurs instances API.
+
+### Neon PostgreSQL
+
+Le schéma central est [`storage/schema.postgres.sql`](../storage/schema.postgres.sql). Il conserve des identifiants textuels et des payloads JSON afin que les événements créés hors ligne par SQLite puissent être rejoués sans changer d’identité.
+
+Le store [`storage/postgres-store.mjs`](../storage/postgres-store.mjs) :
+
+- utilise un pool PostgreSQL ;
+- applique le schéma dans une transaction ;
+- enregistre la version de socle `5` ;
+- expose des transactions pour les inscriptions et les opérations sensibles ;
+- refuse de démarrer sans `DATABASE_URL` ;
+- accepte SSL pour Neon ;
+- ne place aucun secret dans le navigateur.
+
+Le schéma est idempotent pour une première installation. Les futures évolutions devront être ajoutées comme migrations versionnées et testées sur une copie avant toute migration de production.
+
+### SQLite local
+
+SQLite reste le stockage de proximité de l’application Windows/Tauri. Il n’est pas remplacé par PostgreSQL :
+
+- SQLite conserve les changements locaux ;
+- l’outbox conserve les événements à envoyer ;
+- l’API centrale reçoit les événements ;
+- l’inbox et les curseurs rendent les reprises idempotentes ;
+- les conflits restent visibles et ne sont jamais résolus silencieusement ;
+- une sauvegarde vérifiée doit précéder une migration ou une mise à jour importante.
+
+Le navigateur actuel reste un prototype utilisant son adaptateur local. Le branchement Tauri/SQLite réel et l’API de synchronisation ne sont pas encore terminés.
+
+## 2. Lancer l’expérimentation localement
+
+Prérequis : Docker et Docker Compose.
+
+```bash
+cp .env.example .env
+
+docker compose up --build
+```
+
+L’API est alors accessible sur :
+
+```text
+http://localhost:8080/api/health
+http://localhost:8080/api/ready
+```
+
+La base PostgreSQL est conservée dans le volume Docker `emrys-postgres-data`. Pour arrêter les conteneurs sans effacer les données :
+
+```bash
+docker compose down
+```
+
+Ne pas utiliser `docker compose down -v` sauf pour supprimer volontairement la base d’expérimentation.
+
+Pour lancer l’API hors Docker, Node et la dépendance `pg` doivent être installés :
+
+```bash
+npm install
+DATABASE_URL='postgresql://emrys:emrys_dev_password@localhost:5432/emrys' \
+DATABASE_SSL=false \
+NODE_ENV=development \
+DEV_EXPOSE_TOKENS=true \
+npm run preview-api
+```
+
+L’API de démonstration avec SQLite reste disponible séparément :
+
+```bash
+npm run preview-site
+```
+
+## 3. Préparer Neon
+
+Pour l’expérimentation en ligne :
+
+1. créer un projet Neon distinct de la future production ;
+2. créer une base dédiée EMRYS ;
+3. copier la chaîne PostgreSQL Neon dans `DATABASE_URL` du service API ;
+4. activer `DATABASE_SSL=true` si la chaîne ne contient pas déjà `sslmode=require` ;
+5. démarrer l’API Docker avec ces variables ;
+6. contrôler `/api/health` et `/api/ready` ;
+7. tester une inscription avec une adresse de test ;
+8. vérifier les lignes créées dans `users`, `workspace`, `companies`, `memberships`, `dossiers`, `fiscal_years`, `periods` et `trials`.
+
+Les secrets Neon, Google, e-mail et paiement ne doivent jamais être committés, ni placés dans le code du site public.
+
+## 4. Déployer l’API
+
+L’image est construite à la racine du dépôt :
+
+```bash
+docker build -t emrys-api .
+docker run --rm \
+  -e NODE_ENV=production \
+  -e PORT=8080 \
+  -e HOST=0.0.0.0 \
+  -e DATABASE_URL="$DATABASE_URL" \
+  -e DATABASE_SSL=true \
+  -e EMRYS_PUBLIC_URL=https://emrys-saas.com \
+  -e CORS_ORIGINS=https://emrys-saas.com \
+  -p 8080:8080 \
+  emrys-api
+```
+
+En hébergement réel, le conteneur doit être placé derrière HTTPS, avec :
+
+- un nom DNS, par exemple `api.emrys-saas.com` ;
+- des sauvegardes PostgreSQL testées ;
+- des logs sans mots de passe ni jetons ;
+- une rotation des secrets ;
+- une limite de débit ;
+- une politique CORS limitée aux domaines EMRYS ;
+- une supervision de `/api/health` ;
+- au moins une instance de secours avant d’ouvrir l’inscription au public.
+
+Le serveur Docker actuel est le socle d’expérimentation. Il ne prétend pas encore fournir l’ensemble des règles métier CSR, GP, GCSF et GC ni le connecteur de synchronisation complet.
+
+## 5. Déployer le site sur Vercel
+
+Le build public rassemble :
+
+```text
+dist/
+├── index.html       # site public
+├── app/             # application web
+├── styles.css
+├── app.js
+├── manifest.webmanifest
+└── sw.js
+```
+
+Le build se teste localement avec :
+
+```bash
+npm run build:site
+python3 -m http.server 4173 --bind 0.0.0.0 --directory dist
+```
+
+Dans Vercel :
+
+1. importer le dépôt GitHub ;
+2. conserver la racine du dépôt comme répertoire du projet ;
+3. utiliser le build command défini dans `vercel.json` ;
+4. vérifier que le répertoire de sortie est `dist` ;
+5. rattacher `emrys-saas.com` ;
+6. configurer le DNS ;
+7. vérifier que `/api/health` passe bien par le proxy vers l’API ;
+8. tester l’inscription et la vérification d’e-mail sur le domaine HTTPS.
+
+Tant que `api.emrys-saas.com` n’est pas réellement déployé, le site Vercel peut s’afficher mais son inscription en ligne ne doit pas être annoncée comme active.
+
+## 6. Données et changement d’hébergeur
+
+Neon n’est pas une dépendance propriétaire du modèle métier. Le contrat de stockage repose sur PostgreSQL standard :
+
+- export `pg_dump` ;
+- restauration `pg_restore` ou `psql` ;
+- stockage objet S3-compatible pour les pièces et archives ;
+- SQLite local exportable et sauvegardé séparément.
+
+Avant un changement d’hébergeur :
+
+1. arrêter les écritures ou passer en maintenance ;
+2. effectuer une sauvegarde PostgreSQL ;
+3. calculer et conserver son empreinte ;
+4. restaurer sur le nouvel hébergeur ;
+5. contrôler le nombre de lignes et les empreintes utiles ;
+6. vérifier `/api/health` et les comptes de test ;
+7. basculer le DNS ;
+8. conserver l’ancien service en lecture seule pendant la période de vérification.
+
+Aucune mise à jour, synchronisation ou migration ne devra supprimer automatiquement les données d’un espace EMRYS.
+
+## 7. Ce qui reste à construire avant la production
+
+- migration contrôlée des données SQLite vers PostgreSQL ;
+- endpoints de synchronisation push/pull avec curseurs, outbox, inbox et conflits ;
+- application Tauri et sauvegarde locale avant mise à jour ;
+- Google OAuth avec callback, vérification du jeton et liaison d’identité ;
+- fournisseur réel d’e-mails ;
+- limitation de débit et protection CSRF adaptée au mode de déploiement ;
+- connecteur FedaPay et vérification des webhooks ;
+- licences, lecture seule après essai et droits métier côté API ;
+- stockage objet des pièces, FEC et sauvegardes ;
+- tests de restauration, panne réseau, migration interrompue et concurrence ;
+- revue comptable et fiscale professionnelle au Bénin avant toute promesse réglementaire.

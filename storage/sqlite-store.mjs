@@ -21,12 +21,17 @@ function ensureParent(filename) {
 export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
   ensureParent(filename);
   const db = new DatabaseSync(filename);
+  // Add columns required by indexes before replaying the complete idempotent
+  // schema: an existing database may still use the previous table definition.
+  try { db.exec('ALTER TABLE companies ADD COLUMN workspace_id TEXT REFERENCES workspace(id) ON DELETE CASCADE'); } catch { /* Table absente ou colonne déjà présente. */ }
   db.exec(SCHEMA_TEXT);
   try { db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT'); } catch { /* Colonne déjà présente sur une base existante. */ }
+  try { db.exec('ALTER TABLE companies ADD COLUMN workspace_id TEXT REFERENCES workspace(id) ON DELETE CASCADE'); } catch { /* Colonne déjà présente sur une base existante. */ }
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(1, 'initial-domain-schema', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(2, 'offline-sync-and-backups', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(3, 'trials-and-billing', now());
   db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(4, 'authentication-security', now());
+  db.prepare('INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(5, 'workspace-company-isolation', now());
 
   const transaction = (callback) => {
     db.exec('BEGIN IMMEDIATE');
@@ -105,9 +110,9 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
     },
     saveCompany(company, { enqueue = true } = {}) {
       return transaction(() => {
-        db.prepare(`INSERT INTO companies (id, name, short_name, legal_form, address, ifu, activity, country, currency, archived, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET name=excluded.name, short_name=excluded.short_name, legal_form=excluded.legal_form, address=excluded.address, ifu=excluded.ifu, activity=excluded.activity, country=excluded.country, currency=excluded.currency, archived=excluded.archived`).run(company.id, company.name, company.shortName || company.short_name || null, company.legalForm || company.legal_form || null, company.address || null, company.ifu || null, company.activity || null, company.country || 'BJ', company.currency || 'XOF', flag(company.archived), company.createdAt || now());
+        db.prepare(`INSERT INTO companies (id, workspace_id, name, short_name, legal_form, address, ifu, activity, country, currency, archived, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET workspace_id=excluded.workspace_id, name=excluded.name, short_name=excluded.short_name, legal_form=excluded.legal_form, address=excluded.address, ifu=excluded.ifu, activity=excluded.activity, country=excluded.country, currency=excluded.currency, archived=excluded.archived`).run(company.id, company.workspaceId || company.workspace_id || null, company.name, company.shortName || company.short_name || null, company.legalForm || company.legal_form || null, company.address || null, company.ifu || null, company.activity || null, company.country || 'BJ', company.currency || 'XOF', flag(company.archived), company.createdAt || now());
         if (enqueue) enqueueInternal({ companyId: company.id, entityType: 'COMPANY', entityId: company.id, payload: company });
       });
     },

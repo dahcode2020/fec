@@ -1,12 +1,18 @@
 {
-  "name": "fec-comptabilite",
-  "version": "0.1.0",
+  "name": "emrys-gestion",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Socle de prototype pour une gestion comptable SYSCOHADA adaptée au Bénin",
+  "description": "Socle de prototype EMRYS pour une gestion modulaire SYSCOHADA adaptée au Bénin",
   "scripts": {
     "test": "node --test prototype/core.test.mjs prototype/app-load.test.mjs storage/sqlite-store.test.mjs storage/sync-engine.test.mjs",
+    "check:api": "node --check server/api-server.mjs && node --check storage/postgres-store.mjs && node --check scripts/build-site.mjs",
+    "build:site": "node scripts/build-site.mjs",
     "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype",
-    "preview-site": "node server/dev-server.mjs"
+    "preview-site": "node server/dev-server.mjs",
+    "preview-api": "node server/api-server.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }
