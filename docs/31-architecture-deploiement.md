@@ -125,13 +125,15 @@ npm run preview-site
 Pour l’expérimentation en ligne :
 
 1. créer un projet Neon distinct de la future production ;
-2. créer une base dédiée EMRYS ;
-3. copier la chaîne PostgreSQL Neon dans `DATABASE_URL` du service API ;
-4. activer `DATABASE_SSL=true` si la chaîne ne contient pas déjà `sslmode=require` ;
-5. démarrer l’API Docker avec ces variables ;
+2. utiliser sa branche Neon `main` uniquement pour le développement ;
+3. copier la chaîne PostgreSQL Neon dans une copie locale de `.env.example` nommée `.env` ;
+4. remplacer `DATABASE_URL` par la chaîne Neon et mettre `DATABASE_SSL=true` ;
+5. démarrer l’API Docker avec `docker compose up --build` ;
 6. contrôler `/api/health` et `/api/ready` ;
 7. tester une inscription avec une adresse de test ;
 8. vérifier les lignes créées dans `users`, `workspace`, `companies`, `memberships`, `dossiers`, `fiscal_years`, `periods` et `trials`.
+
+Le fichier `.env` est ignoré par Git. La chaîne `DATABASE_URL` ne doit être ni committée ni envoyée dans une conversation.
 
 Les secrets Neon, Google, e-mail et paiement ne doivent jamais être committés, ni placés dans le code du site public.
 
