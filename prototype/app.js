@@ -1,4 +1,5 @@
 import { assertPermission, accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createFinancialSnapshot, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, createUser, createMembership, decodeFecText, extractZipArchive, encodeFecText, evaluatePeriodClosure, roleLabel, USER_PERMISSIONS, USER_ROLE_LABELS, USER_ROLES, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { createHttpSyncRemote } from './sync-client.js';
 
 const appState = {
   authenticated: false,
@@ -99,7 +100,9 @@ const appState = {
   openingRuns: [],
   financialSnapshots: [],
   statementMode: 'control',
-  syncStatus: { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' },
+  syncStatus: { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED', deviceId: null, cursor: '0', entityHashes: {}, appliedEventIds: [], lastError: null },
+  syncOutbox: [],
+  syncConflicts: [],
   exportDraft: null,
   exportHistory: [],
   fecDraft: null,
@@ -154,7 +157,7 @@ const appState = {
 };
 
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
-const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'syncStatus', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
+const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'syncStatus', 'syncOutbox', 'syncConflicts', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
 function hydrateAppState() {
   const saved = appStore.load();
@@ -213,7 +216,12 @@ function hydrateAppState() {
   if (!appState.statementMode) appState.statementMode = 'control';
   if (!Array.isArray(appState.exportHistory)) appState.exportHistory = [];
   if (!Array.isArray(appState.fecHistory)) appState.fecHistory = [];
-  if (!appState.syncStatus || typeof appState.syncStatus !== 'object' || Array.isArray(appState.syncStatus)) appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' };
+  if (!appState.syncStatus || typeof appState.syncStatus !== 'object' || Array.isArray(appState.syncStatus)) appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED', deviceId: null, cursor: '0', entityHashes: {}, appliedEventIds: [], lastError: null };
+  if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
+  if (!Array.isArray(appState.syncConflicts)) appState.syncConflicts = [];
+  appState.syncStatus.entityHashes = appState.syncStatus.entityHashes || {};
+  appState.syncStatus.appliedEventIds = Array.isArray(appState.syncStatus.appliedEventIds) ? appState.syncStatus.appliedEventIds : [];
+  appState.syncStatus.cursor = String(appState.syncStatus.cursor || '0');
   if (!Array.isArray(appState.fecArchives)) appState.fecArchives = [];
   if (!appState.pendingFiscalYears || typeof appState.pendingFiscalYears !== 'object' || Array.isArray(appState.pendingFiscalYears)) appState.pendingFiscalYears = {};
   if (!appState.pendingPeriods || typeof appState.pendingPeriods !== 'object' || Array.isArray(appState.pendingPeriods)) appState.pendingPeriods = {};
@@ -860,9 +868,14 @@ function syncStateText(state) {
 }
 
 function refreshSyncStatus() {
-  if (!appState.syncStatus || typeof appState.syncStatus !== 'object') appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED' };
+  if (!appState.syncStatus || typeof appState.syncStatus !== 'object') appState.syncStatus = { state: 'LOCAL', pending: 0, conflicts: 0, lastSyncAt: null, forcedOffline: false, transport: 'NOT_CONNECTED', deviceId: null, cursor: '0', entityHashes: {}, appliedEventIds: [], lastError: null };
+  if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
+  if (!Array.isArray(appState.syncConflicts)) appState.syncConflicts = [];
+  appState.syncStatus.entityHashes = appState.syncStatus.entityHashes || {};
+  appState.syncStatus.appliedEventIds = Array.isArray(appState.syncStatus.appliedEventIds) ? appState.syncStatus.appliedEventIds : [];
   const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
   const status = appState.syncStatus;
+  status.pending = pendingSyncCount();
   status.state = status.forcedOffline || browserOffline ? 'OFFLINE' : status.conflicts > 0 ? 'CONFLICT' : status.pending > 0 ? 'PENDING' : 'LOCAL';
   const label = syncStateText(status.state);
   const indicator = $('#syncStatusButton');
@@ -870,7 +883,7 @@ function refreshSyncStatus() {
     indicator.className = `sync-status sync-status-${status.state.toLowerCase()}`;
     indicator.setAttribute('aria-label', `${label}. Ouvrir le centre de synchronisation`);
   }
-  const detail = status.state === 'OFFLINE' ? 'Les changements restent sur cet appareil' : status.transport === 'NOT_CONNECTED' ? 'Connecteur distant à configurer' : 'Prêt à synchroniser';
+  const detail = status.state === 'OFFLINE' ? 'Les changements restent sur cet appareil' : status.transport === 'CONNECTING' ? 'Connexion au service distant…' : status.transport === 'AUTH_REQUIRED' ? 'Connexion requise pour envoyer les données' : status.transport === 'NOT_CONNECTED' ? 'Connecteur distant non disponible' : status.lastError ? 'Dernière tentative avec erreur' : 'Prêt à synchroniser';
   $('#syncStatusLabel').textContent = label;
   $('#syncStatusDetail').textContent = detail;
   $('#syncModalState').textContent = label;
@@ -878,7 +891,7 @@ function refreshSyncStatus() {
   $('#syncPendingCount').textContent = String(status.pending || 0);
   $('#syncConflictCount').textContent = String(status.conflicts || 0);
   $('#syncLastDate').textContent = status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString('fr-FR') : 'Jamais';
-  $('#syncTransportLabel').textContent = status.transport === 'NOT_CONNECTED' ? 'Non connecté' : 'Disponible';
+  $('#syncTransportLabel').textContent = ({ CONNECTING: 'Connexion…', AUTH_REQUIRED: 'Session requise', NOT_CONNECTED: 'Non connecté', AVAILABLE: 'Disponible' })[status.transport] || 'Non connecté';
 }
 
 function openSyncModal() {
@@ -888,13 +901,179 @@ function openSyncModal() {
 
 function toggleOfflineDemo() {
   appState.syncStatus.forcedOffline = !appState.syncStatus.forcedOffline;
+  if (syncRemote) syncRemote.setOnline(!appState.syncStatus.forcedOffline);
   refreshSyncStatus();
   $('#toggleOfflineButton').textContent = appState.syncStatus.forcedOffline ? 'Repasser en mode réseau' : 'Simuler une coupure';
   showToast(appState.syncStatus.forcedOffline ? 'Mode hors ligne simulé : les données restent locales.' : 'Mode réseau simulé rétabli.');
 }
 
+let syncRemote;
+
+function syncDeviceId() {
+  if (appState.syncStatus.deviceId) return appState.syncStatus.deviceId;
+  try {
+    const saved = localStorage.getItem('emrys.sync.device-id');
+    if (saved) appState.syncStatus.deviceId = saved;
+    else {
+      appState.syncStatus.deviceId = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('emrys.sync.device-id', appState.syncStatus.deviceId);
+    }
+  } catch {
+    appState.syncStatus.deviceId = appState.syncStatus.deviceId || `device-${Date.now()}`;
+  }
+  return appState.syncStatus.deviceId;
+}
+
+function syncRemoteForSession() {
+  if (!syncRemote) syncRemote = createHttpSyncRemote({ baseUrl: '', deviceId: syncDeviceId(), deviceName: `EMRYS · ${navigator.userAgent.includes('Windows') ? 'Windows' : 'Navigateur'}` });
+  return syncRemote;
+}
+
+function syncEntityKey(entityType, entityId, companyId = appState.activeCompany) {
+  return `${companyId || 'global'}:${entityType}:${entityId}`;
+}
+
+function pendingSyncCount() {
+  return (appState.syncOutbox || []).filter((event) => event.status !== 'CONFLICT').length;
+}
+
+function queueSyncChange({ entityType, entityId, payload, companyId = appState.activeCompany, moduleId = 'CSR' }) {
+  if (!entityType || !entityId || !payload || !companyId) return;
+  if (!appState.syncOutbox) appState.syncOutbox = [];
+  if (!appState.syncStatus.entityHashes) appState.syncStatus.entityHashes = {};
+  const key = syncEntityKey(entityType, entityId, companyId);
+  const previous = appState.syncOutbox.find((event) => syncEntityKey(event.entityType, event.entityId, event.companyId) === key && event.status !== 'CONFLICT');
+  const event = {
+    id: previous?.id || `sync-${entityType}-${entityId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    companyId,
+    moduleId,
+    entityType,
+    entityId,
+    operation: 'UPSERT',
+    payload: { ...payload, id: payload.id || entityId, companyId: payload.companyId || companyId, moduleId: payload.moduleId || moduleId },
+    baseHash: appState.syncStatus.entityHashes[key] || previous?.payloadHash || null,
+    status: 'PENDING',
+    attempts: previous?.attempts || 0,
+    lastError: null,
+    queuedAt: new Date().toISOString()
+  };
+  // Coalesce unsent modifications of one entity. The final local state is
+  // sufficient and this avoids sending an obsolete intermediate screen state.
+  const index = previous ? appState.syncOutbox.indexOf(previous) : -1;
+  if (index >= 0) appState.syncOutbox[index] = event;
+  else appState.syncOutbox.push(event);
+  appState.syncStatus.pending = pendingSyncCount();
+  persistAppState();
+  refreshSyncStatus();
+  return event;
+}
+
+function rememberAppliedSyncEvent(eventId) {
+  if (!eventId) return;
+  const ids = appState.syncStatus.appliedEventIds || [];
+  if (!ids.includes(eventId)) ids.push(eventId);
+  appState.syncStatus.appliedEventIds = ids.slice(-1000);
+}
+
+function cursorMax(first, second) {
+  try { return (BigInt(String(second || 0)) > BigInt(String(first || 0)) ? String(second) : String(first || 0)); }
+  catch { return String(second || first || '0'); }
+}
+
+function applyRemoteSyncEvent(event) {
+  if (!event || appState.syncStatus.appliedEventIds?.includes(event.id)) return;
+  const payload = event.payload || {};
+  const companyId = event.companyId || payload.companyId;
+  if (!companyId) return;
+  if (event.entityType === 'COMPANY') {
+    appState.companies[companyId] = { ...(appState.companies[companyId] || {}), ...payload, id: companyId };
+  } else if (event.entityType === 'DOSSIER') {
+    const dossier = { ...payload, id: event.entityId, companyId, dossier: payload.dossier || payload.code || event.entityId };
+    const index = appState.dossiers.findIndex((item) => item.id === event.entityId);
+    if (index >= 0) appState.dossiers[index] = { ...appState.dossiers[index], ...dossier };
+    else appState.dossiers.push(dossier);
+  } else if (event.entityType === 'FISCAL_YEAR') {
+    const year = String(payload.year || payload.id || '');
+    appState.fiscalYears[companyId] = { ...(appState.fiscalYears[companyId] || {}), ...payload, id: year };
+    appState.fiscalYearCatalog[companyId] = appState.fiscalYearCatalog[companyId] || [];
+    const index = appState.fiscalYearCatalog[companyId].findIndex((item) => String(item.id) === year);
+    if (index >= 0) appState.fiscalYearCatalog[companyId][index] = { ...appState.fiscalYearCatalog[companyId][index], ...payload, id: year };
+    else appState.fiscalYearCatalog[companyId].push({ ...payload, id: year });
+  } else if (event.entityType === 'PERIOD') {
+    const year = String(payload.fiscalYear || payload.fiscal_year || appState.fiscalYears?.[companyId]?.id || '2025');
+    appState.periods[companyId] = appState.periods[companyId] || createMonthlyPeriods(Number(year));
+    const period = { ...payload, id: payload.id || event.entityId };
+    const index = appState.periods[companyId].findIndex((item) => item.id === period.id);
+    if (index >= 0) appState.periods[companyId][index] = { ...appState.periods[companyId][index], ...period };
+    else appState.periods[companyId].push(period);
+  } else if (event.entityType === 'JOURNAL_ENTRY') {
+    const entry = { ...payload, id: event.entityId, companyId, source: payload.source || 'Synchronisation distante' };
+    const index = appState.integratedEntries.findIndex((item) => item.id === event.entityId);
+    if (index >= 0) appState.integratedEntries[index] = { ...appState.integratedEntries[index], ...entry };
+    else appState.integratedEntries.push(entry);
+  } else if (event.entityType === 'AUDIT_EVENT') {
+    if (!appState.auditEvents.some((item) => item.id === event.entityId)) appState.auditEvents.push({ ...payload, id: event.entityId });
+  }
+  rememberAppliedSyncEvent(event.id);
+}
+
+async function synchronizeWithServer() {
+  const status = appState.syncStatus;
+  if (status.forcedOffline || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    refreshSyncStatus();
+    showToast('Mode hors ligne : les changements restent dans cet appareil.');
+    return;
+  }
+  status.transport = 'CONNECTING';
+  status.lastError = null;
+  refreshSyncStatus();
+  try {
+    const remote = syncRemoteForSession();
+    const pending = (appState.syncOutbox || []).filter((event) => event.status === 'PENDING' || event.status === 'FAILED').slice(0, 100);
+    const pushed = pending.length ? await remote.push(pending) : { acknowledgements: [], conflicts: [], errors: [] };
+    (pushed.acknowledgements || []).forEach((ack) => {
+      const event = appState.syncOutbox.find((item) => item.id === ack.id);
+      if (ack.payloadHash && event) appState.syncStatus.entityHashes[syncEntityKey(event.entityType, event.entityId, event.companyId)] = ack.payloadHash;
+      appState.syncOutbox = appState.syncOutbox.filter((item) => item.id !== ack.id);
+      rememberAppliedSyncEvent(ack.id);
+    });
+    (pushed.conflicts || []).forEach((conflict) => {
+      const event = appState.syncOutbox.find((item) => item.id === conflict.outboxId);
+      if (event) { event.status = 'CONFLICT'; event.lastError = conflict.reason; }
+      if (!appState.syncConflicts.some((item) => item.outboxId === conflict.outboxId)) appState.syncConflicts.push({ ...conflict, status: 'OPEN', createdAt: new Date().toISOString() });
+    });
+    (pushed.errors || []).forEach((failure) => {
+      const event = appState.syncOutbox.find((item) => item.id === failure.id);
+      if (event) { event.status = 'FAILED'; event.attempts = (event.attempts || 0) + 1; event.lastError = failure.message || failure.code; }
+    });
+    let cursor = String(status.cursor || '0');
+    const incoming = await remote.pull(cursor, { limit: 100, companyId: appState.activeCompany });
+    incoming.forEach((event) => { applyRemoteSyncEvent(event); cursor = cursorMax(cursor, event.cursor); });
+    status.cursor = cursor;
+    status.lastSyncAt = new Date().toISOString();
+    status.transport = 'AVAILABLE';
+    const remoteStatus = await remote.status().catch(() => null);
+    if (remoteStatus?.conflicts !== undefined) status.remoteConflicts = Number(remoteStatus.conflicts) || 0;
+    status.pending = pendingSyncCount();
+    status.conflicts = (appState.syncConflicts || []).filter((item) => item.status === 'OPEN').length + (status.remoteConflicts || 0);
+    persistAppState();
+    refreshSyncStatus();
+    renderCompanyMenu();
+    renderIntegratedJournal();
+    renderEntryQueue();
+    renderDossiers();
+    showToast(status.conflicts ? 'Synchronisation terminée avec un conflit à traiter.' : 'Synchronisation terminée.');
+  } catch (error) {
+    status.transport = error.status === 401 ? 'AUTH_REQUIRED' : 'NOT_CONNECTED';
+    status.lastError = error.message;
+    status.pending = pendingSyncCount();
+    refreshSyncStatus();
+    showToast(error.status === 401 ? 'Reconnectez-vous avant de synchroniser.' : 'Serveur de synchronisation indisponible. Les données restent locales.');
+  }
+}
+
 function showSyncTransportInfo() {
-  showToast('Le connecteur distant sera branché après l’initialisation des commandes Tauri et de l’API.');
+  showToast('EMRYS pousse les changements locaux, vérifie les versions distantes et conserve les conflits avant toute résolution.');
 }
 
 function resetLocalData() {
@@ -1275,6 +1454,9 @@ function addCompany(event) {
   appState.fiscalYearCatalog[id] = [{ id: String(year), label: `Exercice ${year}`, status: 'OPEN' }];
   appState.fiscalYears[id] = { id: year, label: `Exercice ${year}`, status: 'OPEN' };
   appState.fiscalSettings[id] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
+  queueSyncChange({ entityType: 'COMPANY', entityId: id, companyId: id, payload: company });
+  queueSyncChange({ entityType: 'DOSSIER', entityId: dossierId, companyId: id, moduleId: 'CSR', payload: appState.dossiers.find((item) => item.id === dossierId) });
+  queueSyncChange({ entityType: 'FISCAL_YEAR', entityId: `${id}-${year}`, companyId: id, moduleId: 'CSR', payload: { id: `${id}-${year}`, companyId: id, year, label: `Exercice ${year}`, status: 'OPEN' } });
   persistAppState();
   const dossiersAreVisible = !$('#dossiersScreen')?.hasAttribute('hidden');
   closeModal();
@@ -2629,6 +2811,7 @@ function postPayment() {
     const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: payment.amount, debit: payment.amount, credit: payment.amount, source: PAYMENT_TYPE_LABELS[payment.type], integrationCategory: 'GENERAL' }).entries[0];
     appState.integratedEntries.unshift(synced);
     appState.recentEntries.unshift({ ...workflowEntry, amount: payment.amount, accountIds: paymentToJournalLines(payment).map((line) => line.accountId) });
+    queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: workflowEntry.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: { ...workflowEntry, amount: payment.amount, debit: payment.amount, credit: payment.amount, source: PAYMENT_TYPE_LABELS[payment.type], integrationCategory: 'GENERAL' } });
     persistAppState();
     renderPaymentHistory();
     renderPaymentDocuments();
@@ -2738,6 +2921,7 @@ function saveInvoiceDocument(type, post = false) {
       const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: config.title, integrationCategory: 'GENERAL' }).entries[0];
       appState.integratedEntries.unshift(synced);
       appState.recentEntries.unshift({ ...workflowEntry, amount: total, accountIds: accountLines.map((line) => line.accountId) });
+      queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: workflowEntry.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: { ...workflowEntry, amount: total, debit: total, credit: total, source: config.title, integrationCategory: 'GENERAL' } });
     }
     appState[config.collection].push(stored);
     appState.auditEvents.push({ type: post ? 'INVOICE_POSTED' : 'INVOICE_DRAFT_CREATED', companyId: appState.activeCompany, documentId: stored.id, at: new Date().toISOString() });
@@ -3781,6 +3965,7 @@ function insertEntry() {
     appState.recentEntries.unshift(queueEntry);
     const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
     appState.integratedEntries.unshift(syncedEntry);
+    queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: workflowEntry.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category } });
     persistAppState();
     renderIntegratedJournal();
     renderEntryQueue();
@@ -4346,7 +4531,7 @@ function bindEvents() {
     if (action === 'prepare-final-snapshot') void prepareFinalSnapshot().catch((error) => showToast(error.message));
     if (action === 'generate-opening') generateOpeningBalances();
     if (action === 'validate-opening') validateOpeningAndOpen();
-    if (action === 'sync-integrated') synchronizeIntegratedJournal();
+    if (action === 'sync-integrated') { synchronizeIntegratedJournal(); void synchronizeWithServer(); }
     if (action === 'export-current-edition') openEditionPreview('Livre journal intégré', 'journal');
     if (action === 'preview-current-edition') openEditionPreview($('.edition-tab.is-active')?.textContent?.trim() || 'Livre journal intégré', 'journal');
     if (action === 'export-preview') exportEditionPreview();
@@ -4393,6 +4578,7 @@ function bindEvents() {
     if (action === 'show-notifications') showToast('3 actions attendent votre contrôle.');
     if (action === 'open-sync-modal') openSyncModal();
     if (action === 'toggle-offline-demo') toggleOfflineDemo();
+    if (action === 'sync-now') void synchronizeWithServer();
     if (action === 'sync-info') showSyncTransportInfo();
     if (action === 'dismiss-notice') actionTarget.closest('.notice')?.remove();
     if (action === 'save-draft') showToast('Brouillon enregistré.');

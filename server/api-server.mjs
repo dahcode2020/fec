@@ -473,7 +473,7 @@ async function api(request, response, pathname) {
       for (const event of events) {
         try {
           const result = await store.transaction((tx) => processSyncEvent(tx, current.user.id, event));
-          if (result.kind === 'ACK') acknowledgements.push({ id: event.id, cursor: result.cursor });
+          if (result.kind === 'ACK') acknowledgements.push({ id: event.id, cursor: result.cursor, payloadHash: event.payloadHash });
           else conflicts.push({ outboxId: event.id, companyId: event.companyId, entityType: event.entityType, entityId: event.entityId, local: event.payload, remote: result.remote || null, reason: result.reason });
         } catch (error) {
           errors.push({ id: event.id, entityType: event.entityType, entityId: event.entityId, code: error.code || 'SYNC_EVENT_REJECTED', message: error.message });
