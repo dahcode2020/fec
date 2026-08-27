@@ -124,12 +124,22 @@ Pour lancer l’API hors Docker, Node et la dépendance `pg` doivent être insta
 
 ```bash
 npm install
-DATABASE_URL='postgresql://emrys:emrys_dev_password@localhost:5432/emrys' \
-DATABASE_SSL=false \
-NODE_ENV=development \
-DEV_EXPOSE_TOKENS=true \
-npm run preview-api
+node --env-file=.env server/api-server.mjs
 ```
+
+Pour créer ou réinitialiser un compte de démonstration dans **la base indiquée par le `.env` courant**, uniquement en développement :
+
+```bash
+node --env-file=.env server/seed-dev.mjs
+```
+
+Le compte créé par ce seed est :
+
+```text
+demo@emrys.local / EmrysTest2026
+```
+
+Le script refuse de s’exécuter si `NODE_ENV=production`. Il génère le hash PBKDF2 côté serveur et prépare également une société, un dossier CSR, un exercice, ses périodes et un essai. Il ne faut donc pas remplir `password_hash` ou `password_salt` manuellement dans Neon.
 
 L’API de démonstration avec SQLite reste disponible séparément :
 
