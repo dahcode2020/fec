@@ -2649,6 +2649,55 @@ function bankStatusLabel(status) {
   return ({ RECONCILED: ['Rapproché', 'status-green'], POINTED: ['Pointé', 'status-purple'], UNMATCHED: ['À pointer', 'status-amber'] })[status] || ['À contrôler', 'status-amber'];
 }
 
+function bankEntryMatchesMovement(movement, entry) {
+  if (!movement || !entry || movement.companyId !== entry.companyId) return false;
+  const entryAmount = Number(entry.amount || entry.debit || entry.credit || 0);
+  if (!Number.isFinite(entryAmount) || Math.abs(entryAmount - Number(movement.amount || 0)) > 0.005) return false;
+  const lines = Array.isArray(entry.lines) ? entry.lines : [];
+  if (!lines.length) return true;
+  const treasuryAccountId = String(movement.treasuryAccountId || '5211');
+  const treasuryLine = lines.find((line) => String(line.accountId) === treasuryAccountId || String(line.accountId || '').startsWith('5'));
+  if (!treasuryLine) return true;
+  if (Number(movement.debit || 0) > 0) return Math.abs(Number(treasuryLine.credit || 0) - Number(movement.amount || 0)) < 0.005;
+  return Math.abs(Number(treasuryLine.debit || 0) - Number(movement.amount || 0)) < 0.005;
+}
+
+function findBankCandidate(movement) {
+  const candidates = appState.integratedEntries.filter((entry) => {
+    if (entry.companyId !== movement.companyId || entry.status === OPERATION_STATES.CANCELLED || !bankEntryMatchesMovement(movement, entry)) return false;
+    const alreadyMatchedByStatement = appState.bankMovements.some((item) => item.id !== movement.id && item.origin === 'STATEMENT' && item.matchedEntryId === entry.id);
+    return !alreadyMatchedByStatement;
+  });
+  return candidates.map((entry) => {
+    let score = 0;
+    if (movement.reference && entry.reference && String(movement.reference).toLowerCase() === String(entry.reference).toLowerCase()) score += 12;
+    if (movement.date && entry.date === movement.date) score += 6;
+    if (entry.journalId === 'BQ') score += 4;
+    if (Array.isArray(entry.lines) && entry.lines.length) score += 8;
+    return { entry, score };
+  }).sort((a, b) => b.score - a.score)[0]?.entry || null;
+}
+
+function renderBankSummary(movements) {
+  const company = appState.companies[appState.activeCompany];
+  if (!company) return;
+  const opening = parseUiAmount(company.bankOpeningBalance ?? company.treasury ?? 0);
+  const accounting = movements.filter((movement) => movement.origin !== 'STATEMENT');
+  const statement = movements.filter((movement) => movement.origin === 'STATEMENT');
+  const net = (items) => items.reduce((sum, movement) => sum + Number(movement.credit || 0) - Number(movement.debit || 0), 0);
+  const bookBalance = opening + net(accounting);
+  const statementBalance = opening + net(statement);
+  const difference = Math.abs(bookBalance - statementBalance);
+  const unmatched = statement.filter((movement) => movement.status !== 'RECONCILED');
+  const reconciled = statement.length ? statement.filter((movement) => movement.status === 'RECONCILED').length : movements.filter((movement) => movement.status === 'RECONCILED').length;
+  const total = statement.length || movements.length;
+  $('#bankBookBalance').innerHTML = `${numberLabel(bookBalance)} <em>FCFA</em>`;
+  $('#bankStatementBalance').innerHTML = `${numberLabel(statementBalance)} <em>FCFA</em>`;
+  $('#bankDifference').innerHTML = `${numberLabel(difference)} <em>FCFA</em>`;
+  $('#bankDifferenceLabel').textContent = unmatched.length ? `${unmatched.length} mouvement${unmatched.length > 1 ? 's' : ''} à expliquer` : 'Écart expliqué';
+  $('#bankReconciledCount').textContent = `${reconciled} / ${total}`;
+}
+
 function renderBankMovements() {
   const rows = $('#bankMovementRows');
   if (!rows) return;
@@ -2656,22 +2705,23 @@ function renderBankMovements() {
   const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && (filter === 'ALL' || movement.status === filter));
   rows.innerHTML = movements.map((movement) => {
     const [statusLabelText, statusClass] = bankStatusLabel(movement.status);
-    const match = movement.matchedEntryId && appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId);
-    const action = movement.status === 'RECONCILED' ? '<span class="entry-locked" title="Mouvement rapproché">✓</span>' : `<button class="button button-secondary button-small" type="button" data-action="reconcile-bank" data-bank-id="${escapeHtml(movement.id)}">${movement.status === 'POINTED' ? 'Rapprocher' : 'Pointer'}</button>`;
-    return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span></td><td><b>${escapeHtml(movement.reference || '—')}</b></td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td>${match ? `<span class="bank-match">${escapeHtml(match.reference || match.label)}</span>` : '<span class="bank-no-match">Aucune correspondance</span>'}</td><td><span class="status ${statusClass}">${statusLabelText}</span></td><td>${action}</td></tr>`;
+    const matchedEntry = movement.matchedEntryId && appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId);
+    const proposedEntry = !matchedEntry ? findBankCandidate(movement) : null;
+    const match = matchedEntry || proposedEntry;
+    const matchLabel = match ? `${match.reference || match.label}${proposedEntry ? ' · proposition' : ''}` : 'Aucune correspondance';
+    const action = movement.status === 'RECONCILED' ? '<span class="entry-locked" title="Mouvement rapproché">✓</span>' : `<button class="button button-secondary button-small" type="button" data-action="reconcile-bank" data-bank-id="${escapeHtml(movement.id)}">${movement.status === 'POINTED' ? 'Rapprocher' : proposedEntry ? 'Rapprocher la proposition' : 'Pointer'}</button>`;
+    return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span></td><td><b>${escapeHtml(movement.reference || '—')}</b></td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td>${match ? `<span class="bank-match">${escapeHtml(matchLabel)}</span>` : '<span class="bank-no-match">Aucune correspondance</span>'}</td><td><span class="status ${statusClass}">${statusLabelText}</span></td><td>${action}</td></tr>`;
   }).join('');
   if (!movements.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucun mouvement dans cette vue.</td></tr>';
-  const all = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
-  const reconciled = all.filter((movement) => movement.status === 'RECONCILED').length;
-  $('#bankReconciledCount').textContent = `${reconciled} / ${all.length}`;
-  $('#bankDifferenceLabel').textContent = `${all.filter((movement) => movement.status === 'UNMATCHED').length} mouvement${all.filter((movement) => movement.status === 'UNMATCHED').length > 1 ? 's' : ''} à imputer`;
+  renderBankSummary((appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany));
 }
 
 function renderTreasury() {
   const rows = $('#treasuryMovementRows');
   const company = appState.companies[appState.activeCompany];
   if (!rows || !company) return;
-  const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
+  const allMovements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
+  const movements = allMovements.filter((movement) => movement.origin !== 'STATEMENT');
   const chronological = movements.slice().sort((a, b) => `${a.date || ''} ${a.importedAt || ''}`.localeCompare(`${b.date || ''} ${b.importedAt || ''}`));
   let balance = parseUiAmount(company.treasury || 0);
   const withBalance = chronological.map((movement) => {
@@ -2686,7 +2736,7 @@ function renderTreasury() {
   $('#treasuryPayments').innerHTML = `${numberLabel(payments)} <small>FCFA</small>`;
   $('#treasuryReceiptCount').textContent = `${movements.filter((movement) => Number(movement.credit || 0) > 0).length} opération${movements.filter((movement) => Number(movement.credit || 0) > 0).length > 1 ? 's' : ''}`;
   $('#treasuryPaymentCount').textContent = `${movements.filter((movement) => Number(movement.debit || 0) > 0).length} opération${movements.filter((movement) => Number(movement.debit || 0) > 0).length > 1 ? 's' : ''}`;
-  $('#treasuryMovementSubtitle').textContent = `${movements.length} mouvement${movements.length > 1 ? 's' : ''} de trésorerie · société active`;
+  $('#treasuryMovementSubtitle').textContent = `${movements.length} mouvement${movements.length > 1 ? 's' : ''} de trésorerie comptabilisé${movements.length > 1 ? 's' : ''}`;
   rows.innerHTML = withBalance.map(({ movement, balance: after }) => {
     const [statusText, statusClass] = bankStatusLabel(movement.status);
     const amount = Number(movement.amount || movement.debit || movement.credit || 0);
@@ -2714,16 +2764,13 @@ function setBankView(view) {
   else { reconciliation?.removeAttribute('hidden'); importPane?.setAttribute('hidden', ''); cashPane?.setAttribute('hidden', ''); renderBankMovements(); }
 }
 
-function findBankCandidate(movement) {
-  return appState.integratedEntries.find((entry) => entry.companyId === movement.companyId && Number(entry.amount || entry.debit || entry.credit) === Number(movement.amount) && !appState.bankMovements.some((item) => item.matchedEntryId === entry.id));
-}
-
 function reconcileBankMovementById(movementId) {
   const index = appState.bankMovements.findIndex((movement) => movement.id === movementId && movement.companyId === appState.activeCompany);
   if (index < 0) return;
   const movement = appState.bankMovements[index];
   const candidate = movement.matchedEntryId ? appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId) : findBankCandidate(movement);
-  if (!candidate) { movement.status = 'POINTED'; persistAppState(); renderBankMovements(); showToast('Mouvement pointé. Imputez-le avant le rapprochement.'); return; }
+  if (!candidate) { movement.status = 'POINTED'; persistAppState(); renderBankMovements(); renderTreasury(); showToast('Mouvement pointé. Aucune correspondance automatique sûre.'); return; }
+  if (!bankEntryMatchesMovement(movement, candidate)) { showToast('Le sens ou le montant du mouvement ne correspond pas à cette écriture.'); return; }
   try {
     appState.bankMovements[index] = reconcileBankMovement(movement, candidate);
     persistAppState();
@@ -2758,7 +2805,7 @@ function parseBankFile(file) {
     const debitHeader = getHeader(['debit', 'sortie']) || parsed.headers[3];
     const creditHeader = getHeader(['credit', 'entree']) || parsed.headers[4];
     try {
-      pendingBankImport = parsed.rows.map((row, index) => createBankMovement({ id: `imported-bank-${Date.now()}-${index}`, companyId: appState.activeCompany, date: row[dateHeader], label: row[labelHeader], reference: row[referenceHeader], debit: row[debitHeader], credit: row[creditHeader] }));
+      pendingBankImport = parsed.rows.map((row, index) => ({ ...createBankMovement({ id: `imported-bank-${Date.now()}-${index}`, companyId: appState.activeCompany, date: row[dateHeader], label: row[labelHeader], reference: row[referenceHeader], debit: row[debitHeader], credit: row[creditHeader] }), origin: 'STATEMENT' }));
       $('#bankFileName').textContent = file.name;
       $('#bankImportResult')?.removeAttribute('hidden');
       renderBankImportPreview();
@@ -2982,6 +3029,7 @@ function postPayment() {
     appState.payments.push(updatedPayment);
     const bankMovement = createBankMovement({ id: `bank-${payment.id}`, companyId: appState.activeCompany, date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, debit: payment.type === PAYMENT_TYPES.PAYMENT ? payment.amount : 0, credit: payment.type === PAYMENT_TYPES.RECEIPT ? payment.amount : 0, currency: 'XOF' });
     bankMovement.treasuryAccountId = payment.treasuryAccountId;
+    bankMovement.origin = 'ACCOUNTING';
     bankMovement.status = 'POINTED';
     bankMovement.matchedEntryId = workflowEntry.id;
     appState.bankMovements.unshift(bankMovement);
