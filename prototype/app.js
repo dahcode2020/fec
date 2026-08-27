@@ -2853,10 +2853,48 @@ function invoiceConfig(type) {
   return type === 'PURCHASE' ? { partyLabel: 'Fournisseur', formPrefix: 'purchase', collection: 'purchaseBills', journalId: 'AC', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4452', title: 'Facture fournisseur' } : { partyLabel: 'Client', formPrefix: 'sales', collection: 'invoices', journalId: 'VE', expenseAccountId: '6047', revenueAccountId: '7061', taxAccountId: '4431', title: 'Facture client' };
 }
 
+function manualInvoiceParty(type) {
+  const config = invoiceConfig(type);
+  const input = $(`#${config.formPrefix}InvoiceManualParty`);
+  const name = input?.value.trim() || '';
+  if (!name) return null;
+  const partyType = type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tiers';
+  return { id: `manual-${type.toLowerCase()}-${slug}`, name, type: partyType, collectiveAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], auxiliaryAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], currency: 'XOF', active: true, manual: true };
+}
+
+function toggleManualInvoiceParty(type, { focus = false } = {}) {
+  const config = invoiceConfig(type);
+  const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
+  const field = $(`#${config.formPrefix}InvoiceManualPartyField`);
+  const input = $(`#${config.formPrefix}InvoiceManualParty`);
+  const manual = select?.value === 'manual';
+  field?.toggleAttribute('hidden', !manual);
+  if (input) {
+    input.required = manual;
+    if (!manual) input.value = '';
+    if (manual && focus) window.setTimeout(() => input.focus(), 0);
+  }
+}
+
 function currentInvoiceParty(type) {
   const config = invoiceConfig(type);
   const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
+  if (select?.value === 'manual') return manualInvoiceParty(type);
   return currentThirdParties().find((thirdParty) => thirdParty.id === select?.value && thirdParty.type === (type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT));
+}
+
+function ensureManualInvoiceParty(type, document) {
+  if (!document.thirdPartyId?.startsWith('manual-')) return document;
+  const partyType = type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
+  const existing = currentThirdParties().find((party) => party.type === partyType && party.name.toLowerCase() === document.thirdPartyName.toLowerCase());
+  if (existing) return { ...document, thirdPartyId: existing.id, thirdPartyAccountId: existing.auxiliaryAccountId };
+  const setup = currentAccountSetup();
+  const party = { ...manualInvoiceParty(type), id: document.thirdPartyId, auxiliaryAccountId: nextThirdPartyAuxiliary(THIRD_PARTY_DEFAULT_ACCOUNTS[partyType]) };
+  const updatedParties = addThirdPartyToDirectory(currentThirdParties(), party, setup.accounts);
+  appState.thirdParties[appState.activeCompany] = updatedParties;
+  if (!setup.accounts.some((account) => account.id === party.auxiliaryAccountId)) setup.accounts = addAccountToPlan(setup.accounts, { id: party.auxiliaryAccountId, label: `${party.collectiveAccountId} — ${party.name}`, nature: partyType === THIRD_PARTY_TYPES.CLIENT ? 'Actif / tiers' : 'Passif / tiers', isCustom: true });
+  return { ...document, thirdPartyId: party.id, thirdPartyAccountId: party.auxiliaryAccountId };
 }
 
 function renderInvoicePartyOptions(type) {
@@ -2865,8 +2903,10 @@ function renderInvoicePartyOptions(type) {
   if (!select) return;
   const partyType = type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
   const parties = currentThirdParties().filter((thirdParty) => thirdParty.type === partyType && thirdParty.active !== false);
-  select.innerHTML = `${parties.map((party) => `<option value="${escapeHtml(party.id)}">${escapeHtml(party.name)} · ${escapeHtml(party.auxiliaryAccountId)}</option>`).join('')}<option value="none">+ Ajouter un ${type === 'PURCHASE' ? 'fournisseur' : 'client'}</option>`;
+  select.innerHTML = `${parties.map((party) => `<option value="${escapeHtml(party.id)}">${escapeHtml(party.name)} · ${escapeHtml(party.auxiliaryAccountId)}</option>`).join('')}<option value="manual">+ Saisir un ${type === 'PURCHASE' ? 'nouveau fournisseur' : 'nouveau client'}</option>`;
   if (parties.length) select.value = parties[0].id;
+  else select.value = 'manual';
+  toggleManualInvoiceParty(type);
 }
 
 function invoiceField(type, name) {
@@ -2933,7 +2973,8 @@ function saveInvoiceDocument(type, post = false) {
   if (post && !ensureActivePeriodOpen()) return;
   const config = invoiceConfig(type);
   try {
-    const document = buildInvoice(type);
+    let document = buildInvoice(type);
+    if (post) document = ensureManualInvoiceParty(type, document);
     const setup = currentAccountSetup();
     const accountLines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
     let stored = { ...document, paidAmount: 0, outstanding: document.totalInclTax, allocations: [], status: post ? 'POSTED' : 'DRAFT' };
@@ -4354,7 +4395,10 @@ function bindEvents() {
       }
       renderInvoicePreview(type);
     });
-    form?.addEventListener('change', () => renderInvoicePreview(type));
+    form?.addEventListener('change', (event) => {
+      if (event.target.matches('select[name="customerId"], select[name="supplierId"]')) toggleManualInvoiceParty(type, { focus: true });
+      renderInvoicePreview(type);
+    });
   });
   $('#entryForm')?.addEventListener('change', (event) => { if (event.target.id === 'entryCategory') renderThirdpartyOptions(); renderLivePosting(); });
   $('#multiLineRows')?.addEventListener('input', (event) => {
