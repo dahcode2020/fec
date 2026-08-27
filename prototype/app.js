@@ -2645,6 +2645,7 @@ function exportThirdParties() {
 
 let currentBankView = 'reconciliation';
 let pendingBankImport = [];
+let pendingBankImputationId = null;
 
 function bankStatusLabel(status) {
   return ({ RECONCILED: ['Rapproché', 'status-green'], POINTED: ['Pointé', 'status-purple'], UNMATCHED: ['À pointer', 'status-amber'] })[status] || ['À contrôler', 'status-amber'];
@@ -2710,7 +2711,10 @@ function renderBankMovements() {
     const proposedEntry = !matchedEntry ? findBankCandidate(movement) : null;
     const match = matchedEntry || proposedEntry;
     const matchLabel = match ? `${match.reference || match.label}${proposedEntry ? ' · proposition' : ''}` : 'Aucune correspondance';
-    const action = movement.status === 'RECONCILED' ? '<span class="entry-locked" title="Mouvement rapproché">✓</span>' : `<button class="button button-secondary button-small" type="button" data-action="reconcile-bank" data-bank-id="${escapeHtml(movement.id)}">${movement.status === 'POINTED' ? 'Rapprocher' : proposedEntry ? 'Rapprocher la proposition' : 'Pointer'}</button>`;
+    const isStatement = movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
+    const imputeAction = isStatement && movement.status !== 'RECONCILED' ? `<button class="text-button table-action" type="button" data-action="impute-bank-movement" data-bank-id="${escapeHtml(movement.id)}">Imputer</button>` : '';
+    const reconcileAction = movement.status === 'RECONCILED' ? '<span class="entry-locked" title="Mouvement rapproché">✓</span>' : `<button class="button button-secondary button-small" type="button" data-action="reconcile-bank" data-bank-id="${escapeHtml(movement.id)}">${movement.status === 'POINTED' ? 'Rapprocher' : proposedEntry ? 'Rapprocher la proposition' : 'Pointer'}</button>`;
+    const action = `<div class="table-actions">${imputeAction}${reconcileAction}</div>`;
     return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span></td><td><b>${escapeHtml(movement.reference || '—')}</b></td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td>${match ? `<span class="bank-match">${escapeHtml(matchLabel)}</span>` : '<span class="bank-no-match">Aucune correspondance</span>'}</td><td><span class="status ${statusClass}">${statusLabelText}</span></td><td>${action}</td></tr>`;
   }).join('');
   if (!movements.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucun mouvement dans cette vue.</td></tr>';
@@ -2779,6 +2783,36 @@ function reconcileBankMovementById(movementId) {
     renderTreasury();
     showToast('Mouvement rapproché avec le journal BQ.');
   } catch (error) { showToast(error.message); }
+}
+
+function openBankMovementInEntry(movementId) {
+  const movement = (appState.bankMovements || []).find((item) => item.id === movementId && item.companyId === appState.activeCompany);
+  if (!movement) { showToast('Mouvement bancaire introuvable.'); return; }
+  const tab = document.querySelector('.entry-tab[data-entry-tab="free"]');
+  if (!tab) { showToast('La saisie centrale est indisponible.'); return; }
+  openView('entry');
+  selectEntryTab(tab);
+  const amount = Number(movement.amount || movement.debit || movement.credit || 0);
+  const label = movement.label || 'Mouvement bancaire';
+  const isDebit = Number(movement.debit || 0) > 0;
+  const isFee = /frais|commission|agios|tenue de compte/i.test(label);
+  $('#entryDate').value = movement.date || '';
+  $('#entryJournal').value = 'BQ';
+  $('#entryReference').value = movement.reference || '';
+  $('#entryLabel').value = label;
+  $('#entryAmount').value = numberLabel(amount);
+  $('#entryCategory').value = isFee ? 'bank-fee' : 'other';
+  renderThirdpartyOptions();
+  $('#entryThirdParty').value = 'none';
+  toggleManualEntryParty();
+  manualLineOverride = isDebit
+    ? [{ accountId: isFee ? '6318' : '4711', label: isFee ? 'Frais bancaires' : 'Mouvement à qualifier', debit: amount, credit: 0 }, { accountId: '5211', label: 'Banque', debit: 0, credit: amount }]
+    : [{ accountId: '5211', label: 'Banque', debit: amount, credit: 0 }, { accountId: isFee ? '7581' : '4711', label: isFee ? 'Produit bancaire' : 'Mouvement à qualifier', debit: 0, credit: amount }];
+  pendingBankImputationId = movement.id;
+  const source = $('#entryBankSource');
+  if (source) { $('#entryBankSourceText').textContent = `Relevé bancaire · ${movement.reference || 'sans référence'} · ${numberLabel(amount)} FCFA`; source.removeAttribute('hidden'); }
+  renderLivePosting();
+  showToast('Imputation proposée. Corrigez les lignes si nécessaire, puis insérez l’écriture.');
 }
 
 function openBankImport() {
@@ -4433,6 +4467,8 @@ function clearEntry(notify = true) {
   manualLineOverride = null;
   editingEntryId = null;
   manualLineContext = null;
+  pendingBankImputationId = null;
+  $('#entryBankSource')?.setAttribute('hidden', '');
   $('#entryCorrectionReasonField')?.setAttribute('hidden', '');
   $('#entryCorrectionReason').value = '';
   const button = $('#insertEntryButton');
@@ -4524,6 +4560,16 @@ function insertEntry() {
     } catch (windowError) {
       if (windowError.code !== 'CORRECTION_WINDOW_FULL') throw windowError;
     }
+    const linkedBankMovement = pendingBankImputationId && appState.bankMovements.find((movement) => movement.id === pendingBankImputationId && movement.companyId === appState.activeCompany);
+    if (linkedBankMovement) {
+      linkedBankMovement.matchedEntryId = workflowEntry.id;
+      linkedBankMovement.status = 'POINTED';
+      linkedBankMovement.imputationEntryId = workflowEntry.id;
+      pendingBankImputationId = null;
+      const bankAudit = { id: `audit-${Date.now()}`, action: 'BANK_MOVEMENT_IMPUTED', companyId: appState.activeCompany, movementId: linkedBankMovement.id, entryId: workflowEntry.id, at: new Date().toISOString(), userId: appState.currentUserId };
+      appState.auditEvents.push(bankAudit);
+      queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: bankAudit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: bankAudit });
+    }
     appState.recentEntries.unshift(queueEntry);
     const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
     appState.integratedEntries.unshift(syncedEntry);
@@ -4532,6 +4578,8 @@ function insertEntry() {
     renderIntegratedJournal();
     renderEntryQueue();
     renderCorrectionWindow();
+    renderBankMovements();
+    renderTreasury();
     showToast('Écriture insérée dans le brouillard. Contrôle requis avant validation.');
     clearEntry(false);
   } catch (error) { showToast(error.message); }
@@ -5073,6 +5121,7 @@ function bindEvents() {
     if (action === 'open-bank-import') openBankImport();
     if (action === 'close-bank-import') setBankView('reconciliation');
     if (action === 'apply-bank-import') applyBankImport();
+    if (action === 'impute-bank-movement') openBankMovementInEntry(actionTarget.dataset.bankId);
     if (action === 'reconcile-bank') reconcileBankMovementById(actionTarget.dataset.bankId);
     if (action === 'reset-payment') showCentralEntryDocument('receipt');
     if (action === 'clear-payment') clearPayment();

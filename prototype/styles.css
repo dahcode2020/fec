@@ -973,3 +973,8 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 .table-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .table-action { font-size: 8px; white-space: nowrap; }
 .table-action-locked { color: #a6afbb; font-size: 8px; white-space: nowrap; }
+
+.entry-bank-source { display:flex; align-items:center; gap:8px; margin:12px 0 0; padding:10px 12px; border:1px solid #dbe9f3; border-radius:9px; background:#f5fbff; color:#5d8197; font-size:9px; }
+.entry-bank-source > span:first-child { display:flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:#e4f2fa; color:#3b89ae; font-weight:800; }
+.entry-bank-source strong, .entry-bank-source small { display:block; }
+.entry-bank-source small { margin-top:3px; color:#8aa5b5; font-size:8px; }
