@@ -1108,30 +1108,29 @@ function recoverFromBootstrapError() {
 }
 
 function openSelectedDossier() {
-  const dossier = appState.dossiers.find((item) => item.id === appState.selectedDossier);
+  const selected = appState.dossiers.find((item) => item.id === appState.selectedDossier && item.status !== 'Archivé');
+  const dossier = selected || appState.dossiers.find((item) => item.status !== 'Archivé' && appState.companies[item.companyId]);
   const company = dossier && appState.companies[dossier.companyId];
   if (!dossier || !company) {
     showToast('Sélectionnez d’abord un dossier accessible.');
     return;
   }
-  if (dossier.status === 'Archivé') {
-    showToast('Ce dossier est archivé et ne peut pas être ouvert.');
-    return;
-  }
+  appState.selectedDossier = dossier.id;
   dossier.sessions = Math.max(1, Number(dossier.sessions || 0));
   appState.moduleCompanyId = dossier.companyId;
   appState.moduleDossierCode = dossier.dossier || dossier.code;
-  const moduleDossier = appState.dossiers.find((item) => item.id === dossier.id);
-  if (moduleDossier.moduleId && !companyModuleAccess(dossier.companyId, moduleDossier.moduleId)) {
+  if (dossier.moduleId && !companyModuleAccess(dossier.companyId, dossier.moduleId)) {
     showToast('Vous n’avez pas accès au module de ce dossier.');
     return;
   }
   persistAppState();
-  setActiveCompany(dossier.companyId, false);
+  // Change d’écran avant les rafraîchissements secondaires : une vue ou une
+  // donnée locale ancienne ne doit jamais rendre le bouton Ouvrir inerte.
   $('#dossiersScreen')?.setAttribute('hidden', '');
   $('#appShell')?.setAttribute('hidden', '');
   $('#moduleStubScreen')?.setAttribute('hidden', '');
   $('#moduleHomeScreen')?.removeAttribute('hidden');
+  try { setActiveCompany(dossier.companyId, false); } catch (error) { console.error('Rafraîchissement de société impossible.', error); }
   renderModuleHome(dossier.companyId, appState.moduleDossierCode);
   showToast(`${company.name} est ouvert. Choisissez un module.`);
 }
@@ -1157,20 +1156,24 @@ function openModule(moduleId) {
   const dossierCode = appState.moduleDossierCode;
   const entry = activeModulesFor(companyId, dossierCode).find((item) => item.moduleId === moduleId);
   if (!entry) return activateModule(moduleId);
-  setActiveCompany(companyId, false);
+  const company = appState.companies[companyId];
+  if (!company) { showToast('La société de ce dossier est introuvable.'); return; }
   if (moduleId === 'CSR') {
+    // Le changement de vue est prioritaire ; le rafraîchissement des panneaux
+    // ne doit pas empêcher l’ouverture du module.
     $('#moduleHomeScreen')?.setAttribute('hidden', '');
     $('#moduleStubScreen')?.setAttribute('hidden', '');
     $('#appShell')?.removeAttribute('hidden');
     openView('dashboard');
+    try { setActiveCompany(companyId, false); } catch (error) { console.error('Rafraîchissement de société impossible.', error); }
     showToast('Module CSR ouvert.');
     return;
   }
+  try { setActiveCompany(companyId, false); } catch (error) { console.error('Rafraîchissement de société impossible.', error); }
   const definition = MODULES[moduleId];
   $('#moduleHomeScreen')?.setAttribute('hidden', '');
   $('#appShell')?.setAttribute('hidden', '');
   $('#moduleStubScreen')?.removeAttribute('hidden');
-  const company = appState.companies[companyId];
   const stubName = $('#stubCompanyName');
   const stubCode = $('#stubDossierCode');
   const stubTitle = $('#stubModuleTitle');
