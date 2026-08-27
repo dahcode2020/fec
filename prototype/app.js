@@ -3107,7 +3107,10 @@ function openInvoiceSource(type, invoiceId) {
   const config = invoiceConfig(type);
   const document = (appState[config.collection] || []).find((item) => item.id === invoiceId);
   if (!document) { showToast('Facture source introuvable.'); return; }
-  openView(type === 'PURCHASE' ? 'purchases' : 'sales');
+  const tab = document.querySelector(`.entry-tab[data-entry-tab="${type === 'PURCHASE' ? 'purchase' : 'sale'}"]`);
+  if (!tab) { showToast('La saisie centrale de cette facture est indisponible.'); return; }
+  openView('entry');
+  selectEntryTab(tab);
   renderInvoicePartyOptions(type);
   const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
   if (select && document.thirdPartyId && Array.from(select.options).some((option) => option.value === document.thirdPartyId)) select.value = document.thirdPartyId;
