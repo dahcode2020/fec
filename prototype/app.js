@@ -2782,19 +2782,28 @@ function renderLettering() {
 
 function setPaymentType(type) {
   $$('.payment-tab').forEach((tab) => { const active = tab.dataset.paymentType === type; tab.classList.toggle('is-active', active); tab.setAttribute('aria-selected', String(active)); });
+  const inCentralEntry = $('#view-entry')?.classList.contains('is-visible');
   if (type === 'LETTERING') {
     $('#paymentEntryPane')?.setAttribute('hidden', '');
-    $('#letteringPane')?.removeAttribute('hidden');
+    if (!inCentralEntry) $('#letteringPane')?.removeAttribute('hidden');
     renderLettering();
     return;
   }
   currentPaymentType = type;
-  $('#paymentEntryPane')?.removeAttribute('hidden');
-  $('#letteringPane')?.setAttribute('hidden', '');
+  if (inCentralEntry) {
+    $('#entryDocumentPane')?.removeAttribute('hidden');
+    $('#paymentEntryPane')?.removeAttribute('hidden');
+    $('#letteringPane')?.setAttribute('hidden', '');
+  } else {
+    // Gestion/Règlements only displays the follow-up list. Creation remains
+    // centralized in Opérations → Saisie et insertion.
+    $('#paymentEntryPane')?.setAttribute('hidden', '');
+    $('#letteringPane')?.setAttribute('hidden', '');
+  }
   const isReceipt = type === PAYMENT_TYPES.RECEIPT;
   $('#paymentTypeTitle').textContent = PAYMENT_TYPE_LABELS[type];
   $('#paymentPartyLabel').innerHTML = `${isReceipt ? 'Client' : 'Fournisseur'} <b>*</b>`;
-  $('#paymentJournalLabel').textContent = isReceipt ? 'BQ · Banque' : 'BQ · Banque';
+  $('#paymentJournalLabel').textContent = 'BQ · Banque';
   $('#paymentPreviewTitle').textContent = PAYMENT_TYPE_LABELS[type];
   renderPaymentPartyOptions();
   paymentAllocations = {};
@@ -3022,9 +3031,11 @@ function renderInvoiceHistory(type) {
     const editable = !entry || ![OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status);
     const editAction = editable && document.status !== 'DRAFT' ? `<button class="text-button table-action" type="button" data-action="edit-saved-invoice-imputation" data-invoice-type="${type}" data-invoice-id="${escapeHtml(document.id)}">Modifier l’imputation</button>` : '';
     const locked = !editable && document.status !== 'DRAFT' ? '<span class="table-action-locked">Verrouillée</span>' : '';
-    return `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${documentStatus[1]}">${documentStatus[0]}</span></td><td><div class="table-actions"><button class="text-button table-action" type="button" data-action="view-invoice-source" data-invoice-type="${type}" data-invoice-id="${escapeHtml(document.id)}">Voir la source</button>${editAction}${locked}</div></td></tr>`;
+    const paidAmount = Number(document.paidAmount || 0);
+    const outstanding = Number(document.outstanding ?? Math.max(0, Number(document.totalInclTax || 0) - paidAmount));
+    return `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td>${escapeHtml(displayDate(document.dueDate))}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td class="align-right">${numberLabel(paidAmount)} FCFA</td><td class="align-right">${numberLabel(outstanding)} FCFA</td><td><span class="status ${documentStatus[1]}">${documentStatus[0]}</span></td><td><div class="table-actions"><button class="text-button table-action" type="button" data-action="view-invoice-source" data-invoice-type="${type}" data-invoice-id="${escapeHtml(document.id)}">Voir la source</button>${editAction}${locked}</div></td></tr>`;
   }).join('');
-  if (!entries.length) rows.innerHTML = `<tr><td colspan="6" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
+  if (!entries.length) rows.innerHTML = `<tr><td colspan="9" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
   const count = $(`#${config.formPrefix}InvoiceCount`);
   if (count) count.textContent = String(entries.length);
 }
@@ -4127,10 +4138,55 @@ function renderLivePosting() {
   if (reasonNode) reasonNode.textContent = manualLineOverride ? 'Répartition saisie par l’utilisateur · prête pour insertion.' : suggestion.reason;
 }
 
+function centralizeEntryForms() {
+  const pane = $('#entryDocumentPane');
+  if (!pane || pane.dataset.centralized === 'true') return;
+  const invoiceLayouts = [
+    ['sale', document.querySelector('#view-sales .document-layout')],
+    ['purchase', document.querySelector('#view-purchases .document-layout')]
+  ];
+  invoiceLayouts.forEach(([type, layout]) => {
+    if (!layout) return;
+    layout.dataset.entryDocumentType = type;
+    pane.append(layout);
+  });
+  const paymentPane = $('#paymentEntryPane');
+  if (paymentPane) {
+    paymentPane.dataset.entryDocumentType = 'payment';
+    pane.append(paymentPane);
+  }
+  pane.dataset.centralized = 'true';
+}
+
+function showCentralEntryDocument(type) {
+  const tab = document.querySelector(`.entry-tab[data-entry-tab="${type}"]`);
+  if (!tab) { showToast('Cette saisie centralisée n’est pas disponible.'); return; }
+  openView('entry');
+  selectEntryTab(tab);
+  if (type === 'sale' || type === 'purchase') resetInvoice(type === 'sale' ? 'SALE' : 'PURCHASE');
+  if (type === 'receipt' || type === 'payment') resetPayment();
+}
+
 function selectEntryTab(tab) {
   manualLineOverride = null;
-  const config = ENTRY_TAB_CONFIG[tab.dataset.entryTab] || ENTRY_TAB_CONFIG.free;
+  const tabId = tab.dataset.entryTab;
+  const config = ENTRY_TAB_CONFIG[tabId] || ENTRY_TAB_CONFIG.free;
   $$('.entry-tab').forEach((item) => item.classList.toggle('is-active', item === tab));
+  const genericLayout = document.querySelector('#view-entry .entry-layout');
+  const documentPane = $('#entryDocumentPane');
+  const documentType = tabId === 'sale' || tabId === 'purchase' ? tabId : tabId === 'receipt' || tabId === 'payment' ? 'payment' : null;
+  if (documentPane) {
+    documentPane.toggleAttribute('hidden', !documentType);
+    Array.from(documentPane.children).forEach((child) => child.toggleAttribute('hidden', child.dataset.entryDocumentType !== documentType));
+  }
+  if (genericLayout) genericLayout.toggleAttribute('hidden', Boolean(documentType));
+  if (documentType === 'payment') setPaymentType(tabId === 'payment' ? PAYMENT_TYPES.PAYMENT : PAYMENT_TYPES.RECEIPT);
+  if (tabId === 'sale' || tabId === 'purchase') {
+    const invoiceType = tabId === 'sale' ? 'SALE' : 'PURCHASE';
+    renderInvoicePartyOptions(invoiceType);
+    renderInvoiceLines(invoiceType);
+    renderInvoicePreview(invoiceType);
+  }
   const title = $('#entryTypeTitle');
   if (title) title.textContent = config.title;
   const category = $('#entryCategory');
@@ -4736,11 +4792,12 @@ function bindEvents() {
     if (action === 'close-bank-import') setBankView('reconciliation');
     if (action === 'apply-bank-import') applyBankImport();
     if (action === 'reconcile-bank') reconcileBankMovementById(actionTarget.dataset.bankId);
-    if (action === 'reset-payment') { setPaymentType(PAYMENT_TYPES.RECEIPT); resetPayment(); }
+    if (action === 'reset-payment') showCentralEntryDocument('receipt');
     if (action === 'clear-payment') clearPayment();
     if (action === 'post-payment') postPayment();
     if (action === 'auto-lettering') { renderLettering(); showToast('Les lettrages complets sont proposés à partir des factures soldées.'); }
-    if (action === 'reset-invoice') { resetInvoice(actionTarget.dataset.invoiceType); showToast('Nouvelle facture prête à être saisie.'); }
+    if (action === 'reset-invoice') { showCentralEntryDocument(actionTarget.dataset.invoiceType === 'PURCHASE' ? 'purchase' : 'sale'); showToast('Nouvelle facture prête à être saisie dans Opérations.'); }
+    if (action === 'open-entry-invoice') showCentralEntryDocument(actionTarget.dataset.invoiceType === 'PURCHASE' ? 'purchase' : 'sale');
     if (action === 'add-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].push({ id: `line-${Date.now()}`, description: '', quantity: 1, unitPrice: 0 }); renderInvoiceLines(type); renderInvoicePreview(type); window.setTimeout(() => $(`#${invoiceConfig(type).formPrefix}InvoiceLines [data-invoice-field="description"]:last-of-type`)?.focus(), 0); }
     if (action === 'remove-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].splice(Number(actionTarget.dataset.lineIndex), 1); renderInvoiceLines(type); renderInvoicePreview(type); }
     if (action === 'save-invoice-draft') saveInvoiceDocument(actionTarget.dataset.invoiceType, false);
@@ -4924,6 +4981,7 @@ function bootstrapApp() {
     bindEvents();
     bindResetLocalData();
     hydrateAppState();
+    centralizeEntryForms();
     persistAppState();
     loadFullSyscohadaPlan();
     renderCompanyMenu();
