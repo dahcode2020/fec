@@ -2683,6 +2683,21 @@ function treasuryMovementForEntry(entry) {
   };
 }
 
+function ensureTreasuryMovements() {
+  const activeCompanyId = appState.activeCompany;
+  let added = false;
+  for (const entry of (appState.integratedEntries || []).filter((item) => item.companyId === activeCompanyId && item.status !== OPERATION_STATES.CANCELLED)) {
+    const movement = treasuryMovementForEntry(entry);
+    if (!movement) continue;
+    const alreadyRecorded = (appState.bankMovements || []).some((item) => item.matchedEntryId === entry.id || item.id === movement.id);
+    const statementAlreadyLinked = (appState.bankMovements || []).some((item) => (item.origin === 'STATEMENT' || String(item.id).startsWith('imported-bank-')) && item.matchedEntryId === entry.id);
+    if (alreadyRecorded || statementAlreadyLinked) continue;
+    appState.bankMovements.unshift(movement);
+    added = true;
+  }
+  if (added) persistAppState();
+}
+
 function bankEntryMatchesMovement(movement, entry) {
   if (!movement || !entry || movement.companyId !== entry.companyId) return false;
   const entryAmount = Number(entry.amount || entry.debit || entry.credit || 0);
@@ -2737,6 +2752,7 @@ function renderBankSummary(movements) {
 }
 
 function renderBankMovements() {
+  ensureTreasuryMovements();
   const rows = $('#bankMovementRows');
   if (!rows) return;
   const filter = currentBankView === 'unmatched' ? 'UNMATCHED' : 'ALL';
@@ -2758,6 +2774,7 @@ function renderBankMovements() {
 }
 
 function renderTreasury() {
+  ensureTreasuryMovements();
   const rows = $('#treasuryMovementRows');
   const company = appState.companies[appState.activeCompany];
   if (!rows || !company) return;
