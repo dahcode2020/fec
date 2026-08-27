@@ -271,6 +271,7 @@ function persistAppState() {
 
 let manualLineOverride = null;
 let manualLineDraft = [];
+let editingEntryId = null;
 let manualLineContext = null;
 let fullPlanPayload = null;
 
@@ -4011,11 +4012,47 @@ function renderEntryQueue() {
     const deletable = canDeleteCorrectionCandidate(window, entry);
     const deleteAction = deletable ? `<button class="icon-button small delete-entry-button" type="button" data-action="delete-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Supprimer cette imputation"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : '<span class="entry-locked" title="Correction verrouillée">⌁</span>';
     const validateAction = entry.status === OPERATION_STATES.TO_REVIEW ? `<button class="icon-button small validate-entry-button" type="button" data-action="validate-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Valider cette imputation">✓</button>` : '';
-    const action = `<span class="entry-actions">${validateAction}${deleteAction}</span>`;
+    const editAction = entry.status === OPERATION_STATES.TO_REVIEW ? `<button class="icon-button small edit-entry-button" type="button" data-action="edit-entry" data-entry-id="${escapeHtml(entry.id)}" aria-label="Modifier cette imputation">✎</button>` : '';
+    const action = `<span class="entry-actions">${editAction}${validateAction}${deleteAction}</span>`;
     const journalClass = entry.journalId === 'AC' ? 'journal-badge-blue' : entry.journalId === 'BQ' ? 'journal-badge-teal' : '';
     return `<tr><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span> Saisie</td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${deletable ? 'Dans la fenêtre de correction' : 'Correction verrouillée'}</small></td><td class="align-right">${numberLabel(entry.amount)}</td><td>${escapeHtml(entry.accountIds?.join(' / ') || 'À compléter')}</td><td><span class="status ${statusClass}">${label}</span></td><td>${action}</td></tr>`;
   }).join('');
   if (!entries.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucune saisie active dans ce dossier.</td></tr>';
+}
+
+function editRecentEntry(entryId) {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_CORRECT)) return;
+  const entry = appState.recentEntries.find((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (!entry) { showToast('Écriture introuvable.'); return; }
+  if (entry.status !== OPERATION_STATES.TO_REVIEW) {
+    showToast('Cette écriture est validée ou verrouillée.');
+    return;
+  }
+  const tab = document.querySelector(`.entry-tab[data-entry-tab="${entry.journalId === 'VE' ? 'sale' : entry.journalId === 'AC' ? 'purchase' : entry.journalId === 'BQ' ? (entry.natureOperation === 'PAIEMENT' ? 'payment' : 'receipt') : 'free'}"]`);
+  openView('entry');
+  if (tab) selectEntryTab(tab);
+  $('#entryDate').value = entry.date || '';
+  $('#entryJournal').value = entry.journalId || 'OD';
+  $('#entryReference').value = entry.reference || '';
+  $('#entryLabel').value = entry.label || '';
+  $('#entryAmount').value = numberLabel(entry.amount || entry.debit || entry.credit || 0);
+  $('#entryCategory').value = entry.category || (entry.journalId === 'AC' ? 'goods-purchase' : entry.journalId === 'VE' ? 'service-sale' : 'other');
+  renderThirdpartyOptions();
+  const partySelect = $('#entryThirdParty');
+  if (partySelect && entry.thirdPartyId && Array.from(partySelect.options).some((option) => option.value === entry.thirdPartyId)) partySelect.value = entry.thirdPartyId;
+  else if (partySelect && entry.thirdPartyName && entry.thirdPartyName !== 'Aucun tiers') {
+    partySelect.value = 'manual';
+    $('#entryManualParty').value = entry.thirdPartyName;
+  }
+  toggleManualEntryParty();
+  editingEntryId = entryId;
+  manualLineOverride = (entry.lines || []).map((line) => ({ ...line }));
+  $('#entryCorrectionReasonField')?.removeAttribute('hidden');
+  $('#entryCorrectionReason').value = '';
+  const button = $('#insertEntryButton');
+  if (button) button.firstChild.textContent = 'Enregistrer la correction ';
+  renderLivePosting();
+  showToast('Écriture chargée. Modifiez les lignes puis enregistrez la correction.');
 }
 
 function validateRecentEntry(entryId) {
@@ -4390,6 +4427,12 @@ function selectEntryTab(tab) {
 
 function clearEntry(notify = true) {
   manualLineOverride = null;
+  editingEntryId = null;
+  manualLineContext = null;
+  $('#entryCorrectionReasonField')?.setAttribute('hidden', '');
+  $('#entryCorrectionReason').value = '';
+  const button = $('#insertEntryButton');
+  if (button) button.firstChild.textContent = 'Prévisualiser et insérer ';
   const form = $('#entryForm');
   if (!form) return;
   form.reset();
@@ -4409,6 +4452,36 @@ function ensureActivePeriodOpen() {
   return true;
 }
 
+function saveEntryCorrection(entryId, lines) {
+  const entryIndex = appState.recentEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (entryIndex < 0) throw new Error('Écriture introuvable.');
+  const current = appState.recentEntries[entryIndex];
+  if (current.status !== OPERATION_STATES.TO_REVIEW) throw new Error('Cette écriture est déjà validée ou verrouillée.');
+  const reason = $('#entryCorrectionReason')?.value.trim() || '';
+  if (!reason) throw new Error('Le motif de la correction est obligatoire.');
+  const setup = currentAccountSetup();
+  const validation = validateJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, lines }, { companyId: appState.activeCompany, accountIds: setup.accounts.map((account) => account.id) });
+  const party = ensureManualEntryParty(currentEntryParty());
+  const updated = { ...current, date: $('#entryDate').value, journalId: $('#entryJournal').value, reference: $('#entryReference').value.trim(), label: $('#entryLabel').value.trim(), thirdPartyId: party?.id, thirdPartyAccountId: party?.auxiliaryAccountId, thirdPartyName: party?.name, lines, amount: validation.debit, debit: validation.debit, credit: validation.credit };
+  appState.recentEntries[entryIndex] = updated;
+  const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
+  if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], ...updated, source: 'Correction contrôlée' };
+  const correctedAt = new Date().toISOString();
+  appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'ENTRY_CORRECTED', companyId: appState.activeCompany, entryId, reason, at: correctedAt, userId: appState.currentUserId });
+  queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: appState.activeCompany, moduleId: 'CSR', payload: { ...updated, source: 'Correction contrôlée', correctionReason: reason } });
+  editingEntryId = null;
+  manualLineOverride = null;
+  $('#entryCorrectionReasonField')?.setAttribute('hidden', '');
+  $('#entryCorrectionReason').value = '';
+  const button = $('#insertEntryButton');
+  if (button) button.firstChild.textContent = 'Prévisualiser et insérer ';
+  persistAppState();
+  renderEntryQueue();
+  renderIntegratedJournal();
+  renderCorrectionWindow();
+  showToast('Correction enregistrée dans l’audit. L’écriture reste à valider.');
+}
+
 function insertEntry() {
   if (!requirePermission(USER_PERMISSIONS.ENTRIES_CREATE)) return;
   if (!ensureActivePeriodOpen()) return;
@@ -4418,6 +4491,10 @@ function insertEntry() {
   const lines = entryLinesForCurrentOperation(suggestion);
   if (!lines.length) { showToast('Complétez l’imputation avant d’insérer l’écriture.'); return; }
   try {
+    if (editingEntryId) {
+      saveEntryCorrection(editingEntryId, lines);
+      return;
+    }
     const dossierId = currentDossierCode(appState.activeCompany);
     const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
     const selectedEntryParty = currentEntryParty();
@@ -5013,6 +5090,7 @@ function bindEvents() {
     if (action === 'insert-entry') insertEntry();
     if (action === 'apply-manual-lines') applyManualLines();
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
+    if (action === 'edit-entry') editRecentEntry(actionTarget.dataset.entryId);
     if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
     if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
