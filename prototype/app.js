@@ -4065,7 +4065,9 @@ function validateRecentEntry(entryId) {
   appState.recentEntries[entryIndex] = validated;
   const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], status: OPERATION_STATES.VALIDATED, validatedAt: validated.statusChangedAt };
-  appState.auditEvents.push({ type: 'ENTRY_VALIDATED', companyId: entry.companyId, entryId, at: validated.statusChangedAt });
+  const validationAudit = { id: `audit-${Date.now()}`, type: 'ENTRY_VALIDATED', action: 'ENTRY_VALIDATED', companyId: entry.companyId, entryId, at: validated.statusChangedAt, userId: appState.currentUserId };
+  appState.auditEvents.push(validationAudit);
+  queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: validationAudit.id, companyId: entry.companyId, moduleId: 'CSR', payload: validationAudit });
   queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: entry.companyId, moduleId: 'CSR', payload: { ...validated, source: 'Validation CSR' } });
   persistAppState();
   renderEntryQueue();
@@ -4086,8 +4088,10 @@ function deleteRecentEntry(entryId) {
   const result = deleteCorrectionCandidate(window, entry, 'Correction depuis la fenêtre des trois imputations récentes');
   appState.correctionWindows[appState.activeCompany] = result.window;
   appState.recentEntries = appState.recentEntries.filter((item) => item.id !== entryId);
-  appState.auditEvents.push({ type: 'CORRECTION_DELETE', companyId: entry.companyId, entryId, reason: result.entry.cancellationReason, at: result.entry.cancelledAt });
+  const deletionAudit = { id: `audit-${Date.now()}`, type: 'CORRECTION_DELETE', action: 'CORRECTION_DELETE', companyId: entry.companyId, entryId, reason: result.entry.cancellationReason, at: result.entry.cancelledAt, userId: appState.currentUserId };
+  appState.auditEvents.push(deletionAudit);
   appState.integratedEntries = appState.integratedEntries.filter((item) => item.id !== entryId);
+  queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: deletionAudit.id, companyId: entry.companyId, moduleId: 'CSR', payload: deletionAudit });
   queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: entry.companyId, moduleId: 'CSR', payload: { ...entry, ...result.entry, status: 'CANCELLED', source: 'Correction CSR' } });
   persistAppState();
   renderEntryQueue();
@@ -4467,7 +4471,9 @@ function saveEntryCorrection(entryId, lines) {
   const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], ...updated, source: 'Correction contrôlée' };
   const correctedAt = new Date().toISOString();
-  appState.auditEvents.push({ id: `audit-${Date.now()}`, action: 'ENTRY_CORRECTED', companyId: appState.activeCompany, entryId, reason, at: correctedAt, userId: appState.currentUserId });
+  const correctionAudit = { id: `audit-${Date.now()}`, action: 'ENTRY_CORRECTED', companyId: appState.activeCompany, entryId, reason, at: correctedAt, userId: appState.currentUserId };
+  appState.auditEvents.push(correctionAudit);
+  queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: correctionAudit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: correctionAudit });
   queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: appState.activeCompany, moduleId: 'CSR', payload: { ...updated, source: 'Correction contrôlée', correctionReason: reason } });
   editingEntryId = null;
   manualLineOverride = null;
