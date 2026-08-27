@@ -1018,6 +1018,8 @@ function applyRemoteSyncEvent(event) {
       const index = appState.integratedEntries.findIndex((item) => item.id === event.entityId);
       if (index >= 0) appState.integratedEntries[index] = { ...appState.integratedEntries[index], ...entry };
       else appState.integratedEntries.push(entry);
+      const remoteTreasuryMovement = treasuryMovementForEntry(entry);
+      if (remoteTreasuryMovement && !appState.bankMovements.some((movement) => movement.id === remoteTreasuryMovement.id)) appState.bankMovements.unshift(remoteTreasuryMovement);
     }
   } else if (event.entityType === 'AUDIT_EVENT') {
     if (!appState.auditEvents.some((item) => item.id === event.entityId)) appState.auditEvents.push({ ...payload, id: event.entityId });
@@ -1069,6 +1071,8 @@ async function synchronizeWithServer() {
     renderCompanyMenu();
     renderIntegratedJournal();
     renderEntryQueue();
+    renderBankMovements();
+    renderTreasury();
     renderDossiers();
     showToast(status.conflicts ? 'Synchronisation terminée avec un conflit à traiter.' : 'Synchronisation terminée.');
   } catch (error) {
@@ -2649,6 +2653,34 @@ let pendingBankImputationId = null;
 
 function bankStatusLabel(status) {
   return ({ RECONCILED: ['Rapproché', 'status-green'], POINTED: ['Pointé', 'status-purple'], UNMATCHED: ['À pointer', 'status-amber'] })[status] || ['À contrôler', 'status-amber'];
+}
+
+function treasuryMovementForEntry(entry) {
+  if (!entry || !['BQ', 'CA'].includes(entry.journalId)) return null;
+  const treasuryLines = (entry.lines || []).filter((line) => String(line.accountId || '').startsWith('5'));
+  if (treasuryLines.length !== 1) return null;
+  const line = treasuryLines[0];
+  const credit = Number(line.debit || 0);
+  const debit = Number(line.credit || 0);
+  const amount = credit || debit;
+  if (!Number.isFinite(amount) || amount <= 0 || (credit > 0 && debit > 0)) return null;
+  return {
+    id: `bank-entry-${entry.id}`,
+    companyId: entry.companyId,
+    date: entry.date,
+    reference: entry.reference || '',
+    label: entry.label || 'Mouvement de trésorerie',
+    debit,
+    credit,
+    amount,
+    currency: entry.currency || 'XOF',
+    treasuryAccountId: line.accountId,
+    treasuryType: entry.journalId === 'CA' || String(line.accountId).startsWith('57') ? 'CASH' : 'BANK',
+    origin: 'ACCOUNTING',
+    status: 'POINTED',
+    matchedEntryId: entry.id,
+    importedAt: new Date().toISOString()
+  };
 }
 
 function bankEntryMatchesMovement(movement, entry) {
@@ -4510,6 +4542,11 @@ function saveEntryCorrection(entryId, lines) {
   appState.recentEntries[entryIndex] = updated;
   const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], ...updated, source: 'Correction contrôlée' };
+  const existingTreasuryIndex = appState.bankMovements.findIndex((movement) => movement.matchedEntryId === entryId && movement.origin !== 'STATEMENT');
+  const correctedTreasuryMovement = treasuryMovementForEntry(updated);
+  if (correctedTreasuryMovement && existingTreasuryIndex >= 0) appState.bankMovements[existingTreasuryIndex] = { ...appState.bankMovements[existingTreasuryIndex], ...correctedTreasuryMovement, status: appState.bankMovements[existingTreasuryIndex].status };
+  else if (correctedTreasuryMovement && existingTreasuryIndex < 0) appState.bankMovements.unshift(correctedTreasuryMovement);
+  else if (!correctedTreasuryMovement && existingTreasuryIndex >= 0) appState.bankMovements.splice(existingTreasuryIndex, 1);
   const correctedAt = new Date().toISOString();
   const correctionAudit = { id: `audit-${Date.now()}`, action: 'ENTRY_CORRECTED', companyId: appState.activeCompany, entryId, reason, at: correctedAt, userId: appState.currentUserId };
   appState.auditEvents.push(correctionAudit);
@@ -4573,6 +4610,10 @@ function insertEntry() {
       const bankAudit = { id: `audit-${Date.now()}`, action: 'BANK_MOVEMENT_IMPUTED', companyId: appState.activeCompany, movementId: linkedBankMovement.id, entryId: workflowEntry.id, at: new Date().toISOString(), userId: appState.currentUserId };
       appState.auditEvents.push(bankAudit);
       queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: bankAudit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: bankAudit });
+    }
+    if (!linkedBankMovement) {
+      const treasuryMovement = treasuryMovementForEntry(workflowEntry);
+      if (treasuryMovement && !appState.bankMovements.some((movement) => movement.id === treasuryMovement.id)) appState.bankMovements.unshift(treasuryMovement);
     }
     appState.recentEntries.unshift(queueEntry);
     const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...workflowEntry, amount: total, debit: total, credit: total, source: 'Saisie et insertion', integrationCategory: operation.category }).entries[0];
