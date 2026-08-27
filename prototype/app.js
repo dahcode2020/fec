@@ -4309,6 +4309,8 @@ function handleEditionAction(action, title) {
 }
 
 function bindEvents() {
+  if (document.body?.dataset.eventsBound === 'true') return;
+  if (document.body) document.body.dataset.eventsBound = 'true';
   bindAuthForm();
   $('#passwordResetForm')?.addEventListener('submit', requestPasswordReset);
   window.addEventListener('online', refreshSyncStatus);
@@ -4698,6 +4700,10 @@ function bindCriticalNavigation() {
 
 function bootstrapApp() {
   try {
+    // Bind the global delegation before any secondary renderer. A malformed
+    // legacy local state must never make the whole workspace inert.
+    bindEvents();
+    bindResetLocalData();
     hydrateAppState();
     persistAppState();
     loadFullSyscohadaPlan();
@@ -4705,8 +4711,6 @@ function bootstrapApp() {
     setActiveCompany(appState.activeCompany, false);
     buildExportPane();
     buildFecPane();
-    bindEvents();
-    bindResetLocalData();
     toggleOtherLegalForm();
     updateDossierPreview();
     renderFichierGroup('dossiers');
