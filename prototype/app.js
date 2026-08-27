@@ -271,6 +271,7 @@ function persistAppState() {
 
 let manualLineOverride = null;
 let manualLineDraft = [];
+let manualLineContext = null;
 let fullPlanPayload = null;
 
 const MODULES = {
@@ -2477,6 +2478,7 @@ const invoiceDraftLines = {
   SALE: [{ id: 'sale-line-1', description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }],
   PURCHASE: [{ id: 'purchase-line-1', description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }]
 };
+const invoiceImputationOverrides = { SALE: null, PURCHASE: null };
 let currentPaymentType = PAYMENT_TYPES.RECEIPT;
 let paymentAllocations = {};
 let currentStatementTab = 'trial';
@@ -2760,8 +2762,13 @@ function renderPaymentHistory() {
   const rows = $('#paymentRows');
   if (!rows) return;
   const payments = (appState.payments || []).filter((payment) => payment.companyId === appState.activeCompany);
-  rows.innerHTML = payments.slice().reverse().map((payment) => `<tr><td><b>${escapeHtml(payment.reference)}</b></td><td>${escapeHtml(displayDate(payment.date))}</td><td>${escapeHtml(payment.thirdPartyName)}</td><td><span class="journal-badge ${payment.type === PAYMENT_TYPES.RECEIPT ? 'journal-badge-teal' : 'journal-badge-blue'}">${payment.type === PAYMENT_TYPES.RECEIPT ? 'Encaissement' : 'Paiement'}</span></td><td class="align-right">${numberLabel(payment.amount)} FCFA</td><td>${numberLabel(payment.allocatedAmount || 0)} FCFA</td><td><span class="status ${payment.status === 'ALLOCATED' ? 'status-green' : 'status-amber'}">${payment.status === 'ALLOCATED' ? 'Affecté' : 'Partiel'}</span></td></tr>`).join('');
-  if (!payments.length) rows.innerHTML = '<tr><td colspan="7" class="dossier-empty">Aucun règlement enregistré.</td></tr>';
+  rows.innerHTML = payments.slice().reverse().map((payment) => {
+    const entry = payment.journalEntryId && appState.recentEntries.find((item) => item.id === payment.journalEntryId);
+    const editable = !entry || ![OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status);
+    const editAction = editable ? `<button class="text-button table-action" type="button" data-action="edit-payment-imputation" data-payment-id="${escapeHtml(payment.id)}">Modifier l’imputation</button>` : '<span class="table-action-locked">Verrouillée</span>';
+    return `<tr><td><b>${escapeHtml(payment.reference)}</b></td><td>${escapeHtml(displayDate(payment.date))}</td><td>${escapeHtml(payment.thirdPartyName)}</td><td><span class="journal-badge ${payment.type === PAYMENT_TYPES.RECEIPT ? 'journal-badge-teal' : 'journal-badge-blue'}">${payment.type === PAYMENT_TYPES.RECEIPT ? 'Encaissement' : 'Paiement'}</span></td><td class="align-right">${numberLabel(payment.amount)} FCFA</td><td>${numberLabel(payment.allocatedAmount || 0)} FCFA</td><td><span class="status ${payment.status === 'ALLOCATED' ? 'status-green' : 'status-amber'}">${payment.status === 'ALLOCATED' ? 'Affecté' : 'Partiel'}</span></td><td><div class="table-actions">${editAction}</div></td></tr>`;
+  }).join('');
+  if (!payments.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucun règlement enregistré.</td></tr>';
   if ($('#paymentCount')) $('#paymentCount').textContent = String(payments.length);
 }
 
@@ -2824,7 +2831,8 @@ function postPayment() {
     const setup = currentAccountSetup();
     const journalEntry = createJournalEntry({ companyId: appState.activeCompany, journalId: 'BQ', date: payment.date, pieceDate: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, thirdPartyId: payment.thirdPartyId, thirdPartyAccountId: payment.thirdPartyAccountId, settlementDate: payment.date, settlementMode: payment.method, natureOperation: payment.type === PAYMENT_TYPES.RECEIPT ? 'ENCAISSEMENT' : 'PAIEMENT', lines: paymentToJournalLines(payment) }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
     const workflowEntry = transitionOperation(transitionOperation(journalEntry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
-    const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id };
+    const paymentLines = paymentToJournalLines(payment);
+    const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id, imputationLines: paymentLines };
     appState.payments.push(updatedPayment);
     const bankMovement = createBankMovement({ id: `bank-${payment.id}`, companyId: appState.activeCompany, date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, debit: payment.type === PAYMENT_TYPES.PAYMENT ? payment.amount : 0, credit: payment.type === PAYMENT_TYPES.RECEIPT ? payment.amount : 0, currency: 'XOF' });
     bankMovement.status = 'POINTED';
@@ -2930,6 +2938,37 @@ function buildInvoice(type) {
   return createInvoiceDocument({ companyId: appState.activeCompany, type, thirdPartyId: party.id, thirdPartyName: party.name, thirdPartyAccountId: party.auxiliaryAccountId, date: $(`#${prefix}InvoiceDate`).value, reference: $(`#${prefix}InvoiceReference`).value.trim(), dueDate: $(`#${prefix}InvoiceDueDate`).value || null, taxRate: $(`#${prefix}InvoiceTaxRate`).value, lines: invoiceDraftLines[type] });
 }
 
+function invoicePostingLines(type, document) {
+  const config = invoiceConfig(type);
+  const generated = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
+  const custom = invoiceImputationOverrides[type];
+  if (!custom) return generated;
+  const debit = custom.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+  const credit = custom.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+  if (Math.abs(debit - credit) > 0.005 || Math.abs(debit - document.totalInclTax) > 0.005) return generated;
+  return custom;
+}
+
+function openInvoiceImputationEditor(type, invoiceId = null) {
+  const config = invoiceConfig(type);
+  const source = invoiceId ? (appState[config.collection] || []).find((item) => item.id === invoiceId) : null;
+  let document;
+  try { document = source || buildInvoice(type); } catch (error) { showToast(error.message); return; }
+  const entryId = source?.journalEntryId || null;
+  const entry = entryId && appState.recentEntries.find((item) => item.id === entryId);
+  if (entry && [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) {
+    showToast('Cette écriture est validée et verrouillée. Utilisez une correction contrôlée.');
+    return;
+  }
+  const lines = source?.imputationLines || invoicePostingLines(type, document);
+  invoiceImputationOverrides[type] = lines.map((line) => ({ ...line }));
+  openManualLineEditor({
+    lines,
+    title: `Imputation · ${config.title}`,
+    context: { kind: 'INVOICE', type, invoiceId, entryId, total: document.totalInclTax, document }
+  });
+}
+
 function renderInvoicePreview(type) {
   const config = invoiceConfig(type);
   const prefix = config.formPrefix;
@@ -2940,14 +2979,33 @@ function renderInvoicePreview(type) {
     if (note) note.textContent = error.message;
     return;
   }
-  const lines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
+  const lines = invoicePostingLines(type, document);
   $(`#${targetPrefix}TotalExclTax`).textContent = `${numberLabel(document.totalExclTax)} FCFA`;
   $(`#${targetPrefix}TaxAmount`).textContent = `${numberLabel(document.tax)} FCFA`;
   $(`#${targetPrefix}TotalInclTax`).textContent = `${numberLabel(document.totalInclTax)} FCFA`;
   $(`#${targetPrefix}PostingTotal`).innerHTML = `${numberLabel(document.totalInclTax)} <small>FCFA</small>`;
   $(`#${targetPrefix}InvoicePosting`).innerHTML = lines.map((line) => `<div class="document-posting-row"><span><b>${escapeHtml(line.accountId)}</b><small>${escapeHtml(line.label)}</small></span><strong>${numberLabel(line.debit || line.credit)}</strong><em class="${line.debit ? '' : 'credit'}">${line.debit ? 'D' : 'C'}</em></div>`).join('');
   const note = $(`#${targetPrefix}InvoicePreviewNote`);
-  if (note) note.textContent = `${lines.length} ligne${lines.length > 1 ? 's' : ''} d’imputation proposée${lines.length > 1 ? 's' : ''} · ${document.taxRate}% de TVA.`;
+  if (note) note.textContent = `${lines.length} ligne${lines.length > 1 ? 's' : ''} ${invoiceImputationOverrides[type] ? 'personnalisée' : 'd’imputation proposée'}${lines.length > 1 ? 's' : ''} · ${document.taxRate}% de TVA.`;
+}
+
+function openInvoiceSource(type, invoiceId) {
+  const config = invoiceConfig(type);
+  const document = (appState[config.collection] || []).find((item) => item.id === invoiceId);
+  if (!document) { showToast('Facture source introuvable.'); return; }
+  openView(type === 'PURCHASE' ? 'purchases' : 'sales');
+  renderInvoicePartyOptions(type);
+  const select = $(`#${config.formPrefix}Invoice${type === 'PURCHASE' ? 'Supplier' : 'Customer'}`);
+  if (select && document.thirdPartyId && Array.from(select.options).some((option) => option.value === document.thirdPartyId)) select.value = document.thirdPartyId;
+  $(`#${config.formPrefix}InvoiceDate`).value = document.date || '';
+  $(`#${config.formPrefix}InvoiceReference`).value = document.reference || '';
+  $(`#${config.formPrefix}InvoiceDueDate`).value = document.dueDate || '';
+  $(`#${config.formPrefix}InvoiceTaxRate`).value = String(document.taxRate || 0);
+  invoiceDraftLines[type] = (document.lines || []).map((line) => ({ ...line }));
+  invoiceImputationOverrides[type] = document.imputationLines ? document.imputationLines.map((line) => ({ ...line })) : null;
+  renderInvoiceLines(type);
+  renderInvoicePreview(type);
+  showToast(`${document.reference} affichée depuis sa facture source.`);
 }
 
 function renderInvoiceHistory(type) {
@@ -2956,13 +3014,23 @@ function renderInvoiceHistory(type) {
   const entries = collection.filter((document) => document.companyId === appState.activeCompany);
   const rows = $(`#${config.formPrefix}InvoiceRows`);
   if (!rows) return;
-  rows.innerHTML = entries.slice().reverse().map((document) => { const settled = (document.outstanding ?? document.totalInclTax) === 0; const partial = !settled && (document.paidAmount || 0) > 0; const documentStatus = settled ? ['Réglée', 'status-green'] : partial ? ['Partielle', 'status-amber'] : document.status === 'POSTED' ? ['À contrôler', 'status-purple'] : ['Brouillon', 'status-amber']; return `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${documentStatus[1]}">${documentStatus[0]}</span></td></tr>`; }).join('');
-  if (!entries.length) rows.innerHTML = `<tr><td colspan="5" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
+  rows.innerHTML = entries.slice().reverse().map((document) => {
+    const settled = (document.outstanding ?? document.totalInclTax) === 0;
+    const partial = !settled && (document.paidAmount || 0) > 0;
+    const documentStatus = settled ? ['Réglée', 'status-green'] : partial ? ['Partielle', 'status-amber'] : document.status === 'POSTED' ? ['À contrôler', 'status-purple'] : ['Brouillon', 'status-amber'];
+    const entry = document.journalEntryId && appState.recentEntries.find((item) => item.id === document.journalEntryId);
+    const editable = !entry || ![OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status);
+    const editAction = editable && document.status !== 'DRAFT' ? `<button class="text-button table-action" type="button" data-action="edit-saved-invoice-imputation" data-invoice-type="${type}" data-invoice-id="${escapeHtml(document.id)}">Modifier l’imputation</button>` : '';
+    const locked = !editable && document.status !== 'DRAFT' ? '<span class="table-action-locked">Verrouillée</span>' : '';
+    return `<tr><td><b>${escapeHtml(document.reference)}</b></td><td>${escapeHtml(displayDate(document.date))}</td><td>${escapeHtml(document.thirdPartyName)}</td><td class="align-right">${numberLabel(document.totalInclTax)} FCFA</td><td><span class="status ${documentStatus[1]}">${documentStatus[0]}</span></td><td><div class="table-actions"><button class="text-button table-action" type="button" data-action="view-invoice-source" data-invoice-type="${type}" data-invoice-id="${escapeHtml(document.id)}">Voir la source</button>${editAction}${locked}</div></td></tr>`;
+  }).join('');
+  if (!entries.length) rows.innerHTML = `<tr><td colspan="6" class="dossier-empty">Aucune facture ${type === 'PURCHASE' ? 'fournisseur' : 'client'} enregistrée.</td></tr>`;
   const count = $(`#${config.formPrefix}InvoiceCount`);
   if (count) count.textContent = String(entries.length);
 }
 
 function resetInvoice(type) {
+  invoiceImputationOverrides[type] = null;
   invoiceDraftLines[type] = type === 'PURCHASE' ? [{ id: `purchase-line-${Date.now()}`, description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }] : [{ id: `sale-line-${Date.now()}`, description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }];
   const prefix = invoiceConfig(type).formPrefix;
   $(`#${prefix}InvoiceReference`).value = type === 'PURCHASE' ? `FA-${String((appState.purchaseBills?.length || 0) + 155).padStart(4, '0')}` : `FAC-2025-${String((appState.invoices?.length || 0) + 19).padStart(3, '0')}`;
@@ -2978,8 +3046,8 @@ function saveInvoiceDocument(type, post = false) {
     let document = buildInvoice(type);
     if (post) document = ensureManualInvoiceParty(type, document);
     const setup = currentAccountSetup();
-    const accountLines = documentToJournalLines(document, { revenueAccountId: config.revenueAccountId, expenseAccountId: config.expenseAccountId, salesTaxAccountId: '4431', purchaseTaxAccountId: config.taxAccountId });
-    let stored = { ...document, paidAmount: 0, outstanding: document.totalInclTax, allocations: [], status: post ? 'POSTED' : 'DRAFT' };
+    const accountLines = invoicePostingLines(type, document);
+    let stored = { ...document, imputationLines: accountLines, paidAmount: 0, outstanding: document.totalInclTax, allocations: [], status: post ? 'POSTED' : 'DRAFT' };
     if (post) {
       const entry = createJournalEntry({ companyId: appState.activeCompany, journalId: config.journalId, date: document.date, pieceDate: document.date, reference: document.reference, label: `${config.title} — ${document.thirdPartyName}`, thirdPartyId: document.thirdPartyId, thirdPartyAccountId: document.thirdPartyAccountId, lines: accountLines }, { activeCompanyId: appState.activeCompany, dossierId: currentDossierCode(appState.activeCompany), accountIds: setup.accounts.map((account) => account.id) });
       const workflowEntry = transitionOperation(transitionOperation(entry, OPERATION_STATES.IMPUTED), OPERATION_STATES.TO_REVIEW);
@@ -3885,20 +3953,111 @@ function updateManualLineSummary() {
   if (balance) { const balanced = lines.length >= 2 && Math.abs(debit - credit) < 0.005; balance.textContent = balanced ? 'Équilibrée ✓' : 'À équilibrer'; balance.className = `multi-line-balance ${balanced ? 'is-balanced' : 'is-unbalanced'}`; }
 }
 
-function openManualLineEditor() {
-  let suggestion;
-  try { suggestion = suggestPosting(entryOperation()); } catch { suggestion = { lines: [] }; }
-  manualLineDraft = (suggestion.lines?.length ? suggestion.lines : [{ accountId: '', label: '', debit: 0, credit: 0 }, { accountId: '', label: '', debit: 0, credit: 0 }]).map((line) => ({ accountId: line.accountId || '', label: line.label || '', debit: line.debit || 0, credit: line.credit || 0 }));
+function openManualLineEditor({ lines = null, title = 'Modifier les lignes', context = null } = {}) {
+  manualLineContext = context;
+  if (!lines) {
+    let suggestion;
+    try { suggestion = suggestPosting(entryOperation()); } catch { suggestion = { lines: [] }; }
+    lines = suggestion.lines?.length ? suggestion.lines : [{ accountId: '', label: '', debit: 0, credit: 0 }, { accountId: '', label: '', debit: 0, credit: 0 }];
+  }
+  manualLineDraft = lines.map((line) => ({ accountId: line.accountId || '', label: line.label || '', debit: line.debit || 0, credit: line.credit || 0 }));
   renderManualLineEditor();
+  const titleNode = $('#multiLineTitle');
+  if (titleNode) titleNode.textContent = title;
   openModal('multiLineModal');
+}
+
+function openPaymentImputationEditor(paymentId) {
+  const payment = (appState.payments || []).find((item) => item.id === paymentId && item.companyId === appState.activeCompany);
+  if (!payment) { showToast('Règlement introuvable.'); return; }
+  const entry = payment.journalEntryId && appState.recentEntries.find((item) => item.id === payment.journalEntryId);
+  if (entry && [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) {
+    showToast('Cette écriture est validée et verrouillée. Utilisez une correction contrôlée.');
+    return;
+  }
+  openManualLineEditor({
+    lines: payment.imputationLines || paymentToJournalLines(payment),
+    title: `Imputation · ${payment.type === PAYMENT_TYPES.RECEIPT ? 'Encaissement' : 'Paiement'}`,
+    context: { kind: 'PAYMENT', paymentId, entryId: payment.journalEntryId, total: payment.amount, document: { date: payment.date } }
+  });
+}
+
+function applyPaymentImputationLines(lines, context) {
+  const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
+  validateJournalEntry({ companyId: appState.activeCompany, journalId: 'BQ', date: context.document?.date || $('#entryDate')?.value, lines }, { companyId: appState.activeCompany, accountIds: setup.accounts.map((account) => account.id) });
+  const debit = lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+  const credit = lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+  if (Math.abs(debit - credit) > 0.005 || Math.abs(debit - Number(context.total || 0)) > 0.005) throw new Error(`L’imputation doit rester équilibrée et totaliser ${numberLabel(context.total)} FCFA.`);
+  const payment = (appState.payments || []).find((item) => item.id === context.paymentId && item.companyId === appState.activeCompany);
+  if (!payment) throw new Error('Règlement source introuvable.');
+  const entry = context.entryId && appState.recentEntries.find((item) => item.id === context.entryId);
+  if (entry && [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) throw new Error('Cette écriture est validée et verrouillée.');
+  payment.imputationLines = lines;
+  if (entry) {
+    entry.lines = lines;
+    entry.accountIds = lines.map((line) => line.accountId);
+    const integrated = appState.integratedEntries.find((item) => item.id === context.entryId);
+    if (integrated) { integrated.lines = lines; integrated.accountIds = entry.accountIds; integrated.debit = debit; integrated.credit = credit; }
+    queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: context.entryId, companyId: payment.companyId, moduleId: 'CSR', payload: { ...entry, lines, source: 'Modification d’imputation règlement' } });
+  }
+  persistAppState();
+  closeModal();
+  manualLineContext = null;
+  renderPaymentHistory();
+  renderIntegratedJournal();
+  renderEntryQueue();
+  showToast('Imputation du règlement modifiée et historisée.');
+}
+
+function applyInvoiceImputationLines(lines, context) {
+  const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
+  const journalId = context.type === 'PURCHASE' ? 'AC' : 'VE';
+  validateJournalEntry({ companyId: appState.activeCompany, journalId, date: context.document?.date || $('#entryDate')?.value, lines }, { companyId: appState.activeCompany, accountIds: setup.accounts.map((account) => account.id) });
+  const debit = lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+  const credit = lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+  if (Math.abs(debit - credit) > 0.005 || Math.abs(debit - Number(context.total || 0)) > 0.005) throw new Error(`L’imputation doit rester équilibrée et totaliser ${numberLabel(context.total)} FCFA.`);
+  const baseLines = context.document?.imputationLines || [];
+  const enrichedLines = lines.map((line, index) => ({ ...(baseLines[index] || {}), ...line }));
+  invoiceImputationOverrides[context.type] = enrichedLines;
+  if (!context.invoiceId) {
+    closeModal();
+    renderInvoicePreview(context.type);
+    manualLineContext = null;
+    showToast('Imputation de facture modifiée. Elle sera utilisée lors de la comptabilisation.');
+    return;
+  }
+  const config = invoiceConfig(context.type);
+  const invoice = (appState[config.collection] || []).find((item) => item.id === context.invoiceId);
+  if (!invoice) throw new Error('Facture source introuvable.');
+  const entry = context.entryId && appState.recentEntries.find((item) => item.id === context.entryId);
+  if (entry && [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) throw new Error('Cette écriture est validée et verrouillée.');
+  invoice.imputationLines = enrichedLines;
+  invoice.imputationEditedAt = new Date().toISOString();
+  if (entry) {
+    entry.lines = enrichedLines;
+    entry.accountIds = enrichedLines.map((line) => line.accountId);
+    const integrated = appState.integratedEntries.find((item) => item.id === context.entryId);
+    if (integrated) { integrated.lines = enrichedLines; integrated.accountIds = entry.accountIds; integrated.debit = debit; integrated.credit = credit; }
+    queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: context.entryId, companyId: invoice.companyId, moduleId: 'CSR', payload: { ...entry, lines: enrichedLines, source: 'Modification d’imputation facture' } });
+  }
+  persistAppState();
+  closeModal();
+  manualLineContext = null;
+  renderInvoiceHistory(context.type);
+  renderIntegratedJournal();
+  renderEntryQueue();
+  showToast('Imputation de facture modifiée et historisée.');
 }
 
 function applyManualLines() {
   const lines = normalizedManualLines();
   const setup = appState.accountingSetups[appState.activeCompany] || createCsrSetup({ companyId: appState.activeCompany });
   try {
+    if (manualLineContext?.kind === 'INVOICE') return applyInvoiceImputationLines(lines, manualLineContext);
+    if (manualLineContext?.kind === 'PAYMENT') return applyPaymentImputationLines(lines, manualLineContext);
     validateJournalEntry({ companyId: appState.activeCompany, journalId: $('#entryJournal').value, date: $('#entryDate').value, lines }, { companyId: appState.activeCompany, accountIds: setup.accounts.map((account) => account.id) });
     manualLineOverride = lines;
+    manualLineContext = null;
     closeModal();
     renderLivePosting();
     showToast(`${lines.length} lignes d’imputation prêtes à être contrôlées.`);
@@ -4586,6 +4745,10 @@ function bindEvents() {
     if (action === 'remove-invoice-line') { const type = actionTarget.dataset.invoiceType; invoiceDraftLines[type].splice(Number(actionTarget.dataset.lineIndex), 1); renderInvoiceLines(type); renderInvoicePreview(type); }
     if (action === 'save-invoice-draft') saveInvoiceDocument(actionTarget.dataset.invoiceType, false);
     if (action === 'post-invoice') saveInvoiceDocument(actionTarget.dataset.invoiceType, true);
+    if (action === 'edit-invoice-imputation') openInvoiceImputationEditor(actionTarget.dataset.invoiceType);
+    if (action === 'edit-saved-invoice-imputation') openInvoiceImputationEditor(actionTarget.dataset.invoiceType, actionTarget.dataset.invoiceId);
+    if (action === 'view-invoice-source') openInvoiceSource(actionTarget.dataset.invoiceType, actionTarget.dataset.invoiceId);
+    if (action === 'edit-payment-imputation') openPaymentImputationEditor(actionTarget.dataset.paymentId);
     if (action === 'focus-entry-amount') { openView('entry'); window.setTimeout(() => $('#entryAmount')?.focus(), 50); }
     if (action === 'show-calculator') openCalculator();
     if (action === 'capture-screen') captureScreen();

@@ -965,3 +965,9 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 .password-reset-modal { width:min(480px, calc(100% - 30px)); }
 .password-reset-result { margin-top:12px; padding:11px 12px; border:1px solid #d8f1e9; background:#f5fcf9; border-radius:8px; color:#5c8779; font-size:9px; line-height:1.4; }
 .password-reset-result a { color:var(--green-dark); font-weight:800; text-decoration:underline; }
+
+.invoice-imputation-link { margin-top: 13px; padding-top: 11px; border-top: 1px solid rgba(231,226,250,.9); }
+.document-preview-purchase .invoice-imputation-link { border-color: #dae4fb; }
+.table-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.table-action { font-size: 8px; white-space: nowrap; }
+.table-action-locked { color: #a6afbb; font-size: 8px; white-space: nowrap; }
