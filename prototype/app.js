@@ -2860,7 +2860,8 @@ function manualInvoiceParty(type) {
   if (!name) return null;
   const partyType = type === 'PURCHASE' ? THIRD_PARTY_TYPES.SUPPLIER : THIRD_PARTY_TYPES.CLIENT;
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tiers';
-  return { id: `manual-${type.toLowerCase()}-${slug}`, name, type: partyType, collectiveAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], auxiliaryAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], currency: 'XOF', active: true, manual: true };
+  const codePrefix = type === 'PURCHASE' ? 'FOU' : 'CLI';
+  return { id: `manual-${type.toLowerCase()}-${slug}`, code: `${codePrefix}-${slug}`.toUpperCase(), name, type: partyType, collectiveAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], auxiliaryAccountId: THIRD_PARTY_DEFAULT_ACCOUNTS[partyType], currency: 'XOF', active: true, manual: true };
 }
 
 function toggleManualInvoiceParty(type, { focus = false } = {}) {
@@ -2869,6 +2870,7 @@ function toggleManualInvoiceParty(type, { focus = false } = {}) {
   const field = $(`#${config.formPrefix}InvoiceManualPartyField`);
   const input = $(`#${config.formPrefix}InvoiceManualParty`);
   const manual = select?.value === 'manual';
+  if (select) select.required = !manual;
   field?.toggleAttribute('hidden', !manual);
   if (input) {
     input.required = manual;
