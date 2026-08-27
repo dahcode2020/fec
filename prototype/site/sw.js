@@ -1,4 +1,4 @@
-const CACHE_NAME = 'emrys-site-v1';
+const CACHE_NAME = 'emrys-site-v2';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   // Never cache account data, sessions or verification links. The API must
   // remain online-first even when the public site is installed as a PWA.
-  if (requestUrl.pathname.startsWith('/api/')) return;
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/app/')) return;
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
     const copy = response.clone();
     caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
