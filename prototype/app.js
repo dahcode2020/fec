@@ -1109,21 +1109,31 @@ function recoverFromBootstrapError() {
 
 function openSelectedDossier() {
   const dossier = appState.dossiers.find((item) => item.id === appState.selectedDossier);
-  if (!dossier || dossier.status === 'Archivé') {
+  const company = dossier && appState.companies[dossier.companyId];
+  if (!dossier || !company) {
+    showToast('Sélectionnez d’abord un dossier accessible.');
+    return;
+  }
+  if (dossier.status === 'Archivé') {
     showToast('Ce dossier est archivé et ne peut pas être ouvert.');
     return;
   }
-  dossier.sessions = Math.max(1, dossier.sessions || 0);
-  persistAppState();
+  dossier.sessions = Math.max(1, Number(dossier.sessions || 0));
   appState.moduleCompanyId = dossier.companyId;
-  appState.moduleDossierCode = dossier.dossier;
+  appState.moduleDossierCode = dossier.dossier || dossier.code;
+  const moduleDossier = appState.dossiers.find((item) => item.id === dossier.id);
+  if (moduleDossier.moduleId && !companyModuleAccess(dossier.companyId, moduleDossier.moduleId)) {
+    showToast('Vous n’avez pas accès au module de ce dossier.');
+    return;
+  }
+  persistAppState();
   setActiveCompany(dossier.companyId, false);
   $('#dossiersScreen')?.setAttribute('hidden', '');
   $('#appShell')?.setAttribute('hidden', '');
   $('#moduleStubScreen')?.setAttribute('hidden', '');
   $('#moduleHomeScreen')?.removeAttribute('hidden');
-  renderModuleHome(dossier.companyId, dossier.dossier);
-  showToast(`${appState.companies[dossier.companyId].name} est ouvert. Choisissez un module.`);
+  renderModuleHome(dossier.companyId, appState.moduleDossierCode);
+  showToast(`${company.name} est ouvert. Choisissez un module.`);
 }
 
 function activateModule(moduleId) {
@@ -1282,7 +1292,13 @@ function mergeRemoteContext(context, userId) {
   });
   appState.memberships = [...(appState.memberships || []).filter((membership) => membership.userId !== userId), ...(context.memberships || [])];
   const remoteCompanyIds = new Set(remoteCompanies.map((company) => company.id));
-  appState.dossiers = [...(appState.dossiers || []).filter((dossier) => !remoteCompanyIds.has(dossier.companyId)), ...(context.dossiers || [])];
+  const remoteDossiers = (context.dossiers || []).map((dossier) => ({
+    ...dossier,
+    period: dossier.period || `${displayDate(dossier.exerciseStart)} - ${displayDate(dossier.exerciseEnd)}`,
+    sessions: Number(dossier.sessions || 0),
+    statusClass: dossier.status === 'Archivé' ? 'status-muted' : 'status-green'
+  }));
+  appState.dossiers = [...(appState.dossiers || []).filter((dossier) => !remoteCompanyIds.has(dossier.companyId)), ...remoteDossiers];
   (context.fiscalYears || []).forEach((fiscalYear) => {
     appState.fiscalYears[fiscalYear.companyId] = { ...fiscalYear, id: String(fiscalYear.id) };
     if (!appState.fiscalYearCatalog[fiscalYear.companyId]) appState.fiscalYearCatalog[fiscalYear.companyId] = [];
@@ -1293,7 +1309,7 @@ function mergeRemoteContext(context, userId) {
   });
   const firstCompany = remoteCompanies[0];
   if (firstCompany) appState.activeCompany = firstCompany.id;
-  const firstDossier = (context.dossiers || []).find((dossier) => dossier.moduleId === 'CSR');
+  const firstDossier = remoteDossiers.find((dossier) => dossier.moduleId === 'CSR');
   if (firstDossier) appState.selectedDossier = firstDossier.id;
 }
 
@@ -4662,6 +4678,24 @@ function bindResetLocalData() {
   button.dataset.resetBound = 'true';
 }
 
+function bindCriticalNavigation() {
+  const dossierOpen = document.querySelector('[data-action="dossier-open"]');
+  if (dossierOpen && dossierOpen.dataset.criticalBound !== 'true') {
+    dossierOpen.addEventListener('click', (event) => { event.stopPropagation(); openSelectedDossier(); });
+    dossierOpen.dataset.criticalBound = 'true';
+  }
+  const moduleGrid = $('#moduleGrid');
+  if (moduleGrid && moduleGrid.dataset.criticalBound !== 'true') {
+    moduleGrid.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-module-open]');
+      if (!button) return;
+      event.stopPropagation();
+      openModule(button.dataset.moduleOpen);
+    });
+    moduleGrid.dataset.criticalBound = 'true';
+  }
+}
+
 function bootstrapApp() {
   try {
     hydrateAppState();
@@ -4691,5 +4725,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // L’accès aux dossiers reste disponible même si une vue secondaire rencontre une donnée locale ancienne.
   bindAuthForm();
   bindResetLocalData();
+  bindCriticalNavigation();
   bootstrapApp();
 });
