@@ -1008,9 +1008,14 @@ function applyRemoteSyncEvent(event) {
     else appState.periods[companyId].push(period);
   } else if (event.entityType === 'JOURNAL_ENTRY') {
     const entry = { ...payload, id: event.entityId, companyId, source: payload.source || 'Synchronisation distante' };
-    const index = appState.integratedEntries.findIndex((item) => item.id === event.entityId);
-    if (index >= 0) appState.integratedEntries[index] = { ...appState.integratedEntries[index], ...entry };
-    else appState.integratedEntries.push(entry);
+    if (entry.status === 'CANCELLED') {
+      appState.integratedEntries = appState.integratedEntries.filter((item) => item.id !== event.entityId);
+      appState.recentEntries = appState.recentEntries.filter((item) => item.id !== event.entityId);
+    } else {
+      const index = appState.integratedEntries.findIndex((item) => item.id === event.entityId);
+      if (index >= 0) appState.integratedEntries[index] = { ...appState.integratedEntries[index], ...entry };
+      else appState.integratedEntries.push(entry);
+    }
   } else if (event.entityType === 'AUDIT_EVENT') {
     if (!appState.auditEvents.some((item) => item.id === event.entityId)) appState.auditEvents.push({ ...payload, id: event.entityId });
   }
@@ -3712,6 +3717,7 @@ function validateRecentEntry(entryId) {
   const integratedIndex = appState.integratedEntries.findIndex((item) => item.id === entryId && item.companyId === appState.activeCompany);
   if (integratedIndex >= 0) appState.integratedEntries[integratedIndex] = { ...appState.integratedEntries[integratedIndex], status: OPERATION_STATES.VALIDATED, validatedAt: validated.statusChangedAt };
   appState.auditEvents.push({ type: 'ENTRY_VALIDATED', companyId: entry.companyId, entryId, at: validated.statusChangedAt });
+  queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: entry.companyId, moduleId: 'CSR', payload: { ...validated, source: 'Validation CSR' } });
   persistAppState();
   renderEntryQueue();
   renderIntegratedJournal();
@@ -3733,6 +3739,7 @@ function deleteRecentEntry(entryId) {
   appState.recentEntries = appState.recentEntries.filter((item) => item.id !== entryId);
   appState.auditEvents.push({ type: 'CORRECTION_DELETE', companyId: entry.companyId, entryId, reason: result.entry.cancellationReason, at: result.entry.cancelledAt });
   appState.integratedEntries = appState.integratedEntries.filter((item) => item.id !== entryId);
+  queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId: entryId, companyId: entry.companyId, moduleId: 'CSR', payload: { ...entry, ...result.entry, status: 'CANCELLED', source: 'Correction CSR' } });
   persistAppState();
   renderEntryQueue();
   renderCorrectionWindow();
