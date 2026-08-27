@@ -2684,10 +2684,14 @@ function renderBankSummary(movements) {
   const company = appState.companies[appState.activeCompany];
   if (!company) return;
   const opening = parseUiAmount(company.bankOpeningBalance ?? company.treasury ?? 0);
-  const accounting = movements.filter((movement) => movement.origin !== 'STATEMENT');
-  const statement = movements.filter((movement) => movement.origin === 'STATEMENT');
+  const isStatementMovement = (movement) => movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
+  const accounting = movements.filter((movement) => !isStatementMovement(movement));
+  const statement = movements.filter(isStatementMovement);
+  const accountingEntryIds = new Set(accounting.map((movement) => movement.matchedEntryId).filter(Boolean));
+  const matchedStatementMovements = statement.filter((movement) => movement.matchedEntryId && !accountingEntryIds.has(movement.matchedEntryId));
+  const bookMovements = [...accounting, ...matchedStatementMovements];
   const net = (items) => items.reduce((sum, movement) => sum + Number(movement.credit || 0) - Number(movement.debit || 0), 0);
-  const bookBalance = opening + net(accounting);
+  const bookBalance = opening + net(bookMovements);
   const statementBalance = opening + net(statement);
   const difference = Math.abs(bookBalance - statementBalance);
   const unmatched = statement.filter((movement) => movement.status !== 'RECONCILED');
