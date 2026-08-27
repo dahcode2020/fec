@@ -8,6 +8,7 @@
     "test": "node --test prototype/core.test.mjs prototype/app-load.test.mjs storage/sqlite-store.test.mjs storage/sync-engine.test.mjs storage/http-sync-remote.test.mjs storage/sync-errors.test.mjs",
     "check:api": "node --check server/api-server.mjs && node --check storage/postgres-store.mjs && node --check scripts/build-site.mjs",
     "build:site": "node scripts/build-site.mjs",
+    "dev:neon": "node scripts/dev-neon.mjs",
     "preview": "python3 -m http.server 4173 --bind 0.0.0.0 --directory prototype",
     "preview-site": "node server/dev-server.mjs",
     "preview-site-neon": "EMRYS_API_ORIGIN=http://127.0.0.1:8080 node server/dev-server.mjs",

@@ -155,6 +155,14 @@ EMRYS_API_ORIGIN=http://127.0.0.1:8080 npm run preview-site
 
 Le navigateur continue d’appeler le même domaine `4174`; le serveur public relaie les appels `/api/*` vers l’API PostgreSQL.
 
+Pour démarrer l’API, attendre son healthcheck, démarrer le proxy et obtenir directement le lien de l’application avec une seule commande :
+
+```bash
+npm run dev:neon
+```
+
+Le lanceur vérifie `.env`, refuse les ports déjà occupés et arrête ses deux processus avec `Ctrl+C`. Il ne supprime aucun fichier ni aucune donnée.
+
 ## 3. Préparer Neon
 
 Pour l’expérimentation en ligne :

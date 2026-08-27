@@ -67,6 +67,7 @@ Le site public est prévu pour Vercel. L’API ne stocke pas les données dans V
 ```bash
 npm run build:site       # construit dist/ pour Vercel
 npm run check:api        # vérifie la syntaxe du socle API PostgreSQL
+npm run dev:neon         # lance API + site proxy en un seul terminal
 docker compose up --build
 ```
 
