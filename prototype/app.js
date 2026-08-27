@@ -737,6 +737,7 @@ function setActiveCompany(companyId, notify = true) {
   renderPaymentHistory();
   renderLettering();
   renderBankMovements();
+  renderTreasury();
   renderAutomaticTasks();
   renderAutomaticRuns();
   renderPeriods();
@@ -2666,6 +2667,35 @@ function renderBankMovements() {
   $('#bankDifferenceLabel').textContent = `${all.filter((movement) => movement.status === 'UNMATCHED').length} mouvement${all.filter((movement) => movement.status === 'UNMATCHED').length > 1 ? 's' : ''} à imputer`;
 }
 
+function renderTreasury() {
+  const rows = $('#treasuryMovementRows');
+  const company = appState.companies[appState.activeCompany];
+  if (!rows || !company) return;
+  const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
+  const chronological = movements.slice().sort((a, b) => `${a.date || ''} ${a.importedAt || ''}`.localeCompare(`${b.date || ''} ${b.importedAt || ''}`));
+  let balance = parseUiAmount(company.treasury || 0);
+  const withBalance = chronological.map((movement) => {
+    balance += Number(movement.credit || 0) - Number(movement.debit || 0);
+    return { movement, balance };
+  }).reverse();
+  const receipts = movements.reduce((sum, movement) => sum + Number(movement.credit || 0), 0);
+  const payments = movements.reduce((sum, movement) => sum + Number(movement.debit || 0), 0);
+  const total = parseUiAmount(company.treasury || 0) + receipts - payments;
+  $('#treasuryTotalAvailable').innerHTML = `${numberLabel(total)} <small>FCFA</small>`;
+  $('#treasuryReceipts').innerHTML = `${numberLabel(receipts)} <small>FCFA</small>`;
+  $('#treasuryPayments').innerHTML = `${numberLabel(payments)} <small>FCFA</small>`;
+  $('#treasuryReceiptCount').textContent = `${movements.filter((movement) => Number(movement.credit || 0) > 0).length} opération${movements.filter((movement) => Number(movement.credit || 0) > 0).length > 1 ? 's' : ''}`;
+  $('#treasuryPaymentCount').textContent = `${movements.filter((movement) => Number(movement.debit || 0) > 0).length} opération${movements.filter((movement) => Number(movement.debit || 0) > 0).length > 1 ? 's' : ''}`;
+  $('#treasuryMovementSubtitle').textContent = `${movements.length} mouvement${movements.length > 1 ? 's' : ''} de trésorerie · société active`;
+  rows.innerHTML = withBalance.map(({ movement, balance: after }) => {
+    const [statusText, statusClass] = bankStatusLabel(movement.status);
+    const amount = Number(movement.amount || movement.debit || movement.credit || 0);
+    const isDebit = Number(movement.debit || 0) > 0;
+    return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span><small class="cell-subtitle">${escapeHtml(movement.reference || 'Sans référence')}</small></td><td>${escapeHtml(`${movement.treasuryAccountId || '5211'} · ${isDebit ? 'Décaissement' : 'Encaissement'}`)}</td><td class="align-right ${isDebit ? '' : 'amount-positive'}">${isDebit ? '−' : '+'} ${numberLabel(amount)} FCFA</td><td>${numberLabel(after)} FCFA</td><td><span class="status ${statusClass}">${escapeHtml(statusText)}</span></td></tr>`;
+  }).join('');
+  if (!movements.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun mouvement de trésorerie enregistré.</td></tr>';
+}
+
 function renderBankImportPreview() {
   const container = $('#bankImportRows');
   if (!container) return;
@@ -2698,6 +2728,7 @@ function reconcileBankMovementById(movementId) {
     appState.bankMovements[index] = reconcileBankMovement(movement, candidate);
     persistAppState();
     renderBankMovements();
+    renderTreasury();
     showToast('Mouvement rapproché avec le journal BQ.');
   } catch (error) { showToast(error.message); }
 }
@@ -2743,6 +2774,7 @@ function applyBankImport() {
   persistAppState();
   pendingBankImport = [];
   setBankView('reconciliation');
+  renderTreasury();
   showToast('Relevé intégré. Les mouvements sont prêts à être pointés.');
 }
 
@@ -2949,6 +2981,7 @@ function postPayment() {
     const updatedPayment = { ...result.payment, journalEntryId: workflowEntry.id, imputationLines: paymentLines };
     appState.payments.push(updatedPayment);
     const bankMovement = createBankMovement({ id: `bank-${payment.id}`, companyId: appState.activeCompany, date: payment.date, reference: payment.reference, label: `${PAYMENT_TYPE_LABELS[payment.type]} — ${payment.thirdPartyName}`, debit: payment.type === PAYMENT_TYPES.PAYMENT ? payment.amount : 0, credit: payment.type === PAYMENT_TYPES.RECEIPT ? payment.amount : 0, currency: 'XOF' });
+    bankMovement.treasuryAccountId = payment.treasuryAccountId;
     bankMovement.status = 'POINTED';
     bankMovement.matchedEntryId = workflowEntry.id;
     appState.bankMovements.unshift(bankMovement);
@@ -2962,6 +2995,7 @@ function postPayment() {
     renderPaymentHistory();
     renderPaymentDocuments();
     renderBankMovements();
+    renderTreasury();
     renderInvoiceHistory('SALE');
     renderInvoiceHistory('PURCHASE');
     renderIntegratedJournal();
