@@ -2375,6 +2375,16 @@ function renderAutomaticRuns() {
   if (!runs.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun traitement exécuté pour cette société.</td></tr>';
 }
 
+function addDemoSubscription() {
+  const companyId = appState.activeCompany;
+  const alreadyConfigured = appState.automaticSchedules.some((schedule) => schedule.companyId === companyId && schedule.active !== false);
+  if (alreadyConfigured) { showToast('Un abonnement est déjà paramétré pour cette société.'); return; }
+  appState.automaticSchedules.push({ id: `sub-demo-${companyId}`, companyId, label: 'Abonnement internet mensuel', supplierName: 'Fournisseur internet', amount: 12000, expenseAccount: '6281', supplierAccount: '4011', periodicity: 'Mensuelle', active: true, source: 'Jeu de test EMRYS' });
+  persistAppState();
+  renderAutomaticTasks();
+  showToast('Abonnement de test ajouté : 12 000 FCFA par mois.');
+}
+
 function renderAutomaticTasks() {
   const container = $('#periodicTasks');
   if (!container) return;
@@ -2385,8 +2395,10 @@ function renderAutomaticTasks() {
     const [runLabel, runClass] = run ? automaticRunStatus(run) : ['', ''];
     const status = run ? `Généré · ${runLabel.toLowerCase()}` : systemReady ? 'Prêt à générer' : 'Paramétrage requis';
     const statusClass = run ? runClass : systemReady ? 'status-green' : 'status-amber';
-    const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : 'Voir le détail';
-    return `<article class="periodic-task periodic-task-${definition.tone} ${systemReady ? '' : 'is-not-ready'}"><div class="periodic-task-top"><span class="periodic-task-icon">${definition.symbol}</span><span class="status ${statusClass}">${status}</span></div><h2>${definition.label}</h2><p>${definition.description}</p><div class="periodic-task-foot"><span><b>Journal ${definition.journalId}</b><small>${run ? `${run.count} écriture${run.count > 1 ? 's' : ''} · ${new Date(run.at).toLocaleDateString('fr-FR')}` : currentPeriod().label}</small></span><button class="button ${systemReady ? 'button-primary' : 'button-secondary'} button-small" type="button" data-action="preview-automatic" data-automatic-category="${category}">${buttonLabel}</button></div></article>`;
+    const isSubscriptionSetup = category === 'ABONNEMENTS' && !systemReady && !run;
+    const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : isSubscriptionSetup ? 'Ajouter un abonnement de test' : 'Voir le détail';
+    const buttonAction = isSubscriptionSetup ? 'add-demo-subscription' : 'preview-automatic';
+    return `<article class="periodic-task periodic-task-${definition.tone} ${systemReady ? '' : 'is-not-ready'}"><div class="periodic-task-top"><span class="periodic-task-icon">${definition.symbol}</span><span class="status ${statusClass}">${status}</span></div><h2>${definition.label}</h2><p>${definition.description}</p><div class="periodic-task-foot"><span><b>Journal ${definition.journalId}</b><small>${run ? `${run.count} écriture${run.count > 1 ? 's' : ''} · ${new Date(run.at).toLocaleDateString('fr-FR')}` : currentPeriod().label}</small></span><button class="button ${systemReady ? 'button-primary' : 'button-secondary'} button-small" type="button" data-action="${buttonAction}" data-automatic-category="${category}">${buttonLabel}</button></div></article>`;
   }).join('');
 }
 
@@ -5262,6 +5274,7 @@ function bindEvents() {
     if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
     if (action === 'validate-automatic-entry') validateAutomaticEntry(actionTarget.dataset.entryId);
     if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
+    if (action === 'add-demo-subscription') addDemoSubscription();
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
     if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
     if (action === 'generate-fiscal-result') generateFiscalResult();
