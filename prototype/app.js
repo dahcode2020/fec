@@ -3780,7 +3780,8 @@ function renderStatementTable(statement) {
   const table = $('#statementTableContent');
   if (!table) return;
   if (currentStatementTab === 'cashflow') {
-    const movements = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && String(movement.date).startsWith(statement.period));
+    const isStatementMovement = (movement) => movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
+    const movements = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && !isStatementMovement(movement) && String(movement.date).startsWith(statement.period));
     table.innerHTML = `<div class="statement-table-scroll"><table class="statement-data-table"><thead><tr><th>DATE</th><th>LIBELLÉ</th><th class="align-right">SORTIES</th><th class="align-right">ENTRÉES</th><th>ÉTAT</th></tr></thead><tbody>${movements.map((movement) => `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td>${escapeHtml(movement.label)}</td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td><span class="status ${movement.status === 'RECONCILED' ? 'status-green' : 'status-amber'}">${movement.status === 'RECONCILED' ? 'Rapproché' : 'À pointer'}</span></td></tr>`).join('')}</tbody></table></div>`;
     if (!movements.length) table.innerHTML = '<div class="statement-empty">Aucun mouvement bancaire dans cette période.</div>';
     return;
@@ -3804,6 +3805,16 @@ function renderStatements() {
   const snapshot = currentFinancialSnapshot();
   const statuses = appState.statementMode === 'official' ? [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] : [OPERATION_STATES.IMPUTED, OPERATION_STATES.TO_REVIEW, OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED];
   const statement = appState.statementMode === 'official' && year.status === 'FINALIZED' && snapshot?.statements ? snapshot.statements : buildFinancialStatements(appState.integratedEntries, { companyId: appState.activeCompany, period: period.id, statuses });
+  const statementLabels = {
+    trial: ['Balance générale', 'Comptes et soldes du périmètre sélectionné.'],
+    income: ['Compte de résultat', 'Produits, charges et résultat de la période.'],
+    balance: ['Bilan', 'Actif, passif et situation nette de la société.'],
+    cashflow: ['Flux de trésorerie', 'Entrées et sorties enregistrées dans les journaux BQ et CA.'],
+    notes: ['Notes et annexes', 'Informations complémentaires du périmètre sélectionné.']
+  };
+  const [statementTitle, statementDescription] = statementLabels[currentStatementTab] || statementLabels.trial;
+  $('#statementSelectedTitle').textContent = statementTitle;
+  $('#statementSelectedDescription').textContent = statementDescription;
   $('#statementPeriodLabel').textContent = appState.statementMode === 'official' && snapshot ? `Exercice ${year.id}` : period.label;
   $('#statementPeriodStatus').textContent = appState.statementMode === 'official' ? (year.status === 'FINALIZED' && snapshot ? 'Instantané officiel scellé · écritures validées ou clôturées' : 'Écritures validées ou clôturées · édition officielle') : 'Écritures validées et en revue · édition de contrôle';
   $('#statementAccountCount').textContent = String(statement.trialBalance.length);
