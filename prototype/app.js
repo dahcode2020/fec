@@ -2434,6 +2434,8 @@ function addDemoCentralizationSources() {
 function renderAutomaticTasks() {
   const container = $('#periodicTasks');
   if (!container) return;
+  const periodLabel = $('#periodicPeriodLabel');
+  if (periodLabel) periodLabel.textContent = currentPeriod().label;
   container.innerHTML = Object.entries(AUTOMATIC_DEFINITIONS).map(([category, definition]) => {
     const preview = automaticPreview(category);
     const run = automaticRunFor(category);
@@ -4101,6 +4103,8 @@ function renderClosure() {
   const container = $('#closureChecks');
   if (!container) return;
   const period = currentPeriod();
+  const periodLabel = $('#closurePeriodLabel');
+  if (periodLabel) periodLabel.textContent = period.label;
   const evaluation = evaluatePeriodClosure(currentClosureChecks());
   container.innerHTML = evaluation.checks.map((check) => `<div class="closure-check-row ${check.passed ? 'is-passed' : 'is-blocked'}"><span class="closure-check-icon">${check.passed ? '✓' : '!'}</span><span class="closure-check-copy"><strong>${escapeHtml(check.label)}</strong><small>${escapeHtml(check.description)}</small></span>${check.passed ? '<span class="status status-green">OK</span>' : `<button class="closure-check-action" type="button" data-closure-action="${escapeHtml(check.action)}">${escapeHtml(check.actionLabel)}</button>`}</div>`).join('');
   $('#closureProgress').textContent = `${evaluation.passedCount} / ${evaluation.totalCount} contrôles`;
@@ -4108,6 +4112,8 @@ function renderClosure() {
   $('#closureScore strong').textContent = String(evaluation.passedCount);
   $('#closureScore small').textContent = `sur ${evaluation.totalCount} contrôles`;
   $('#closureSideMessage').textContent = period.status === 'CLOSED' ? 'La période est clôturée et les écritures sont verrouillées.' : evaluation.valid ? 'Tous les contrôles bloquants sont résolus.' : 'La période ne peut pas encore être clôturée.';
+  const sideNote = $('#closureSideNote');
+  if (sideNote) sideNote.textContent = `La clôture définitive sera enregistrée dans l’audit et bloquera toute nouvelle saisie sur ${period.label}.`;
   const button = $('#closePeriodButton');
   button.disabled = period.status === 'CLOSED' || !evaluation.valid || !can(USER_PERMISSIONS.PERIODS_CLOSE);
   button.textContent = period.status === 'CLOSED' ? 'Période clôturée' : 'Clôturer la période';
