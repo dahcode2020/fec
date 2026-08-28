@@ -2345,7 +2345,7 @@ function automaticPreview(category) {
   const result = calculatePeriodResult(appState.integratedEntries, { companyId, period: periodId });
   if (!result.sourceCount || !result.lines.length || result.result === 0) return { ready: false, entries: [], reason: 'Aucun résultat à générer pour cette période.' };
   const resultEntry = createAutomaticJournalEntry({ companyId, integrationCategory: category, date: period.end, reference: 'RP-0001', label: `Résultat de la période — ${period.label}`, dossierId, lines: result.lines });
-  return { ready: true, entries: [{ ...resultEntry, id: `auto-result-${companyId}-${periodId}`, amount: Math.abs(result.result), debit: result.totalDebit, credit: result.totalCredit, source: `Résultat calculé sur ${result.sourceCount} écriture${result.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: result.sourceEntryIds, technicalOnly: true, result: result.result, status: OPERATION_STATES.TO_REVIEW }] };
+  return { ready: true, entries: [{ ...resultEntry, id: `auto-result-${companyId}-${periodId}`, amount: result.totalDebit, debit: result.totalDebit, credit: result.totalCredit, source: `Résultat net ${numberLabel(result.result)} FCFA · ${result.sourceCount} écriture${result.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: result.sourceEntryIds, technicalOnly: true, result: result.result, status: OPERATION_STATES.TO_REVIEW }] };
 }
 
 function automaticRunFor(category) {

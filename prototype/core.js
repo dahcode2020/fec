@@ -397,9 +397,16 @@ export function calculatePeriodResult(entries = [], { companyId, period = null }
   const totalProducts = productLines.reduce((sum, line) => sum + line.debit, 0);
   const result = Math.round((totalProducts - totalCharges) * 100) / 100;
   const resultAccount = result >= 0 ? '131' : '139';
-  const resultLines = totalCharges ? [{ accountId: resultAccount, label: result >= 0 ? 'Résultat net — charges de la période' : 'Résultat net — charges de la période', debit: totalCharges, credit: 0 }] : [];
-  if (totalProducts) resultLines.push({ accountId: resultAccount, label: result >= 0 ? 'Résultat net — produits de la période' : 'Résultat net — produits de la période', debit: 0, credit: totalProducts });
-  return { companyId, period, sourceEntryIds, sourceCount: sourceEntryIds.length, charges: totalCharges, products: totalProducts, result, resultAccount, lines: [...productLines, ...chargeLines, ...resultLines], totalDebit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.debit, 0), totalCredit: [...productLines, ...chargeLines, ...resultLines].reduce((sum, line) => sum + line.credit, 0) };
+  // Close class 7 by debiting it and class 6 by crediting it. Only the net
+  // result is posted to 131 (profit) or 139 (loss); posting total charges and
+  // total products again on the result account would create a wrong balance.
+  const resultLines = result > 0
+    ? [{ accountId: resultAccount, label: 'Résultat net bénéficiaire', debit: 0, credit: result }]
+    : result < 0
+      ? [{ accountId: resultAccount, label: 'Résultat net déficitaire', debit: Math.abs(result), credit: 0 }]
+      : [];
+  const lines = [...productLines, ...chargeLines, ...resultLines];
+  return { companyId, period, sourceEntryIds, sourceCount: sourceEntryIds.length, charges: totalCharges, products: totalProducts, result, resultAccount, lines, totalDebit: lines.reduce((sum, line) => sum + line.debit, 0), totalCredit: lines.reduce((sum, line) => sum + line.credit, 0) };
 }
 
 export function buildTrialBalance(entries = [], { companyId, period = null, includeTechnical = false, statuses = [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] } = {}) {

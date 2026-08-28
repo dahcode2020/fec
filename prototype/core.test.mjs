@@ -210,6 +210,10 @@ test('calcule le résultat d’une période à partir des comptes 6 et 7', () =>
   assert.equal(result.charges, 38500);
   assert.equal(result.result, 211500);
   assert.equal(result.resultAccount, '131');
+  assert.equal(result.lines.find((line) => line.accountId === '7061').debit, 250000);
+  assert.equal(result.lines.find((line) => line.accountId === '6047').credit, 38500);
+  assert.equal(result.lines.filter((line) => line.accountId === '131').length, 1);
+  assert.equal(result.lines.find((line) => line.accountId === '131').credit, 211500);
   assert.equal(result.totalDebit, result.totalCredit);
 });
 
