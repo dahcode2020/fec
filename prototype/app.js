@@ -4086,14 +4086,15 @@ function currentClosureChecks() {
   const period = currentPeriod();
   const companyEntries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED && String(entry.date).startsWith(period.id));
   const sourceEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && String(entry.date).startsWith(period.id));
-  const companyBanks = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && String(movement.date).startsWith(period.id));
+  const isStatementMovement = (movement) => movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
+  const companyBanks = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && String(movement.date).startsWith(period.id) && movement.treasuryType !== 'CASH' && isStatementMovement(movement));
   const runCategories = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === period.id).map((run) => run.category));
   const fiscal = currentFiscalSettings();
   return [
     { id: 'balance', label: 'Équilibres fondamentaux', description: 'Les écritures sources possèdent des lignes équilibrées.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Voir le journal' },
     { id: 'entries', label: 'Saisies validées', description: `${companyEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} saisie(s) restent à contrôler.`, passed: companyEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
     { id: 'automatic', label: 'Traitements automatiques', description: 'Amortissements, abonnements, centralisation et résultat traités.', passed: ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runCategories.has(category)), action: 'periodic', actionLabel: 'Voir les traitements' },
-    { id: 'bank', label: 'Banque et rapprochement', description: `${companyBanks.filter((movement) => movement.status !== 'RECONCILED').length} mouvement(s) bancaire(s) restent à rapprocher.`, passed: companyBanks.length > 0 && companyBanks.every((movement) => movement.status === 'RECONCILED'), action: 'bank', actionLabel: 'Ouvrir la banque' },
+    { id: 'bank', label: 'Banque et rapprochement', description: companyBanks.length ? `${companyBanks.filter((movement) => movement.status !== 'RECONCILED').length} mouvement(s) bancaire(s) restent à rapprocher.` : 'Aucun mouvement de relevé ne reste à rapprocher.', passed: companyBanks.every((movement) => movement.status === 'RECONCILED'), action: 'bank', actionLabel: 'Ouvrir la banque' },
     { id: 'fiscal', label: 'Résultat fiscal et impôt', description: fiscal.taxRate > 0 ? 'Taux fiscal renseigné et calcul disponible.' : 'Le taux fiscal de la société reste à valider.', passed: fiscal.taxRate > 0, action: 'periodic', actionLabel: 'Paramétrer le fiscal' },
     { id: 'sync', label: 'Livre journal synchronisé', description: 'Les écritures actives sont présentes dans le livre journal intégré.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Vérifier le livre' }
   ];
