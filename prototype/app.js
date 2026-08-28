@@ -2438,7 +2438,9 @@ function openAutomaticPreview(category) {
   $('#automaticPreviewJournal').textContent = `Journal ${definition.journalId}`;
   const content = $('#automaticPreviewContent');
   const total = preview.entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-  $('#automaticPreviewSummary').innerHTML = `<span><small>ÉCRITURES À GÉNÉRER</small><strong>${preview.entries.length}</strong></span><span><small>MONTANT TOTAL</small><strong>${numberLabel(total)} <em>FCFA</em></strong></span><span><small>JOURNAL</small><strong>${definition.journalId}</strong></span>`;
+  const netResult = preview.entries.reduce((sum, entry) => sum + Number(entry.result || 0), 0);
+  const resultSummary = category === 'RESULTAT' && preview.entries.some((entry) => entry.result !== undefined) ? `<span><small>RÉSULTAT NET</small><strong>${numberLabel(netResult)} <em>FCFA</em></strong></span>` : '';
+  $('#automaticPreviewSummary').innerHTML = `<span><small>ÉCRITURES À GÉNÉRER</small><strong>${preview.entries.length}</strong></span><span><small>MONTANT TOTAL DE L’ÉCRITURE</small><strong>${numberLabel(total)} <em>FCFA</em></strong></span>${resultSummary}<span><small>JOURNAL</small><strong>${definition.journalId}</strong></span>`;
   if (preview.entries.length) {
     content.innerHTML = `<div class="automatic-preview-table-wrap"><table class="automatic-preview-table"><thead><tr><th>RÉFÉRENCE</th><th>LIBELLÉ</th><th>IMPUTATION GÉNÉRÉE</th><th class="align-right">MONTANT</th></tr></thead><tbody>${preview.entries.map((entry) => `<tr><td><b>${escapeHtml(entry.reference)}</b></td><td>${escapeHtml(entry.label)}</td><td>${escapeHtml(entry.lines.map((line) => `${line.accountId} ${line.debit > 0 ? 'D' : 'C'}`).join(' · '))}</td><td class="align-right">${numberLabel(entry.amount)} FCFA</td></tr>`).join('')}</tbody></table></div>`;
   } else content.innerHTML = `<div class="automatic-preview-empty"><span>⌁</span><strong>Aucune écriture ne sera générée</strong><p>${escapeHtml(preview.reason)}</p></div>`;
