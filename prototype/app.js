@@ -4210,8 +4210,16 @@ function validateAutomaticEntry(entryId) {
   if (index < 0) { showToast('Écriture automatique introuvable.'); return; }
   const entry = appState.integratedEntries[index];
   if (!['AM', 'AB', 'CT', 'RP'].includes(entry.journalId)) { showToast('Cette écriture ne relève pas d’un journal automatique.'); return; }
-  if (entry.status !== OPERATION_STATES.TO_REVIEW) { showToast('Cette écriture automatique est déjà verrouillée.'); return; }
-  const validated = { ...entry, status: OPERATION_STATES.VALIDATED, validatedAt: new Date().toISOString(), statusChangedAt: new Date().toISOString() };
+  // The action is idempotent: a double click or an old browser listener must
+  // not turn a successful validation into a misleading error message.
+  if ([OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) {
+    renderIntegratedJournal();
+    renderAutomaticRuns();
+    return;
+  }
+  if (entry.status !== OPERATION_STATES.TO_REVIEW) { showToast('Cette écriture automatique ne peut plus être validée.'); return; }
+  const validatedAt = new Date().toISOString();
+  const validated = { ...entry, status: OPERATION_STATES.VALIDATED, validatedAt, statusChangedAt: validatedAt };
   appState.integratedEntries[index] = validated;
   const audit = { id: `audit-${Date.now()}`, action: 'AUTOMATIC_ENTRY_VALIDATED', companyId: appState.activeCompany, entryId, journalId: entry.journalId, at: validated.validatedAt, userId: appState.currentUserId };
   appState.auditEvents.push(audit);
