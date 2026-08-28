@@ -2463,6 +2463,7 @@ function runAutomaticProcess(category) {
   persistAppState();
   closeModal();
   renderAutomaticTasks();
+  renderAutomaticRuns();
   renderIntegratedJournal();
   showToast(`${preview.entries.length} écriture${preview.entries.length > 1 ? 's' : ''} générée${preview.entries.length > 1 ? 's' : ''} dans le journal automatique.`);
 }
