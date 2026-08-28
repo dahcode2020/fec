@@ -1302,8 +1302,10 @@ function mergeRemoteContext(context, userId) {
   remoteCompanies.forEach((company) => {
     appState.companies[company.id] = { ...company, color: company.color || 'teal' };
     if (!appState.accountingSetups[company.id]) appState.accountingSetups[company.id] = createCsrSetup({ companyId: company.id });
-    appState.periods[company.id] = appState.periods[company.id] || createMonthlyPeriods(Number(context.fiscalYears?.find((year) => year.companyId === company.id)?.id || new Date().getUTCFullYear()));
-    appState.activePeriodIds[company.id] = appState.activePeriodIds[company.id] || appState.periods[company.id][0]?.id;
+    const remoteYear = String(context.fiscalYears?.find((year) => year.companyId === company.id)?.id || new Date().getUTCFullYear());
+    appState.periods[company.id] = appState.periods[company.id] || createMonthlyPeriods(Number(remoteYear));
+    const selectedPeriod = appState.activePeriodIds[company.id];
+    appState.activePeriodIds[company.id] = selectedPeriod && String(selectedPeriod).startsWith(`${remoteYear}-`) ? selectedPeriod : appState.periods[company.id][0]?.id;
   });
   appState.memberships = [...(appState.memberships || []).filter((membership) => membership.userId !== userId), ...(context.memberships || [])];
   const remoteCompanyIds = new Set(remoteCompanies.map((company) => company.id));
@@ -1389,6 +1391,23 @@ async function requestPasswordReset(event) {
   } catch (error) { showToast(error.message || 'Service de réinitialisation indisponible.'); }
 }
 
+function refreshViewData(viewName) {
+  if (viewName === 'periodic') { renderAutomaticTasks(); renderAutomaticRuns(); renderClosure(); }
+  if (viewName === 'finalization') renderFinalization();
+  if (viewName === 'opening') renderOpening();
+  if (viewName === 'periods') renderPeriods();
+  if (viewName === 'statements') renderStatements();
+  if (viewName === 'journal') renderIntegratedJournal();
+  if (viewName === 'sales') { renderInvoiceHistory('SALE'); renderInvoicePartyOptions('SALE'); renderInvoiceLines('SALE'); renderInvoicePreview('SALE'); }
+  if (viewName === 'purchases') { renderInvoiceHistory('PURCHASE'); renderInvoicePartyOptions('PURCHASE'); renderInvoiceLines('PURCHASE'); renderInvoicePreview('PURCHASE'); }
+  if (viewName === 'payments') { renderPaymentHistory(); renderLettering(); }
+  if (viewName === 'bank') renderBankMovements();
+  if (viewName === 'treasury') renderTreasury();
+  if (viewName === 'companies') { renderCompanyMenu(); }
+  if (viewName === 'access') renderAccessView();
+  if (viewName === 'imports') { renderExportAssistant(); renderFecAssistant(); }
+}
+
 function openView(viewName) {
   $$('.view').forEach((view) => view.classList.toggle('is-visible', view.dataset.viewPanel === viewName));
   $$('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === viewName));
@@ -1397,6 +1416,7 @@ function openView(viewName) {
   $('#companyPicker')?.setAttribute('aria-expanded', 'false');
   $('#quickMenu')?.setAttribute('hidden', '');
   $('#sidebar')?.classList.remove('is-open');
+  refreshViewData(viewName);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
