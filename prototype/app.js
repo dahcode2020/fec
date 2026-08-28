@@ -2431,7 +2431,7 @@ function generateDepreciation() {
     status.textContent = 'À contrôler';
   });
   const amount = entry.lines[0].debit;
-  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: `auto-amort-${appState.activeCompany}-${currentPeriod().id}`, companyId: appState.activeCompany, reference: 'AM-0003', date: currentPeriod().end, journalId: 'AM', label: `Dotation amortissement — ${currentPeriod().label}`, debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
+  const syncedEntry = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { id: `auto-amort-${appState.activeCompany}-${currentPeriod().id}`, companyId: appState.activeCompany, reference: 'AM-0003', date: currentPeriod().end, journalId: 'AM', label: `Dotation amortissement — ${currentPeriod().label}`, lines: entry.lines, debit: amount, credit: amount, amount, source: 'Amortissement automatique', integrationCategory: 'AMORTISSEMENTS', status: 'TO_REVIEW' }).entries[0];
   const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
   if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
   else appState.integratedEntries.unshift(syncedEntry);
@@ -4204,6 +4204,25 @@ function statusLabel(status) {
   return ({ TO_REVIEW: ['À contrôler', 'status-purple'], VALIDATED: ['Validée', 'status-green'], CALCULATED: ['Calculé', 'status-amber'] })[status] || ['Brouillon', 'status-amber'];
 }
 
+function validateAutomaticEntry(entryId) {
+  if (!requirePermission(USER_PERMISSIONS.ENTRIES_VALIDATE)) return;
+  const index = appState.integratedEntries.findIndex((entry) => entry.id === entryId && entry.companyId === appState.activeCompany);
+  if (index < 0) { showToast('Écriture automatique introuvable.'); return; }
+  const entry = appState.integratedEntries[index];
+  if (!['AM', 'AB', 'CT', 'RP'].includes(entry.journalId)) { showToast('Cette écriture ne relève pas d’un journal automatique.'); return; }
+  if (entry.status !== OPERATION_STATES.TO_REVIEW) { showToast('Cette écriture automatique est déjà verrouillée.'); return; }
+  const validated = { ...entry, status: OPERATION_STATES.VALIDATED, validatedAt: new Date().toISOString(), statusChangedAt: new Date().toISOString() };
+  appState.integratedEntries[index] = validated;
+  const audit = { id: `audit-${Date.now()}`, action: 'AUTOMATIC_ENTRY_VALIDATED', companyId: appState.activeCompany, entryId, journalId: entry.journalId, at: validated.validatedAt, userId: appState.currentUserId };
+  appState.auditEvents.push(audit);
+  queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: audit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: audit });
+  queueSyncChange({ entityType: 'JOURNAL_ENTRY', entityId, companyId: appState.activeCompany, moduleId: 'CSR', payload: validated });
+  persistAppState();
+  renderIntegratedJournal();
+  renderAutomaticRuns();
+  showToast('Écriture automatique validée et verrouillée.');
+}
+
 function renderIntegratedJournal() {
   const rows = $('#integratedJournalRows');
   if (!rows) return;
@@ -4228,9 +4247,11 @@ function renderIntegratedJournal() {
     const category = INTEGRATED_JOURNAL_CATEGORIES[categoryId];
     const [label, statusClass] = statusLabel(entry.status);
     const journalClass = ({ AC: 'journal-badge-blue', BQ: 'journal-badge-teal', OD: 'journal-badge-amber', AM: 'journal-badge-amber', AB: 'journal-badge-purple', CT: 'journal-badge-blue', RP: 'journal-badge-teal' })[entry.journalId] || '';
-    return `<tr><td><b>${escapeHtml(entry.reference || '—')}</b></td><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span></td><td><span class="integrated-category ${categoryClass(categoryId)}">${escapeHtml(category.shortLabel)}</span></td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${escapeHtml(entry.source || 'Imputation synchronisée')}</small></td><td class="align-right">${numberLabel(entry.debit || entry.amount || 0)}</td><td class="align-right">${numberLabel(entry.credit || entry.amount || 0)}</td><td><span class="status ${statusClass}">${label}</span></td></tr>`;
+    const automatic = ['AM', 'AB', 'CT', 'RP'].includes(entry.journalId);
+    const action = automatic && entry.status === OPERATION_STATES.TO_REVIEW ? `<button class="text-button table-action" type="button" data-action="validate-automatic-entry" data-entry-id="${escapeHtml(entry.id)}">Valider</button>` : automatic ? '<span class="table-action-locked">Verrouillée</span>' : '';
+    return `<tr><td><b>${escapeHtml(entry.reference || '—')}</b></td><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span></td><td><span class="integrated-category ${categoryClass(categoryId)}">${escapeHtml(category.shortLabel)}</span></td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${escapeHtml(entry.source || 'Imputation synchronisée')}</small></td><td class="align-right">${numberLabel(entry.debit || entry.amount || 0)}</td><td class="align-right">${numberLabel(entry.credit || entry.amount || 0)}</td><td><span class="status ${statusClass}">${label}</span></td><td>${action}</td></tr>`;
   }).join('');
-  if (!entries.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucune écriture dans cette catégorie.</td></tr>';
+  if (!entries.length) rows.innerHTML = '<tr><td colspan="9" class="dossier-empty">Aucune écriture dans cette catégorie.</td></tr>';
   const subtitle = $('#integratedJournalSubtitle');
   if (subtitle) subtitle.textContent = `${journal.entries.length} écritures · ${Object.values(summary).filter((item) => item.count > 0).length - (summary.GENERAL.count ? 1 : 0)} catégories automatiques · Débit et crédit équilibrés`;
   const footer = $('#integratedJournalFooter');
@@ -5209,6 +5230,7 @@ function bindEvents() {
     if (action === 'delete-entry') deleteRecentEntry(actionTarget.dataset.entryId);
     if (action === 'edit-entry') editRecentEntry(actionTarget.dataset.entryId);
     if (action === 'validate-entry') validateRecentEntry(actionTarget.dataset.entryId);
+    if (action === 'validate-automatic-entry') validateAutomaticEntry(actionTarget.dataset.entryId);
     if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
     if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
