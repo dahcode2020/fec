@@ -447,17 +447,190 @@ export function createFinancialSnapshot({ companyId, fiscalYear, statements, sou
   };
 }
 
-export function calculateFiscalResult({ accountingResult = 0, deductions = 0, reintegrations = 0, taxRate = 0, minimumTax = 0 } = {}) {
+/**
+ * Référentiel fiscal béninois versionné.
+ *
+ * Les taux ci-dessous correspondent au texte fourni pour le CGI 2026. Ils sont
+ * volontairement isolés du calcul afin qu'une nouvelle loi de finances puisse
+ * ajouter une version sans réécrire les calculs des exercices antérieurs.
+ * Ce référentiel reste soumis à validation professionnelle avant production.
+ */
+export const BENIN_FISCAL_ACTIVITY_PROFILES = Object.freeze({
+  INDUSTRIAL: Object.freeze({ label: 'Activité industrielle (hors extractive)', corporateRate: 25, minimumRate: 1 }),
+  PRIVATE_EDUCATION: Object.freeze({ label: 'École privée d’enseignement', corporateRate: 25, minimumRate: 1 }),
+  OTHER: Object.freeze({ label: 'Autre personne morale', corporateRate: 30, minimumRate: 1 }),
+  REAL_ESTATE: Object.freeze({ label: 'Société à prépondérance immobilière', corporateRate: 30, minimumRate: 10 }),
+  BTP: Object.freeze({ label: 'Bâtiment et travaux publics', corporateRate: 30, minimumRate: 3 }),
+  MINING_PETROLEUM: Object.freeze({ label: 'Convention minière ou pétrolière', corporateRate: null, minimumRate: 1, requiresConventionRate: true }),
+  USED_VEHICLES: Object.freeze({ label: 'Commerce de véhicules d’occasion', corporateRate: 30, minimumRate: null, requiresRegulatoryMinimum: true }),
+  CONSUMER_GOODS: Object.freeze({ label: 'Produits de grande consommation', corporateRate: 30, minimumRate: null, requiresRegulatoryMinimum: true }),
+  SERVICE_STATION: Object.freeze({ label: 'Station-service', corporateRate: 30, minimumRate: 1, volumeMinimum: true }),
+  PETROLEUM_DISTRIBUTOR: Object.freeze({ label: 'Distributeur de produits pétroliers', corporateRate: 30, minimumRate: 1, volumeMinimum: true })
+});
+
+export const BENIN_CGI_RULES_BY_YEAR = Object.freeze({
+  '2026': Object.freeze({
+    id: 'CGI-BJ-2026',
+    label: 'Code général des impôts du Bénin 2026',
+    corporateRates: Object.freeze({ industrial: 25, privateEducation: 25, common: 30 }),
+    minimumRates: Object.freeze({ realEstate: 10, btp: 3, common: 1 }),
+    activityProfiles: Object.freeze({
+      INDUSTRIAL: Object.freeze({ corporateRate: 25, minimumRate: 1 }),
+      PRIVATE_EDUCATION: Object.freeze({ corporateRate: 25, minimumRate: 1 }),
+      OTHER: Object.freeze({ corporateRate: 30, minimumRate: 1 }),
+      REAL_ESTATE: Object.freeze({ corporateRate: 30, minimumRate: 10 }),
+      BTP: Object.freeze({ corporateRate: 30, minimumRate: 3 }),
+      MINING_PETROLEUM: Object.freeze({ corporateRate: null, minimumRate: 1 }),
+      USED_VEHICLES: Object.freeze({ corporateRate: 30, minimumRate: null }),
+      CONSUMER_GOODS: Object.freeze({ corporateRate: 30, minimumRate: null }),
+      SERVICE_STATION: Object.freeze({ corporateRate: 30, minimumRate: 1 }),
+      PETROLEUM_DISTRIBUTOR: Object.freeze({ corporateRate: 30, minimumRate: 1 })
+    }),
+    minimumFloor: 250000,
+    broadcastingFee: 4000,
+    stationRatePerLiter: 0.6
+  })
+});
+
+const fiscalRuleYear = (value) => String(value || '').match(/\d{4}/)?.[0] || '';
+
+export function getBeninFiscalRules(year = '2026', overrides = {}) {
+  const requestedYear = fiscalRuleYear(year) || '2026';
+  const exact = BENIN_CGI_RULES_BY_YEAR[requestedYear];
+  const availableYears = Object.keys(BENIN_CGI_RULES_BY_YEAR).sort();
+  const fallbackYear = availableYears[availableYears.length - 1];
+  const base = BENIN_CGI_RULES_BY_YEAR[exact ? requestedYear : fallbackYear];
+  return { ...base, ...overrides, requestedYear, year: exact ? requestedYear : fallbackYear, fallback: !exact };
+}
+
+export function createBeninFiscalSettings({ fiscalYear = '2026', codeVersion = '2026', activityProfile = '' } = {}) {
+  const rules = getBeninFiscalRules(codeVersion || fiscalYear);
+  return {
+    fiscalYear: String(fiscalYear),
+    codeVersion: rules.year,
+    activityProfile,
+    deductions: 0,
+    reintegrations: 0,
+    taxRate: 0,
+    conventionRate: 0,
+    minimumTax: 0,
+    cashableProducts: null,
+    excludedProducts: { immobilizedProduction: 0, stockedProduction: 0, transferredCharges: 0, provisionsAndDepreciationReversals: 0 },
+    minimumTaxFloor: rules.minimumFloor,
+    broadcastingFeeEnabled: true,
+    broadcastingFee: rules.broadcastingFee,
+    stationFuelLiters: 0,
+    stationRatePerLiter: rules.stationRatePerLiter,
+    regulatoryMinimumTax: 0,
+    validated: false
+  };
+}
+
+const fiscalAmountOr = (value, fallback = 0) => {
+  const parsed = amount(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export function calculateFiscalResult({
+  accountingResult = 0,
+  products = null,
+  deductions = 0,
+  reintegrations = 0,
+  taxRate = null,
+  activityProfile = '',
+  conventionRate = 0,
+  fiscalYear = '2026',
+  codeVersion = null,
+  minimumTax = 0,
+  cashableProducts = null,
+  excludedProducts = {},
+  minimumTaxFloor = null,
+  broadcastingFeeEnabled = false,
+  broadcastingFee = null,
+  stationFuelLiters = 0,
+  stationRatePerLiter = null,
+  regulatoryMinimumTax = 0,
+  rules = {}
+} = {}) {
   const beforeTax = amount(accountingResult);
   const deductible = amount(deductions);
   const taxable = amount(reintegrations);
-  const rate = Number(taxRate) || 0;
+  const legacyRate = taxRate === null || taxRate === undefined || taxRate === '' ? 0 : Number(taxRate);
   const minimum = amount(minimumTax);
-  if (![beforeTax, deductible, taxable, minimum].every(Number.isFinite) || deductible < 0 || taxable < 0 || minimum < 0 || rate < 0) throw new DomainError('Les paramètres fiscaux sont invalides.', 'INVALID_FISCAL_INPUT');
+  const profile = BENIN_FISCAL_ACTIVITY_PROFILES[activityProfile] || null;
+  const usesBeninProfile = Boolean(profile);
+  const ruleSet = getBeninFiscalRules(codeVersion || fiscalYear, rules);
+  const profileRule = ruleSet.activityProfiles?.[activityProfile] || profile || {};
+  const convention = fiscalAmountOr(conventionRate);
+  const explicitProducts = products === null || products === undefined || products === '' ? null : amount(products);
+  const declaredCashableProducts = cashableProducts === null || cashableProducts === undefined || cashableProducts === '' ? explicitProducts : amount(cashableProducts);
+  const excluded = {
+    immobilizedProduction: fiscalAmountOr(excludedProducts.immobilizedProduction),
+    stockedProduction: fiscalAmountOr(excludedProducts.stockedProduction),
+    transferredCharges: fiscalAmountOr(excludedProducts.transferredCharges),
+    provisionsAndDepreciationReversals: fiscalAmountOr(excludedProducts.provisionsAndDepreciationReversals)
+  };
+  const exclusionsTotal = Object.values(excluded).reduce((sum, value) => sum + value, 0);
+  const rawCashableProducts = declaredCashableProducts === null ? 0 : declaredCashableProducts;
+  const cashableBase = round(Math.max(0, rawCashableProducts - exclusionsTotal));
+  const liters = fiscalAmountOr(stationFuelLiters);
+  const perLiter = stationRatePerLiter === null || stationRatePerLiter === undefined || stationRatePerLiter === ''
+    ? ruleSet.stationRatePerLiter
+    : Number(stationRatePerLiter);
+  const floor = minimumTaxFloor === null || minimumTaxFloor === undefined || minimumTaxFloor === '' ? ruleSet.minimumFloor : amount(minimumTaxFloor);
+  const fee = broadcastingFee === null || broadcastingFee === undefined || broadcastingFee === '' ? ruleSet.broadcastingFee : amount(broadcastingFee);
+
+  if (![beforeTax, deductible, taxable, minimum, convention, rawCashableProducts, ...Object.values(excluded), liters, perLiter, floor, fee, fiscalAmountOr(regulatoryMinimumTax)].every(Number.isFinite)
+    || deductible < 0 || taxable < 0 || minimum < 0 || legacyRate < 0 || convention < 0 || rawCashableProducts < 0 || exclusionsTotal < 0 || liters < 0 || perLiter < 0 || floor < 0 || fee < 0 || regulatoryMinimumTax < 0) {
+    throw new DomainError('Les paramètres fiscaux sont invalides.', 'INVALID_FISCAL_INPUT');
+  }
+
+  const resolvedRate = usesBeninProfile
+    ? (profile.requiresConventionRate ? (convention > 0 ? Math.max(convention, ruleSet.corporateRates.common) : 0) : (taxRate === null || taxRate === undefined || taxRate === '' ? profileRule.corporateRate : legacyRate))
+    : legacyRate;
   const taxableResult = round(Math.max(0, beforeTax + taxable - deductible));
-  const calculatedTax = round(taxableResult * rate / 100);
-  const tax = round(Math.max(calculatedTax, taxableResult > 0 ? minimum : 0));
-  return { accountingResult: beforeTax, deductions: deductible, reintegrations: taxable, taxableResult, taxRate: rate, calculatedTax, minimumTax: minimum, tax, netResult: round(beforeTax - tax) };
+  const calculatedTax = round(taxableResult * resolvedRate / 100);
+  const minimumRate = usesBeninProfile && profileRule.minimumRate !== null && profileRule.minimumRate !== undefined ? Number(profileRule.minimumRate) : 0;
+  const percentageMinimum = round(cashableBase * minimumRate / 100);
+  const volumeMinimum = usesBeninProfile && profile.volumeMinimum ? round(liters * perLiter) : 0;
+  const regulatoryMinimum = usesBeninProfile && profile.requiresRegulatoryMinimum ? fiscalAmountOr(regulatoryMinimumTax) : 0;
+  const missingRegulatoryMinimum = Boolean(usesBeninProfile && profile.requiresRegulatoryMinimum && regulatoryMinimum <= 0);
+  const configurationReady = Boolean(!usesBeninProfile || (resolvedRate > 0 && !missingRegulatoryMinimum));
+  const statutoryMinimum = configurationReady && usesBeninProfile ? round(Math.max(floor, percentageMinimum, volumeMinimum, regulatoryMinimum)) : 0;
+  const minimumTaxApplied = round(Math.max(minimum, statutoryMinimum));
+  const taxBeforeFee = round(Math.max(calculatedTax, configurationReady && (usesBeninProfile || minimum > 0) ? minimumTaxApplied : 0));
+  const appliedFee = configurationReady && usesBeninProfile && broadcastingFeeEnabled && taxBeforeFee > 0 ? round(fee) : 0;
+  const tax = round(taxBeforeFee + appliedFee);
+  return {
+    accountingResult: beforeTax,
+    products: explicitProducts,
+    deductions: deductible,
+    reintegrations: taxable,
+    taxableResult,
+    fiscalYear: String(fiscalYear),
+    ruleVersion: ruleSet.id,
+    ruleYear: ruleSet.year,
+    rulesFallback: ruleSet.fallback,
+    activityProfile,
+    ready: configurationReady && usesBeninProfile,
+    missingRegulatoryMinimum,
+    taxRate: resolvedRate,
+    conventionRate: convention,
+    minimumRate,
+    calculatedTax,
+    cashableProducts: cashableBase,
+    excludedProducts: excluded,
+    excludedProductsTotal: round(exclusionsTotal),
+    percentageMinimum,
+    volumeMinimum,
+    regulatoryMinimum,
+    minimumTaxFloor: floor,
+    minimumTax: minimumTaxApplied,
+    taxBeforeFee,
+    broadcastingFee: appliedFee,
+    tax,
+    netResult: round(beforeTax - tax)
+  };
 }
 
 export const PERIOD_STATUSES = Object.freeze({ OPEN: 'OPEN', READY: 'READY', CLOSED: 'CLOSED', REOPEN_REQUESTED: 'REOPEN_REQUESTED' });

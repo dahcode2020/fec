@@ -1,4 +1,4 @@
-import { assertPermission, accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, deleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createFinancialSnapshot, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, createUser, createMembership, decodeFecText, extractZipArchive, encodeFecText, evaluatePeriodClosure, roleLabel, USER_PERMISSIONS, USER_ROLE_LABELS, USER_ROLES, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
+import { assertPermission, accountClass, addAccountToPlan, addJournalToSetup, addThirdPartyToDirectory, applyPaymentAllocations, buildFinancialStatements, buildTrialBalance, calculateDocumentTotals, calculateFiscalResult, createBeninFiscalSettings, BENIN_FISCAL_ACTIVITY_PROFILES, BENIN_CGI_RULES_BY_YEAR, calculateOpeningBalances, calculatePeriodResult, calculateStraightLinePlan, canDeleteCorrectionCandidate, deleteCorrectionCandidate, centralizeEntries, closePeriod, classifyIntegratedEntry, createAutomaticJournalEntry, createBankMovement, createCorrectionWindow, createCsrSetup, createFinancialSnapshot, createIntegratedJournal, createInvoiceDocument, createJournalEntry, createLocalWorkspaceStore, createMonthlyPeriods, createPayment, createFecAnnualDemoEntries, createZipArchive, createUser, createMembership, decodeFecText, extractZipArchive, encodeFecText, evaluatePeriodClosure, roleLabel, USER_PERMISSIONS, USER_ROLE_LABELS, USER_ROLES, exportAccountPlanTxt, exportBalanceTxt, exportFecControlReportTxt, exportFecNoticeTxt, exportFecTxt, fecFieldDefinitions, finalizeFiscalYear, depreciationEntry, documentToJournalLines, exerciseYear, importAccountPlanRows, INTEGRATED_JOURNAL_CATEGORIES, makeDossierCode, MODULE_DEFINITIONS, normalizeAccountNumber, parseDelimited, PAYMENT_TYPES, paymentToJournalLines, prepareFecExport, reconcileBankMovement, registerCorrectionCandidate, suggestPosting, summarizeIntegratedJournal, syncIntegratedJournal, transitionOperation, updateAccountInPlan, updateJournalInSetup, updateThirdPartyInDirectory, validateFecTxt, validateJournalDefinition, validateJournalEntry, OPERATION_STATES, THIRD_PARTY_TYPES } from './core.js';
 import { createHttpSyncRemote } from './sync-client.js';
 
 const appState = {
@@ -69,7 +69,8 @@ const appState = {
   ],
   payments: [],
   fiscalSettings: {
-    acacia: { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 }
+    acacia: { years: { '2025': createBeninFiscalSettings({ fiscalYear: '2025', codeVersion: '2026' }) } },
+    noria: { years: { '2025': createBeninFiscalSettings({ fiscalYear: '2025', codeVersion: '2026' }) } }
   },
   periods: {
     acacia: createMonthlyPeriods(2025),
@@ -159,6 +160,33 @@ const appState = {
 const appStore = createLocalWorkspaceStore({ key: 'fec.csr.vertical-slice.v1' });
 const persistedStateKeys = ['currentUserId', 'users', 'memberships', 'activeCompany', 'selectedDossier', 'companies', 'accountingSetups', 'thirdParties', 'invoices', 'purchaseBills', 'payments', 'fiscalSettings', 'periods', 'activePeriodIds', 'bankMovements', 'automaticSchedules', 'automaticRuns', 'dossiers', 'fiscalYears', 'fiscalYearCatalog', 'fiscalYearPeriods', 'activePeriodIdsByYear', 'periodClosures', 'fiscalYearFinalizations', 'openingRuns', 'financialSnapshots', 'statementMode', 'syncStatus', 'syncOutbox', 'syncConflicts', 'exportDraft', 'exportHistory', 'fecDraft', 'fecHistory', 'fecArchives', 'pendingFiscalYears', 'pendingPeriods', 'integratedEntries', 'correctionWindows', 'recentEntries', 'auditEvents'];
 
+function fiscalYearIdForCompany(companyId = appState.activeCompany) {
+  return String(appState.fiscalYears?.[companyId]?.id || appState.companies?.[companyId]?.exerciseStart?.slice(0, 4) || '2025');
+}
+
+function ensureFiscalSettingsForCompany(companyId, year = fiscalYearIdForCompany(companyId)) {
+  if (!appState.fiscalSettings || typeof appState.fiscalSettings !== 'object' || Array.isArray(appState.fiscalSettings)) appState.fiscalSettings = {};
+  const stored = appState.fiscalSettings[companyId];
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) appState.fiscalSettings[companyId] = { years: {} };
+  const settingsContainer = appState.fiscalSettings[companyId];
+  if (!settingsContainer.years || typeof settingsContainer.years !== 'object' || Array.isArray(settingsContainer.years)) {
+    const legacy = { ...settingsContainer };
+    delete legacy.years;
+    appState.fiscalSettings[companyId] = { years: { [String(year)]: { ...createBeninFiscalSettings({ fiscalYear: year, codeVersion: legacy.codeVersion || '2026' }), ...legacy } } };
+  }
+  const years = appState.fiscalSettings[companyId].years;
+  const yearId = String(year);
+  const existing = years[yearId] || {};
+  const defaults = createBeninFiscalSettings({ fiscalYear: yearId, codeVersion: existing.codeVersion || '2026' });
+  years[yearId] = {
+    ...defaults,
+    ...existing,
+    fiscalYear: yearId,
+    excludedProducts: { ...defaults.excludedProducts, ...(existing.excludedProducts || {}) }
+  };
+  return years[yearId];
+}
+
 function hydrateAppState() {
   const saved = appStore.load();
   if (!saved || saved.version !== 1) return;
@@ -195,7 +223,7 @@ function hydrateAppState() {
   if (!appState.automaticRuns) appState.automaticRuns = [];
   if (!appState.payments) appState.payments = [];
   if (!appState.fiscalSettings) appState.fiscalSettings = {};
-  if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
+  Object.keys(appState.companies).forEach((companyId) => ensureFiscalSettingsForCompany(companyId));
   if (!appState.periods) appState.periods = {};
   if (!appState.activePeriodIds) appState.activePeriodIds = {};
   Object.keys(appState.companies).forEach((companyId) => {
@@ -1504,7 +1532,7 @@ function addCompany(event) {
   appState.activePeriodIdsByYear[id] = { [String(year)]: appState.activePeriodIds[id] };
   appState.fiscalYearCatalog[id] = [{ id: String(year), label: `Exercice ${year}`, status: 'OPEN' }];
   appState.fiscalYears[id] = { id: year, label: `Exercice ${year}`, status: 'OPEN' };
-  appState.fiscalSettings[id] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
+  appState.fiscalSettings[id] = { years: { [String(year)]: createBeninFiscalSettings({ fiscalYear: year, codeVersion: '2026' }) } };
   queueSyncChange({ entityType: 'COMPANY', entityId: id, companyId: id, payload: company });
   queueSyncChange({ entityType: 'DOSSIER', entityId: dossierId, companyId: id, moduleId: 'CSR', payload: appState.dossiers.find((item) => item.id === dossierId) });
   queueSyncChange({ entityType: 'FISCAL_YEAR', entityId: `${id}-${year}`, companyId: id, moduleId: 'CSR', payload: { id: `${id}-${year}`, companyId: id, year, label: `Exercice ${year}`, status: 'OPEN' } });
@@ -2292,8 +2320,11 @@ function setImportMode(mode) {
 }
 
 function currentFiscalSettings() {
-  if (!appState.fiscalSettings[appState.activeCompany]) appState.fiscalSettings[appState.activeCompany] = { deductions: 0, reintegrations: 0, taxRate: 0, minimumTax: 0 };
-  return appState.fiscalSettings[appState.activeCompany];
+  return ensureFiscalSettingsForCompany(appState.activeCompany, fiscalYearIdForCompany(appState.activeCompany));
+}
+
+function fiscalSettingDisplay(value) {
+  return value === null || value === undefined ? '' : String(value);
 }
 
 function renderFiscalPreview() {
@@ -2301,30 +2332,117 @@ function renderFiscalPreview() {
   if (!beforeNode) return;
   const settings = currentFiscalSettings();
   const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: currentPeriod().id });
-  const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
+  const fiscal = calculateFiscalResult({ ...settings, accountingResult: result.result, products: result.products, excludedProducts: settings.excludedProducts });
+  const rules = BENIN_CGI_RULES_BY_YEAR[settings.codeVersion] || BENIN_CGI_RULES_BY_YEAR['2026'];
+  const versionSelect = $('#fiscalCodeVersion');
+  if (versionSelect) {
+    versionSelect.innerHTML = Object.entries(BENIN_CGI_RULES_BY_YEAR).map(([year, item]) => `<option value="${escapeHtml(year)}">${escapeHtml(item.label)}</option>`).join('');
+    versionSelect.value = settings.codeVersion;
+  }
+  const profileSelect = $('#fiscalActivityProfile');
+  if (profileSelect) {
+    profileSelect.innerHTML = `<option value="">À sélectionner</option>${Object.entries(BENIN_FISCAL_ACTIVITY_PROFILES).map(([id, profile]) => `<option value="${escapeHtml(id)}">${escapeHtml(profile.label)}</option>`).join('')}`;
+    profileSelect.value = settings.activityProfile || '';
+  }
+  const profile = BENIN_FISCAL_ACTIVITY_PROFILES[settings.activityProfile];
+  const conventionField = $('#fiscalConventionRateField');
+  if (conventionField) conventionField.hidden = !profile?.requiresConventionRate;
+  const conventionInput = $('#fiscalConventionRate');
+  if (conventionInput) conventionInput.value = fiscalSettingDisplay(settings.conventionRate);
+  const policySummary = $('#fiscalPolicySummary');
+  if (policySummary) {
+    policySummary.textContent = profile
+      ? `${profile.label} · taux ${fiscal.taxRate || 'à renseigner'} % · minimum ${fiscal.minimumRate || 'réglementaire'} % des produits encaissables${profile.volumeMinimum ? ' et comparaison avec 0,60 FCFA/litre' : ''}. Référentiel ${rules?.year || settings.codeVersion}.`
+      : 'Sélectionnez un profil pour appliquer les règles correspondantes.';
+  }
+  const controls = {
+    fiscalDeductions: settings.deductions,
+    fiscalReintegrations: settings.reintegrations,
+    fiscalCashableProducts: settings.cashableProducts,
+    fiscalMinimumTax: settings.minimumTax,
+    fiscalTaxRate: fiscal.taxRate,
+    fiscalExcludedImmobilized: settings.excludedProducts?.immobilizedProduction,
+    fiscalExcludedStocked: settings.excludedProducts?.stockedProduction,
+    fiscalExcludedTransfers: settings.excludedProducts?.transferredCharges,
+    fiscalExcludedReversals: settings.excludedProducts?.provisionsAndDepreciationReversals,
+    fiscalStationFuelLiters: settings.stationFuelLiters,
+    fiscalRegulatoryMinimumTax: settings.regulatoryMinimumTax
+  };
+  Object.entries(controls).forEach(([id, value]) => { const input = $(`#${id}`); if (input && document.activeElement !== input) input.value = fiscalSettingDisplay(value); });
+  const feeCheckbox = $('#fiscalBroadcastingFeeEnabled');
+  if (feeCheckbox) feeCheckbox.checked = settings.broadcastingFeeEnabled !== false;
   beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
   $('#fiscalTaxableResult').innerHTML = `${numberLabel(fiscal.taxableResult)} <em>FCFA</em>`;
+  $('#fiscalCalculatedTax').innerHTML = `${numberLabel(fiscal.calculatedTax)} <em>FCFA</em>`;
+  $('#fiscalMinimumTaxResult').innerHTML = `${numberLabel(fiscal.minimumTax)} <em>FCFA</em>`;
   $('#fiscalTaxAmount').innerHTML = `${numberLabel(fiscal.tax)} <em>FCFA</em>`;
   $('#fiscalNetResult').innerHTML = `${numberLabel(fiscal.netResult)} <em>FCFA</em>`;
   const badge = $('#fiscalStatusBadge');
-  if (badge) { badge.innerHTML = `<i></i> ${fiscal.tax > 0 ? 'Impôt estimé' : 'À paramétrer'}`; badge.className = `fiscal-status-badge ${fiscal.tax > 0 ? 'is-ready' : ''}`; }
+  if (badge) { badge.innerHTML = `<i></i> ${fiscal.ready ? 'Impôt estimé · à valider' : 'À paramétrer'}`; badge.className = `fiscal-status-badge ${fiscal.ready ? 'is-ready' : ''}`; }
+  const generateButton = $('[data-action="generate-fiscal-result"]');
+  if (generateButton) generateButton.disabled = !fiscal.ready || currentPeriod().status === 'CLOSED';
   const note = $('#fiscalEntryNote');
-  if (note) note.innerHTML = fiscal.tax > 0 ? `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> L’écriture de ${numberLabel(fiscal.tax)} FCFA sera générée par le système dans le journal RP.` : `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Renseignez un taux validé pour préparer l’écriture fiscale.`;
+  if (note) note.innerHTML = fiscal.ready
+    ? `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Total calculé : ${numberLabel(fiscal.tax)} FCFA${fiscal.broadcastingFee ? `, dont ${numberLabel(fiscal.broadcastingFee)} FCFA de redevance ORTB.` : '.'} L’écriture reste à contrôler.`
+    : fiscal.missingRegulatoryMinimum
+      ? `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Renseignez le minimum réglementaire applicable à cette activité avant de générer.`
+      : `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg> Sélectionnez et faites valider un profil fiscal avant de générer une écriture.`;
 }
 
 function updateFiscalSetting(field, value) {
-  currentFiscalSettings()[field] = parseUiAmount(value) || 0;
-  if (field === 'taxRate') currentFiscalSettings()[field] = Number(value) || 0;
+  const settings = currentFiscalSettings();
+  const excludedFieldMap = {
+    excludedImmobilized: 'immobilizedProduction',
+    excludedStocked: 'stockedProduction',
+    excludedTransfers: 'transferredCharges',
+    excludedReversals: 'provisionsAndDepreciationReversals'
+  };
+  if (field === 'activityProfile') {
+    settings.activityProfile = String(value || '');
+    const profile = BENIN_FISCAL_ACTIVITY_PROFILES[settings.activityProfile];
+    const rules = BENIN_CGI_RULES_BY_YEAR[settings.codeVersion] || BENIN_CGI_RULES_BY_YEAR['2026'];
+    const profileRule = rules?.activityProfiles?.[settings.activityProfile] || profile;
+    settings.taxRate = profile?.requiresConventionRate ? 0 : (profileRule?.corporateRate || 0);
+    settings.validated = false;
+  } else if (field === 'codeVersion') {
+    settings.codeVersion = String(value || '2026');
+    const rules = BENIN_CGI_RULES_BY_YEAR[settings.codeVersion] || BENIN_CGI_RULES_BY_YEAR['2026'];
+    settings.minimumTaxFloor = rules.minimumFloor;
+    settings.broadcastingFee = rules.broadcastingFee;
+    settings.stationRatePerLiter = rules.stationRatePerLiter;
+    const profile = BENIN_FISCAL_ACTIVITY_PROFILES[settings.activityProfile];
+    const profileRule = rules?.activityProfiles?.[settings.activityProfile] || profile;
+    if (profile && !profile.requiresConventionRate) settings.taxRate = profileRule?.corporateRate || 0;
+  } else if (field === 'broadcastingFeeEnabled') {
+    settings.broadcastingFeeEnabled = Boolean(value);
+  } else if (excludedFieldMap[field]) {
+    settings.excludedProducts[excludedFieldMap[field]] = parseUiAmount(value) || 0;
+  } else if (field === 'cashableProducts') {
+    settings.cashableProducts = String(value || '').trim() === '' ? null : (parseUiAmount(value) || 0);
+  } else if (field === 'conventionRate') {
+    settings.conventionRate = Number(value) || 0;
+    settings.taxRate = settings.conventionRate > 0 ? settings.conventionRate : 0;
+  } else if (field === 'taxRate') {
+    settings.taxRate = Number(value) || 0;
+  } else {
+    settings[field] = parseUiAmount(value) || 0;
+  }
   persistAppState();
   renderFiscalPreview();
+}
+
+function fiscalResultForPeriod(periodId = currentPeriod().id) {
+  const settings = currentFiscalSettings();
+  const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: periodId });
+  return calculateFiscalResult({ ...settings, accountingResult: result.result, products: result.products, excludedProducts: settings.excludedProducts });
 }
 
 function generateFiscalResult() {
   if (!ensureActivePeriodOpen()) return;
   const settings = currentFiscalSettings();
   const result = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: currentPeriod().id });
-  const fiscal = calculateFiscalResult({ accountingResult: result.result, deductions: settings.deductions, reintegrations: settings.reintegrations, taxRate: settings.taxRate, minimumTax: settings.minimumTax });
-  if (fiscal.tax <= 0) { showToast('Aucun impôt à générer : paramétrez un taux ou un minimum validé.'); return; }
+  const fiscal = calculateFiscalResult({ ...settings, accountingResult: result.result, products: result.products, excludedProducts: settings.excludedProducts });
+  if (!fiscal.ready || fiscal.tax <= 0) { showToast(fiscal.missingRegulatoryMinimum ? 'Renseignez le minimum réglementaire applicable avant la génération.' : 'Sélectionnez un profil fiscal et faites valider ses paramètres avant la génération.'); return; }
   const accountId = fiscal.calculatedTax >= fiscal.minimumTax ? '8911' : '895';
   const taxEntry = createAutomaticJournalEntry({ companyId: appState.activeCompany, integrationCategory: 'RESULTAT', date: currentPeriod().end, reference: 'RP-0002', label: `Impôt sur le résultat — ${currentPeriod().label}`, dossierId: currentDossierCode(appState.activeCompany), lines: [{ accountId, label: accountId === '895' ? 'Impôt minimum forfaitaire' : 'Impôts sur les bénéfices', debit: fiscal.tax, credit: 0 }, { accountId: '441', label: 'État, impôt sur les bénéfices', debit: 0, credit: fiscal.tax }] });
   const synced = syncIntegratedJournal(integratedJournalForCompany(appState.activeCompany), { ...taxEntry, id: `auto-tax-${appState.activeCompany}-${currentPeriod().id}`, amount: fiscal.tax, debit: fiscal.tax, credit: fiscal.tax, source: 'Calcul fiscal automatique', integrationCategory: 'RESULTAT', technicalOnly: true, status: OPERATION_STATES.TO_REVIEW }).entries[0];
@@ -4023,7 +4141,9 @@ function currentFinalizationChecks() {
   const year = currentFiscalYear();
   const sourceEntries = officialEntriesForYear(year.id);
   const runs = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && String(run.period || '').startsWith(String(year.id))).map((run) => `${run.category}:${run.period}`));
-  const fiscal = currentFiscalSettings();
+  const fiscalSettings = currentFiscalSettings();
+  const annualPeriodResult = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: String(year.id) });
+  const fiscal = calculateFiscalResult({ ...fiscalSettings, accountingResult: annualPeriodResult.result, products: annualPeriodResult.products, excludedProducts: fiscalSettings.excludedProducts });
   const snapshot = currentFinancialSnapshot();
   const relevantPeriods = (appState.periods[appState.activeCompany] || []).filter((period) => String(period.id).startsWith(String(year.id)) && appState.integratedEntries.some((entry) => entry.companyId === appState.activeCompany && String(entry.date || '').startsWith(period.id)));
   const annualAutomaticReady = ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => relevantPeriods.every((period) => runs.has(`${category}:${period.id}`)));
@@ -4031,7 +4151,7 @@ function currentFinalizationChecks() {
     { id: 'periods', label: 'Calendrier de l’exercice complet', description: `${periods.filter((period) => period.status === 'CLOSED').length} période(s) verrouillée(s) sur les 12 ; la clôture mensuelle reste facultative.`, passed: periods.length === 12, action: 'periods', actionLabel: 'Voir les périodes' },
     { id: 'entries', label: 'Aucune saisie en attente', description: `${activeEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} écriture(s) nécessitent encore un contrôle.`, passed: activeEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
     { id: 'automatic', label: 'Traitements automatiques terminés', description: 'Les traitements nécessaires de l’exercice doivent être exécutés pour chaque période concernée.', passed: annualAutomaticReady, action: 'periodic', actionLabel: 'Voir les traitements' },
-    { id: 'fiscal', label: 'Résultat fiscal préparé', description: fiscal.taxRate > 0 ? 'Le taux fiscal et le calcul de l’impôt sont disponibles.' : 'Le taux d’impôt doit être validé pour l’exercice.', passed: fiscal.taxRate > 0, action: 'periodic', actionLabel: 'Voir le résultat fiscal' },
+    { id: 'fiscal', label: 'Résultat fiscal préparé', description: fiscal.ready ? `Le taux de ${fiscal.taxRate} % et le calcul de l’impôt sont disponibles.` : fiscal.missingRegulatoryMinimum ? 'Le minimum réglementaire de cette activité doit être renseigné.' : 'Le profil fiscal et le taux doivent être validés pour l’exercice.', passed: fiscal.ready, action: 'periodic', actionLabel: 'Voir le résultat fiscal' },
     { id: 'snapshot', label: 'Instantané officiel des états', description: snapshot ? `États calculés sur ${sourceEntries.length} écriture(s), référentiel ${snapshot.planVersion}.` : 'Préparez l’instantané officiel avant l’arrêté.', passed: Boolean(snapshot?.immutable && ['SEALED', 'FINALIZED'].includes(snapshot.status) && snapshot.sourceCount > 0), action: 'snapshot', actionLabel: 'Préparer l’instantané' }
   ];
 }
@@ -4050,8 +4170,10 @@ function renderFinalization() {
   $('#finalizationProgress').textContent = `${evaluation.passedCount} / ${evaluation.totalCount} contrôles`;
   $('#finalizationBlockCount').textContent = evaluation.blockingCount ? `${evaluation.blockingCount} blocage${evaluation.blockingCount > 1 ? 's' : ''}` : 'Prêt à arrêter';
   $('#finalizationScore').textContent = String(evaluation.passedCount);
-  const accountingResult = snapshot?.statements?.resultBeforeTax ?? calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: String(year.id) }).result;
-  $('#finalNetResult').innerHTML = `${numberLabel(calculateFiscalResult({ accountingResult, ...currentFiscalSettings() }).netResult)} <em>FCFA</em>`;
+  const annualResult = calculatePeriodResult(appState.integratedEntries, { companyId: appState.activeCompany, period: String(year.id) });
+  const accountingResult = snapshot?.statements?.resultBeforeTax ?? annualResult.result;
+  const annualProducts = snapshot?.statements?.products ?? annualResult.products;
+  $('#finalNetResult').innerHTML = `${numberLabel(calculateFiscalResult({ ...currentFiscalSettings(), accountingResult, products: annualProducts, excludedProducts: currentFiscalSettings().excludedProducts }).netResult)} <em>FCFA</em>`;
   $('#closedPeriodCount').textContent = `${closedPeriods} / 12`;
   $('#finalReportCount').textContent = snapshot ? '5' : '0';
   const snapshotState = $('#finalSnapshotState');
@@ -4101,13 +4223,13 @@ function currentClosureChecks() {
   const isStatementMovement = (movement) => movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
   const companyBanks = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && String(movement.date).startsWith(period.id) && movement.treasuryType !== 'CASH' && isStatementMovement(movement));
   const runCategories = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === period.id).map((run) => run.category));
-  const fiscal = currentFiscalSettings();
+  const fiscal = fiscalResultForPeriod(period.id);
   return [
     { id: 'balance', label: 'Équilibres fondamentaux', description: 'Les écritures sources possèdent des lignes équilibrées.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Voir le journal' },
     { id: 'entries', label: 'Saisies validées', description: `${companyEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} saisie(s) restent à contrôler.`, passed: companyEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
     { id: 'automatic', label: 'Traitements automatiques', description: 'Amortissements, abonnements, centralisation et résultat traités.', passed: ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runCategories.has(category)), action: 'periodic', actionLabel: 'Voir les traitements' },
     { id: 'bank', label: 'Banque et rapprochement', description: companyBanks.length ? `${companyBanks.filter((movement) => movement.status !== 'RECONCILED').length} mouvement(s) bancaire(s) restent à rapprocher.` : 'Aucun mouvement de relevé ne reste à rapprocher.', passed: companyBanks.every((movement) => movement.status === 'RECONCILED'), action: 'bank', actionLabel: 'Ouvrir la banque' },
-    { id: 'fiscal', label: 'Résultat fiscal et impôt', description: fiscal.taxRate > 0 ? 'Taux fiscal renseigné et calcul disponible.' : 'Le taux fiscal de la société reste à valider.', passed: fiscal.taxRate > 0, action: 'periodic', actionLabel: 'Paramétrer le fiscal' },
+    { id: 'fiscal', label: 'Résultat fiscal et impôt', description: fiscal.ready ? `Taux ${fiscal.taxRate} % renseigné et calcul disponible.` : fiscal.missingRegulatoryMinimum ? 'Le minimum réglementaire de cette activité reste à renseigner.' : 'Le taux fiscal de la société reste à valider.', passed: fiscal.ready, action: 'periodic', actionLabel: 'Paramétrer le fiscal' },
     { id: 'sync', label: 'Livre journal synchronisé', description: 'Les écritures actives sont présentes dans le livre journal intégré.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Vérifier le livre' }
   ];
 }
@@ -5105,10 +5227,13 @@ function bindEvents() {
   window.addEventListener('offline', refreshSyncStatus);
   $('#entryForm')?.addEventListener('input', renderLivePosting);
   $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
-  ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax'].forEach((field) => {
+  ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax', 'CashableProducts', 'ExcludedImmobilized', 'ExcludedStocked', 'ExcludedTransfers', 'ExcludedReversals', 'StationFuelLiters', 'RegulatoryMinimumTax', 'ConventionRate'].forEach((field) => {
     const input = $(`#fiscal${field}`);
     input?.addEventListener('input', () => updateFiscalSetting(field === 'TaxRate' ? 'taxRate' : field.charAt(0).toLowerCase() + field.slice(1), input.value));
   });
+  $('#fiscalCodeVersion')?.addEventListener('change', (event) => updateFiscalSetting('codeVersion', event.target.value));
+  $('#fiscalActivityProfile')?.addEventListener('change', (event) => updateFiscalSetting('activityProfile', event.target.value));
+  $('#fiscalBroadcastingFeeEnabled')?.addEventListener('change', (event) => updateFiscalSetting('broadcastingFeeEnabled', event.target.checked));
   $('#paymentForm')?.addEventListener('input', updatePaymentPreview);
   $('#paymentForm')?.addEventListener('change', (event) => {
     if (event.target.id === 'paymentParty') { paymentAllocations = {}; toggleManualPaymentParty({ focus: true }); renderPaymentDocuments(); }

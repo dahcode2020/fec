@@ -22,6 +22,8 @@ import {
   buildTrialBalance,
   calculateDocumentTotals,
   calculateFiscalResult,
+  createBeninFiscalSettings,
+  getBeninFiscalRules,
   calculateOpeningBalances,
   closePeriod,
   createMonthlyPeriods,
@@ -278,6 +280,69 @@ test('calcule le résultat fiscal et l’impôt sans taux implicite', () => {
   assert.equal(taxed.taxableResult, 211500);
   assert.equal(taxed.tax, 63450);
   assert.equal(taxed.netResult, 148050);
+});
+
+test('applique les profils du CGI béninois 2026 et le minimum fiscal', () => {
+  const other = calculateFiscalResult({ accountingResult: 1000000, products: 10000000, activityProfile: 'OTHER', fiscalYear: '2026', broadcastingFeeEnabled: true });
+  assert.equal(other.taxRate, 30);
+  assert.equal(other.calculatedTax, 300000);
+  assert.equal(other.minimumTax, 250000);
+  assert.equal(other.broadcastingFee, 4000);
+  assert.equal(other.tax, 304000);
+
+  const realEstate = calculateFiscalResult({ accountingResult: 100000, products: 10000000, activityProfile: 'REAL_ESTATE', fiscalYear: '2026', broadcastingFeeEnabled: true });
+  assert.equal(realEstate.minimumRate, 10);
+  assert.equal(realEstate.minimumTax, 1000000);
+  assert.equal(realEstate.tax, 1004000);
+
+  const industrial = calculateFiscalResult({ accountingResult: 1000000, products: 1000000, activityProfile: 'INDUSTRIAL', fiscalYear: '2026', broadcastingFeeEnabled: true });
+  assert.equal(industrial.taxRate, 25);
+  assert.equal(industrial.tax, 254000);
+});
+
+test('calcule les produits encaissables après les exclusions prévues par l’article 47', () => {
+  const result = calculateFiscalResult({
+    accountingResult: 100000,
+    products: 10000000,
+    activityProfile: 'OTHER',
+    fiscalYear: '2026',
+    excludedProducts: { immobilizedProduction: 1000000, stockedProduction: 500000, transferredCharges: 250000, provisionsAndDepreciationReversals: 250000 },
+    broadcastingFeeEnabled: false
+  });
+  assert.equal(result.excludedProductsTotal, 2000000);
+  assert.equal(result.cashableProducts, 8000000);
+  assert.equal(result.percentageMinimum, 80000);
+  assert.equal(result.minimumTax, 250000);
+});
+
+test('gère les conventions et le minimum au volume des stations-services', () => {
+  const missingConvention = calculateFiscalResult({ accountingResult: 1000000, activityProfile: 'MINING_PETROLEUM', fiscalYear: '2026', broadcastingFeeEnabled: false });
+  assert.equal(missingConvention.ready, false);
+  const convention = calculateFiscalResult({ accountingResult: 1000000, activityProfile: 'MINING_PETROLEUM', conventionRate: 25, fiscalYear: '2026', broadcastingFeeEnabled: false });
+  assert.equal(convention.taxRate, 30);
+  assert.equal(convention.calculatedTax, 300000);
+
+  const station = calculateFiscalResult({ accountingResult: 100000, products: 10000000, activityProfile: 'SERVICE_STATION', stationFuelLiters: 600000, fiscalYear: '2026', broadcastingFeeEnabled: true });
+  assert.equal(station.volumeMinimum, 360000);
+  assert.equal(station.minimumTax, 360000);
+  assert.equal(station.tax, 364000);
+
+  const regulatedActivity = calculateFiscalResult({ accountingResult: 1000000, products: 5000000, activityProfile: 'USED_VEHICLES', fiscalYear: '2026', broadcastingFeeEnabled: false });
+  assert.equal(regulatedActivity.ready, false);
+  assert.equal(regulatedActivity.missingRegulatoryMinimum, true);
+  const configuredRegulatedActivity = calculateFiscalResult({ accountingResult: 1000000, products: 5000000, activityProfile: 'USED_VEHICLES', regulatoryMinimumTax: 600000, fiscalYear: '2026', broadcastingFeeEnabled: false });
+  assert.equal(configuredRegulatedActivity.ready, true);
+  assert.equal(configuredRegulatedActivity.minimumTax, 600000);
+});
+
+test('versionne le paramétrage fiscal pour les exercices futurs', () => {
+  const settings = createBeninFiscalSettings({ fiscalYear: '2026', codeVersion: '2026' });
+  assert.equal(settings.codeVersion, '2026');
+  assert.equal(settings.activityProfile, '');
+  const fallback = getBeninFiscalRules('2027');
+  assert.equal(fallback.requestedYear, '2027');
+  assert.equal(fallback.year, '2026');
+  assert.equal(fallback.fallback, true);
 });
 
 test('prépare les reports à nouveau des comptes de bilan', () => {
