@@ -2352,13 +2352,19 @@ function automaticRunFor(category) {
   return appState.automaticRuns.find((run) => run.companyId === appState.activeCompany && run.category === category && run.period === currentPeriod().id);
 }
 
+function automaticRunStatus(run) {
+  if (['VALIDATED', 'FINALIZED', 'CLOSED'].includes(String(run.status || '').toUpperCase())) return ['Validée', 'status-green'];
+  return ['À contrôler', 'status-purple'];
+}
+
 function renderAutomaticRuns() {
   const rows = $('#automaticRunsRows');
   if (!rows) return;
   const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany);
   rows.innerHTML = runs.map((run) => {
     const definition = AUTOMATIC_DEFINITIONS[run.category];
-    return `<tr><td><span class="cell-title">${escapeHtml(definition?.label || run.category)}</span></td><td><span class="journal-badge ${run.category === 'ABONNEMENTS' ? 'journal-badge-purple' : run.category === 'AMORTISSEMENTS' ? 'journal-badge-amber' : 'journal-badge-blue'}">${escapeHtml(definition?.journalId || '—')}</span></td><td>${escapeHtml(run.period)}</td><td>${escapeHtml(run.count)}</td><td>${escapeHtml(new Date(run.at).toLocaleString('fr-FR'))}</td><td><span class="status status-purple">À contrôler</span></td></tr>`;
+    const [runLabel, runClass] = automaticRunStatus(run);
+    return `<tr><td><span class="cell-title">${escapeHtml(definition?.label || run.category)}</span></td><td><span class="journal-badge ${run.category === 'ABONNEMENTS' ? 'journal-badge-purple' : run.category === 'AMORTISSEMENTS' ? 'journal-badge-amber' : 'journal-badge-blue'}">${escapeHtml(definition?.journalId || '—')}</span></td><td>${escapeHtml(run.period)}</td><td>${escapeHtml(run.count)}</td><td>${escapeHtml(new Date(run.at).toLocaleString('fr-FR'))}</td><td><span class="status ${runClass}">${runLabel}</span></td></tr>`;
   }).join('');
   if (!runs.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun traitement exécuté pour cette société.</td></tr>';
 }
@@ -2370,8 +2376,9 @@ function renderAutomaticTasks() {
     const preview = automaticPreview(category);
     const run = automaticRunFor(category);
     const systemReady = preview.ready;
-    const status = run ? 'Généré · à contrôler' : systemReady ? 'Prêt à générer' : 'Paramétrage requis';
-    const statusClass = run ? 'status-purple' : systemReady ? 'status-green' : 'status-amber';
+    const [runLabel, runClass] = run ? automaticRunStatus(run) : ['', ''];
+    const status = run ? `Généré · ${runLabel.toLowerCase()}` : systemReady ? 'Prêt à générer' : 'Paramétrage requis';
+    const statusClass = run ? runClass : systemReady ? 'status-green' : 'status-amber';
     const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : 'Voir le détail';
     return `<article class="periodic-task periodic-task-${definition.tone} ${systemReady ? '' : 'is-not-ready'}"><div class="periodic-task-top"><span class="periodic-task-icon">${definition.symbol}</span><span class="status ${statusClass}">${status}</span></div><h2>${definition.label}</h2><p>${definition.description}</p><div class="periodic-task-foot"><span><b>Journal ${definition.journalId}</b><small>${run ? `${run.count} écriture${run.count > 1 ? 's' : ''} · ${new Date(run.at).toLocaleDateString('fr-FR')}` : currentPeriod().label}</small></span><button class="button ${systemReady ? 'button-primary' : 'button-secondary'} button-small" type="button" data-action="preview-automatic" data-automatic-category="${category}">${buttonLabel}</button></div></article>`;
   }).join('');
@@ -2435,7 +2442,12 @@ function generateDepreciation() {
   const existingIndex = appState.integratedEntries.findIndex((item) => item.id === syncedEntry.id && item.companyId === syncedEntry.companyId);
   if (existingIndex >= 0) appState.integratedEntries[existingIndex] = syncedEntry;
   else appState.integratedEntries.unshift(syncedEntry);
+  const runAt = new Date().toISOString();
+  appState.automaticRuns = appState.automaticRuns.filter((run) => !(run.companyId === appState.activeCompany && run.category === 'AMORTISSEMENTS' && run.period === currentPeriod().id));
+  appState.automaticRuns.unshift({ companyId: appState.activeCompany, category: 'AMORTISSEMENTS', period: currentPeriod().id, count: 1, at: runAt, status: 'TO_REVIEW' });
   persistAppState();
+  renderAutomaticRuns();
+  renderAutomaticTasks();
   renderIntegratedJournal();
   $$('.summary-card-action .button').forEach((button) => { button.textContent = 'Préparée'; });
   showToast(`Dotation de juin préparée : ${new Intl.NumberFormat('fr-FR').format(amount)} FCFA à contrôler.`);
@@ -4221,6 +4233,10 @@ function validateAutomaticEntry(entryId) {
   const validatedAt = new Date().toISOString();
   const validated = { ...entry, status: OPERATION_STATES.VALIDATED, validatedAt, statusChangedAt: validatedAt };
   appState.integratedEntries[index] = validated;
+  const runCategory = entry.integrationCategory || ({ AM: 'AMORTISSEMENTS', AB: 'ABONNEMENTS', CT: 'CENTRALISATION', RP: 'RESULTAT' })[entry.journalId];
+  const runPeriod = String(entry.date || currentPeriod().id).slice(0, 7);
+  const run = appState.automaticRuns.find((item) => item.companyId === entry.companyId && item.category === runCategory && item.period === runPeriod);
+  if (run) { run.status = 'VALIDATED'; run.validatedAt = validatedAt; }
   const audit = { id: `audit-${Date.now()}`, action: 'AUTOMATIC_ENTRY_VALIDATED', companyId: appState.activeCompany, entryId, journalId: entry.journalId, at: validated.validatedAt, userId: appState.currentUserId };
   appState.auditEvents.push(audit);
   queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: audit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: audit });
