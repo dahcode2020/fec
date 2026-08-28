@@ -2385,6 +2385,32 @@ function addDemoSubscription() {
   showToast('Abonnement de test ajouté : 12 000 FCFA par mois.');
 }
 
+function addDemoCentralizationSources() {
+  const companyId = appState.activeCompany;
+  const period = currentPeriod();
+  const setup = currentAccountSetup();
+  const existing = appState.integratedEntries.filter((entry) => entry.companyId === companyId && entry.source === 'Jeu de test centralisation' && String(entry.date).startsWith(period.id));
+  if (!existing.length) {
+    const definitions = [
+      { journalId: 'VE', reference: 'VE-TEST-001', label: 'Vente de test — centralisation', lines: [{ accountId: '4111', label: 'Client test', debit: 100000, credit: 0 }, { accountId: '7061', label: 'Services vendus', debit: 0, credit: 100000 }] },
+      { journalId: 'AC', reference: 'AC-TEST-001', label: 'Achat de test — centralisation', lines: [{ accountId: '6047', label: 'Fournitures test', debit: 45000, credit: 0 }, { accountId: '4011', label: 'Fournisseur test', debit: 0, credit: 45000 }] },
+      { journalId: 'BQ', reference: 'BQ-TEST-001', label: 'Encaissement de test — centralisation', lines: [{ accountId: '5211', label: 'Banque', debit: 15000, credit: 0 }, { accountId: '4111', label: 'Client test', debit: 0, credit: 15000 }] }
+    ];
+    definitions.forEach((definition, index) => {
+      const entry = createJournalEntry({ companyId, journalId: definition.journalId, date: period.end, pieceDate: period.end, reference: definition.reference, label: definition.label, lines: definition.lines }, { activeCompanyId: companyId, dossierId: currentDossierCode(companyId), accountIds: setup.accounts.map((account) => account.id) });
+      appState.integratedEntries.unshift({ ...entry, id: `demo-central-${companyId}-${period.id}-${index}`, status: OPERATION_STATES.VALIDATED, source: 'Jeu de test centralisation', amount: 0, debit: definition.lines.reduce((sum, line) => sum + line.debit, 0), credit: definition.lines.reduce((sum, line) => sum + line.credit, 0), integrationCategory: 'GENERAL' });
+    });
+    ensureTreasuryMovements();
+    persistAppState();
+  }
+  renderAutomaticTasks();
+  renderAutomaticRuns();
+  renderIntegratedJournal();
+  renderBankMovements();
+  renderTreasury();
+  showToast('Jeu de test centralisation ajouté : 3 écritures validées.');
+}
+
 function renderAutomaticTasks() {
   const container = $('#periodicTasks');
   if (!container) return;
@@ -2396,8 +2422,9 @@ function renderAutomaticTasks() {
     const status = run ? `Généré · ${runLabel.toLowerCase()}` : systemReady ? 'Prêt à générer' : 'Paramétrage requis';
     const statusClass = run ? runClass : systemReady ? 'status-green' : 'status-amber';
     const isSubscriptionSetup = category === 'ABONNEMENTS' && !systemReady && !run;
-    const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : isSubscriptionSetup ? 'Ajouter un abonnement de test' : 'Voir le détail';
-    const buttonAction = isSubscriptionSetup ? 'add-demo-subscription' : 'preview-automatic';
+    const isCentralizationSetup = category === 'CENTRALISATION' && !systemReady && !run;
+    const buttonLabel = run ? 'Prévisualiser' : systemReady ? 'Prévisualiser' : isSubscriptionSetup ? 'Ajouter un abonnement de test' : isCentralizationSetup ? 'Ajouter un jeu de test' : 'Voir le détail';
+    const buttonAction = isSubscriptionSetup ? 'add-demo-subscription' : isCentralizationSetup ? 'add-demo-centralization' : 'preview-automatic';
     return `<article class="periodic-task periodic-task-${definition.tone} ${systemReady ? '' : 'is-not-ready'}"><div class="periodic-task-top"><span class="periodic-task-icon">${definition.symbol}</span><span class="status ${statusClass}">${status}</span></div><h2>${definition.label}</h2><p>${definition.description}</p><div class="periodic-task-foot"><span><b>Journal ${definition.journalId}</b><small>${run ? `${run.count} écriture${run.count > 1 ? 's' : ''} · ${new Date(run.at).toLocaleDateString('fr-FR')}` : currentPeriod().label}</small></span><button class="button ${systemReady ? 'button-primary' : 'button-secondary'} button-small" type="button" data-action="${buttonAction}" data-automatic-category="${category}">${buttonLabel}</button></div></article>`;
   }).join('');
 }
@@ -5275,6 +5302,7 @@ function bindEvents() {
     if (action === 'validate-automatic-entry') validateAutomaticEntry(actionTarget.dataset.entryId);
     if (action === 'preview-automatic') openAutomaticPreview(actionTarget.dataset.automaticCategory);
     if (action === 'add-demo-subscription') addDemoSubscription();
+    if (action === 'add-demo-centralization') addDemoCentralizationSources();
     if (action === 'run-automatic') runAutomaticProcess(appState.pendingAutomaticCategory);
     if (action === 'show-automatic-help') showToast('Les traitements automatiques calculent une proposition ; la validation reste contrôlée.');
     if (action === 'generate-fiscal-result') generateFiscalResult();
