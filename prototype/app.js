@@ -2349,7 +2349,11 @@ function automaticPreview(category) {
 }
 
 function automaticRunFor(category) {
-  return appState.automaticRuns.find((run) => run.companyId === appState.activeCompany && run.category === category && run.period === currentPeriod().id);
+  const run = appState.automaticRuns.find((item) => item.companyId === appState.activeCompany && item.category === category && item.period === currentPeriod().id);
+  if (!run) return null;
+  const linkedEntries = appState.integratedEntries.filter((entry) => entry.companyId === run.companyId && entry.integrationCategory === run.category && String(entry.date || '').slice(0, 7) === String(run.period));
+  const allLinkedEntriesValidated = linkedEntries.length >= Number(run.count || 0) && linkedEntries.slice(0, Number(run.count || linkedEntries.length)).every((entry) => [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status));
+  return run.status === 'TO_REVIEW' && allLinkedEntriesValidated ? { ...run, status: 'VALIDATED' } : run;
 }
 
 function automaticRunStatus(run) {
@@ -2363,7 +2367,9 @@ function renderAutomaticRuns() {
   const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany);
   rows.innerHTML = runs.map((run) => {
     const definition = AUTOMATIC_DEFINITIONS[run.category];
-    const [runLabel, runClass] = automaticRunStatus(run);
+    const linkedEntries = appState.integratedEntries.filter((entry) => entry.companyId === run.companyId && entry.integrationCategory === run.category && String(entry.date || '').slice(0, 7) === String(run.period));
+    const allLinkedEntriesValidated = linkedEntries.length >= Number(run.count || 0) && linkedEntries.slice(0, Number(run.count || linkedEntries.length)).every((entry) => [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status));
+    const [runLabel, runClass] = automaticRunStatus(run.status === 'TO_REVIEW' && allLinkedEntriesValidated ? { ...run, status: 'VALIDATED' } : run);
     return `<tr><td><span class="cell-title">${escapeHtml(definition?.label || run.category)}</span></td><td><span class="journal-badge ${run.category === 'ABONNEMENTS' ? 'journal-badge-purple' : run.category === 'AMORTISSEMENTS' ? 'journal-badge-amber' : 'journal-badge-blue'}">${escapeHtml(definition?.journalId || '—')}</span></td><td>${escapeHtml(run.period)}</td><td>${escapeHtml(run.count)}</td><td>${escapeHtml(new Date(run.at).toLocaleString('fr-FR'))}</td><td><span class="status ${runClass}">${runLabel}</span></td></tr>`;
   }).join('');
   if (!runs.length) rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucun traitement exécuté pour cette société.</td></tr>';
