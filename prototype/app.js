@@ -2353,8 +2353,11 @@ function renderFiscalPreview() {
   if (conventionInput) conventionInput.value = fiscalSettingDisplay(settings.conventionRate);
   const policySummary = $('#fiscalPolicySummary');
   if (policySummary) {
+    const minimumSummary = fiscal.missingRegulatoryMinimum
+      ? 'minimum réglementaire spécial à renseigner'
+      : `${fiscal.minimumRate} % des produits encaissables${profile?.volumeMinimum ? ' et comparaison avec 0,60 FCFA/litre' : ''}`;
     policySummary.textContent = profile
-      ? `${profile.label} · taux ${fiscal.taxRate || 'à renseigner'} % · minimum ${fiscal.minimumRate || 'réglementaire'} % des produits encaissables${profile.volumeMinimum ? ' et comparaison avec 0,60 FCFA/litre' : ''}. Référentiel ${rules?.year || settings.codeVersion}.`
+      ? `${profile.label} · taux ${fiscal.taxRate || 'à renseigner'} % · ${minimumSummary}. Référentiel ${rules?.year || settings.codeVersion}.`
       : 'Sélectionnez un profil pour appliquer les règles correspondantes.';
   }
   const controls = {
@@ -2377,9 +2380,10 @@ function renderFiscalPreview() {
   beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
   $('#fiscalTaxableResult').innerHTML = `${numberLabel(fiscal.taxableResult)} <em>FCFA</em>`;
   $('#fiscalCalculatedTax').innerHTML = `${numberLabel(fiscal.calculatedTax)} <em>FCFA</em>`;
-  $('#fiscalMinimumTaxResult').innerHTML = `${numberLabel(fiscal.minimumTax)} <em>FCFA</em>`;
-  $('#fiscalTaxAmount').innerHTML = `${numberLabel(fiscal.tax)} <em>FCFA</em>`;
-  $('#fiscalNetResult').innerHTML = `${numberLabel(fiscal.netResult)} <em>FCFA</em>`;
+  const fiscalPendingLabel = '<span class="fiscal-pending">À renseigner</span>';
+  $('#fiscalMinimumTaxResult').innerHTML = fiscal.ready ? `${numberLabel(fiscal.minimumTax)} <em>FCFA</em>` : fiscalPendingLabel;
+  $('#fiscalTaxAmount').innerHTML = fiscal.ready ? `${numberLabel(fiscal.tax)} <em>FCFA</em>` : fiscalPendingLabel;
+  $('#fiscalNetResult').innerHTML = fiscal.ready ? `${numberLabel(fiscal.netResult)} <em>FCFA</em>` : fiscalPendingLabel;
   const badge = $('#fiscalStatusBadge');
   if (badge) { badge.innerHTML = `<i></i> ${fiscal.ready ? 'Impôt estimé · à valider' : 'À paramétrer'}`; badge.className = `fiscal-status-badge ${fiscal.ready ? 'is-ready' : ''}`; }
   const generateButton = $('[data-action="generate-fiscal-result"]');
