@@ -288,6 +288,7 @@
             <label class="field" id="fiscalConventionRateField" hidden><span>Taux prévu par convention</span><div class="fiscal-input"><input id="fiscalConventionRate" type="number" min="0" step="0.01" value="0"><small>%</small></div></label>
             <div class="fiscal-policy-summary" id="fiscalPolicySummary">Sélectionnez un profil pour appliquer les règles correspondantes.</div>
           </div>
+          <div class="fiscal-special-config" id="fiscalStationConfig" hidden><label class="field"><span>Ventes de produits pétroliers</span><div class="fiscal-input"><input id="fiscalStationFuelLiters" type="text" value="0" inputmode="decimal"><small>litres</small></div></label><span>Minimum au volume : <strong>0,60 FCFA par litre</strong></span></div>
           <div class="fiscal-stepper"><span class="is-active"><b>1</b> Avant impôt</span><i></i><span><b>2</b> Ajustements</span><i></i><span><b>3</b> Impôt</span><i></i><span><b>4</b> Net après impôt</span></div>
           <div class="fiscal-layout">
             <div class="fiscal-inputs">
@@ -302,7 +303,6 @@
                 <label class="field"><span>Production stockée exclue</span><div class="fiscal-input"><input id="fiscalExcludedStocked" type="text" value="0" inputmode="decimal"><small>FCFA</small></div></label>
                 <label class="field"><span>Transferts de charges exclus</span><div class="fiscal-input"><input id="fiscalExcludedTransfers" type="text" value="0" inputmode="decimal"><small>FCFA</small></div></label>
                 <label class="field"><span>Reprises exclues</span><div class="fiscal-input"><input id="fiscalExcludedReversals" type="text" value="0" inputmode="decimal"><small>FCFA</small></div></label>
-                <label class="field"><span>Ventes de produits pétroliers</span><div class="fiscal-input"><input id="fiscalStationFuelLiters" type="text" value="0" inputmode="decimal"><small>litres</small></div></label>
                 <label class="field"><span>Minimum réglementaire spécial</span><div class="fiscal-input"><input id="fiscalRegulatoryMinimumTax" type="text" value="0" inputmode="decimal"><small>FCFA</small></div></label>
                 <label class="fiscal-check field"><span>Redevance ORTB</span><span><input id="fiscalBroadcastingFeeEnabled" type="checkbox" checked> Appliquer le montant annuel du référentiel</span></label>
               </div></details>

@@ -2347,6 +2347,8 @@ function renderFiscalPreview() {
   const profile = BENIN_FISCAL_ACTIVITY_PROFILES[settings.activityProfile];
   const conventionField = $('#fiscalConventionRateField');
   if (conventionField) conventionField.hidden = !profile?.requiresConventionRate;
+  const stationConfig = $('#fiscalStationConfig');
+  if (stationConfig) stationConfig.hidden = !profile?.volumeMinimum;
   const conventionInput = $('#fiscalConventionRate');
   if (conventionInput) conventionInput.value = fiscalSettingDisplay(settings.conventionRate);
   const policySummary = $('#fiscalPolicySummary');
