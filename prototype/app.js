@@ -2361,6 +2361,7 @@ function renderFiscalPreview() {
     fiscalCashableProducts: settings.cashableProducts,
     fiscalMinimumTax: settings.minimumTax,
     fiscalTaxRate: fiscal.taxRate,
+    fiscalMinimumRate: fiscal.minimumRate,
     fiscalExcludedImmobilized: settings.excludedProducts?.immobilizedProduction,
     fiscalExcludedStocked: settings.excludedProducts?.stockedProduction,
     fiscalExcludedTransfers: settings.excludedProducts?.transferredCharges,
