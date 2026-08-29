@@ -2341,7 +2341,7 @@ function renderFiscalPreview() {
   }
   const profileSelect = $('#fiscalActivityProfile');
   if (profileSelect) {
-    profileSelect.innerHTML = `<option value="">À sélectionner</option>${Object.entries(BENIN_FISCAL_ACTIVITY_PROFILES).map(([id, profile]) => `<option value="${escapeHtml(id)}">${escapeHtml(profile.label)}</option>`).join('')}`;
+    profileSelect.innerHTML = `<option value="">À sélectionner</option>${Object.entries(BENIN_FISCAL_ACTIVITY_PROFILES).filter(([, profile]) => profile.visible !== false).map(([id, profile]) => `<option value="${escapeHtml(id)}">${escapeHtml(profile.label)}</option>`).join('')}`;
     profileSelect.value = settings.activityProfile || '';
   }
   const profile = BENIN_FISCAL_ACTIVITY_PROFILES[settings.activityProfile];

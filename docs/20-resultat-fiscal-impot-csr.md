@@ -51,7 +51,7 @@ Les produits encaissables peuvent être saisis avant exclusions. Le moteur retir
 - les transferts de charges ;
 - les reprises de provisions et d’amortissements.
 
-Pour une station-service ou un distributeur de produits pétroliers, le moteur compare également le minimum en pourcentage avec **0,60 FCFA par litre**. Pour le commerce de véhicules d’occasion et certains produits de grande consommation, un champ de minimum réglementaire permet de renseigner le montant applicable après validation du texte réglementaire ; aucun montant n’est inventé.
+Pour une station-service ou un distributeur non importateur de produits pétroliers remplissant les conditions prévues par le texte, le moteur compare également le minimum en pourcentage avec **0,60 FCFA par litre**. Ces deux cas sont regroupés sous un même profil dans l’interface, car ils utilisent la même règle de calcul. Pour le commerce de véhicules d’occasion et certains produits de grande consommation, un champ de minimum réglementaire permet de renseigner le montant applicable après validation du texte réglementaire ; aucun montant n’est inventé.
 
 La redevance ORTB de **4 000 FCFA** est affichée séparément et ajoutée au total calculé lorsqu’elle est activée.
 

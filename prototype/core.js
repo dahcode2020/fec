@@ -464,8 +464,9 @@ export const BENIN_FISCAL_ACTIVITY_PROFILES = Object.freeze({
   MINING_PETROLEUM: Object.freeze({ label: 'Convention minière ou pétrolière', corporateRate: null, minimumRate: 1, requiresConventionRate: true }),
   USED_VEHICLES: Object.freeze({ label: 'Commerce de véhicules d’occasion', corporateRate: 30, minimumRate: null, requiresRegulatoryMinimum: true }),
   CONSUMER_GOODS: Object.freeze({ label: 'Produits de grande consommation', corporateRate: 30, minimumRate: null, requiresRegulatoryMinimum: true }),
-  SERVICE_STATION: Object.freeze({ label: 'Station-service', corporateRate: 30, minimumRate: 1, volumeMinimum: true }),
-  PETROLEUM_DISTRIBUTOR: Object.freeze({ label: 'Distributeur de produits pétroliers', corporateRate: 30, minimumRate: 1, volumeMinimum: true })
+  SERVICE_STATION: Object.freeze({ label: 'Station-service ou distributeur non importateur', corporateRate: 30, minimumRate: 1, volumeMinimum: true }),
+  // Alias conservé pour les anciens paramétrages ; il n’est plus proposé dans l’interface.
+  PETROLEUM_DISTRIBUTOR: Object.freeze({ label: 'Distributeur de produits pétroliers', corporateRate: 30, minimumRate: 1, volumeMinimum: true, visible: false })
 });
 
 export const BENIN_CGI_RULES_BY_YEAR = Object.freeze({
