@@ -18,9 +18,28 @@ const round = (value, digits = 2) => {
   return Math.round((Number(value) + Number.EPSILON) * factor) / factor;
 };
 
+const normalizeAmountText = (value) => {
+  let normalized = String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s/g, '').trim();
+  if (!normalized) return '';
+  const commaCount = (normalized.match(/,/g) || []).length;
+  const dotCount = (normalized.match(/\./g) || []).length;
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+  if (commaCount && dotCount) {
+    normalized = lastComma > lastDot ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, '');
+  } else if (commaCount > 1 || (commaCount === 1 && normalized.split(',')[1].length === 3)) {
+    normalized = normalized.replace(/,/g, '');
+  } else if (commaCount === 1) {
+    normalized = normalized.replace(',', '.');
+  } else if (dotCount > 1 || (dotCount === 1 && normalized.split('.')[1].length === 3)) {
+    normalized = normalized.replace(/\./g, '');
+  }
+  return normalized;
+};
+
 const amount = (value) => {
   if (typeof value === 'number') return round(value);
-  const normalized = String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s/g, '').replace(',', '.');
+  const normalized = normalizeAmountText(value);
   if (!normalized || !/^-?\d+(?:\.\d+)?$/.test(normalized)) return NaN;
   return round(Number(normalized));
 };

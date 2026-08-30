@@ -313,6 +313,10 @@ test('calcule les produits encaissables après les exclusions prévues par l’a
   assert.equal(result.cashableProducts, 8000000);
   assert.equal(result.percentageMinimum, 80000);
   assert.equal(result.minimumTax, 250000);
+
+  const commaFormatted = calculateFiscalResult({ accountingResult: 0, products: '30,000,000', activityProfile: 'OTHER', excludedProducts: { immobilizedProduction: '5,000,000' }, broadcastingFeeEnabled: false });
+  assert.equal(commaFormatted.cashableProducts, 25000000);
+  assert.equal(commaFormatted.minimumTax, 250000);
 });
 
 test('gère les conventions et le minimum au volume des stations-services', () => {

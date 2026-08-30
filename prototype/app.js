@@ -2379,6 +2379,7 @@ function renderFiscalPreview() {
   if (feeCheckbox) feeCheckbox.checked = settings.broadcastingFeeEnabled !== false;
   beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
   $('#fiscalTaxableResult').innerHTML = `${numberLabel(fiscal.taxableResult)} <em>FCFA</em>`;
+  $('#fiscalCashableProductsResult').innerHTML = `${numberLabel(fiscal.cashableProducts)} <em>FCFA</em>`;
   $('#fiscalCalculatedTax').innerHTML = `${numberLabel(fiscal.calculatedTax)} <em>FCFA</em>`;
   const fiscalPendingLabel = '<span class="fiscal-pending">À renseigner</span>';
   $('#fiscalMinimumTaxResult').innerHTML = fiscal.ready ? `${numberLabel(fiscal.minimumTax)} <em>FCFA</em>` : fiscalPendingLabel;
@@ -4514,8 +4515,21 @@ const ENTRY_TAB_CONFIG = {
 };
 
 function parseUiAmount(value) {
-  const normalized = String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s/g, '').replace(',', '.');
+  let normalized = String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s/g, '').trim();
   if (!normalized) return 0;
+  const commaCount = (normalized.match(/,/g) || []).length;
+  const dotCount = (normalized.match(/\./g) || []).length;
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+  if (commaCount && dotCount) {
+    normalized = lastComma > lastDot ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, '');
+  } else if (commaCount > 1 || (commaCount === 1 && normalized.split(',')[1].length === 3)) {
+    normalized = normalized.replace(/,/g, '');
+  } else if (commaCount === 1) {
+    normalized = normalized.replace(',', '.');
+  } else if (dotCount > 1 || (dotCount === 1 && normalized.split('.')[1].length === 3)) {
+    normalized = normalized.replace(/\./g, '');
+  }
   const number = Number(normalized);
   return Number.isFinite(number) ? Math.round(number * 100) / 100 : NaN;
 }
