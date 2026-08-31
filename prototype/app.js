@@ -803,8 +803,11 @@ function renderDossiers(query = $('#dossierSearch')?.value || '') {
   const rows = $('#dossierRows');
   if (!rows) return;
   Object.keys(appState.companies || {}).forEach((companyId) => {
-    const yearId = appState.fiscalYears?.[companyId]?.id;
-    if (yearId) ensureFiscalYearDossier(companyId, yearId);
+    const yearIds = new Set([
+      appState.fiscalYears?.[companyId]?.id,
+      ...(appState.fiscalYearCatalog?.[companyId] || []).map((year) => year.id)
+    ].filter(Boolean).map(String));
+    yearIds.forEach((yearId) => ensureFiscalYearDossier(companyId, yearId));
   });
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDossiers = appState.dossiers.filter((dossier) => {
@@ -1364,7 +1367,10 @@ function mergeRemoteContext(context, userId) {
     ...remoteDossiers
   ];
   (context.fiscalYears || []).forEach((fiscalYear) => {
-    appState.fiscalYears[fiscalYear.companyId] = { ...fiscalYear, id: String(fiscalYear.id) };
+    const localYear = appState.fiscalYears[fiscalYear.companyId];
+    const incomingYearId = String(fiscalYear.id);
+    const keepLocalOpenedYear = localYear && (localYear.source === 'LOCAL_EXERCISE' || localYear.openedFrom || localYear.openingEntryId) && Number(localYear.id) > Number(incomingYearId);
+    appState.fiscalYears[fiscalYear.companyId] = keepLocalOpenedYear ? localYear : { ...fiscalYear, id: incomingYearId };
     if (!appState.fiscalYearCatalog[fiscalYear.companyId]) appState.fiscalYearCatalog[fiscalYear.companyId] = [];
     if (!appState.fiscalYearCatalog[fiscalYear.companyId].some((item) => String(item.id) === String(fiscalYear.id))) appState.fiscalYearCatalog[fiscalYear.companyId].push({ ...fiscalYear, id: String(fiscalYear.id) });
     if (!appState.fiscalYearPeriods[fiscalYear.companyId]) appState.fiscalYearPeriods[fiscalYear.companyId] = {};
@@ -3901,6 +3907,7 @@ function ensureActiveYearContext() {
   const companyId = appState.activeCompany;
   const year = currentFiscalYear();
   const yearId = String(year.id);
+  if (year.openedFrom || year.openingEntryId) year.source = 'LOCAL_EXERCISE';
   ensureFiscalYearDossier(companyId, yearId);
   if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
   const storedPeriods = appState.fiscalYearPeriods[companyId][yearId];
@@ -4141,7 +4148,7 @@ function openNextFiscalYear() {
     appState.dossiers = appState.dossiers.map((dossier) => dossier.id === targetDossier.id ? targetDossier : dossier);
   }
   appState.selectedDossier = targetDossier.id;
-  appState.fiscalYears[appState.activeCompany] = { ...target, dossierCode: targetDossierCode, status: 'OPEN', openedAt: new Date().toISOString() };
+  appState.fiscalYears[appState.activeCompany] = { ...target, dossierCode: targetDossierCode, status: 'OPEN', source: 'LOCAL_EXERCISE', openedAt: new Date().toISOString() };
   appState.fiscalYearCatalog[appState.activeCompany] = [...(appState.fiscalYearCatalog[appState.activeCompany] || []).filter((item) => String(item.id) !== String(target.id)), { ...appState.fiscalYears[appState.activeCompany] }];
   appState.fiscalYearPeriods[appState.activeCompany][String(target.id)] = periods;
   appState.activePeriodIdsByYear[appState.activeCompany][String(target.id)] = `${target.id}-01`;
