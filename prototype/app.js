@@ -789,7 +789,8 @@ function setActiveCompany(companyId, notify = true) {
 function renderCompanyMenu() {
   const menu = $('#companyMenu');
   if (!menu) return;
-  menu.innerHTML = `<div class="company-menu-header">VOS SOCIÉTÉS</div>${Object.values(appState.companies).map((company) => `
+  const accessibleCompanies = Object.values(appState.companies).filter((company) => (appState.memberships || []).some((membership) => membership.userId === appState.currentUserId && membership.companyId === company.id && membership.active !== false));
+  menu.innerHTML = `<div class="company-menu-header">VOS SOCIÉTÉS</div>${accessibleCompanies.map((company) => `
     <button class="company-option ${company.id === appState.activeCompany ? 'is-active' : ''}" type="button" role="option" aria-selected="${company.id === appState.activeCompany}" data-company-option="${company.id}">
       <span class="avatar avatar-small ${companyAvatarClass(company)}">${escapeHtml(company.shortName)}</span>
       <span class="company-option-copy"><strong>${escapeHtml(company.name)}</strong><small>${escapeHtml(company.type)} · XOF</small></span>
@@ -1339,8 +1340,12 @@ function mergeRemoteContext(context, userId) {
     const selectedPeriod = appState.activePeriodIds[company.id];
     appState.activePeriodIds[company.id] = selectedPeriod && String(selectedPeriod).startsWith(`${remoteYear}-`) ? selectedPeriod : appState.periods[company.id][0]?.id;
   });
-  appState.memberships = [...(appState.memberships || []).filter((membership) => membership.userId !== userId), ...(context.memberships || [])];
   const remoteCompanyIds = new Set(remoteCompanies.map((company) => company.id));
+  const remoteMembershipKeys = new Set((context.memberships || []).map((membership) => `${membership.companyId}:${membership.moduleId || ''}`));
+  const pendingLocalMemberships = (appState.memberships || []).filter((membership) => membership.userId === userId
+    && !remoteMembershipKeys.has(`${membership.companyId}:${membership.moduleId || ''}`)
+    && !remoteCompanyIds.has(membership.companyId));
+  appState.memberships = [...(appState.memberships || []).filter((membership) => membership.userId !== userId), ...pendingLocalMemberships, ...(context.memberships || [])];
   const remoteDossiers = (context.dossiers || []).map((dossier) => ({
     ...dossier,
     period: dossier.period || `${displayDate(dossier.exerciseStart)} - ${displayDate(dossier.exerciseEnd)}`,
