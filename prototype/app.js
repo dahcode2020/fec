@@ -805,7 +805,9 @@ function renderDossiers(query = $('#dossierSearch')?.value || '') {
   Object.keys(appState.companies || {}).forEach((companyId) => {
     const yearIds = new Set([
       appState.fiscalYears?.[companyId]?.id,
-      ...(appState.fiscalYearCatalog?.[companyId] || []).map((year) => year.id)
+      ...(appState.fiscalYearCatalog?.[companyId] || []).map((year) => year.id),
+      ...Object.keys(appState.fiscalYearPeriods?.[companyId] || {}),
+      ...(appState.openingRuns || []).filter((run) => run.companyId === companyId).flatMap((run) => [run.sourceYear, run.targetYear])
     ].filter(Boolean).map(String));
     yearIds.forEach((yearId) => ensureFiscalYearDossier(companyId, yearId));
   });
@@ -1369,7 +1371,8 @@ function mergeRemoteContext(context, userId) {
   (context.fiscalYears || []).forEach((fiscalYear) => {
     const localYear = appState.fiscalYears[fiscalYear.companyId];
     const incomingYearId = String(fiscalYear.id);
-    const keepLocalOpenedYear = localYear && (localYear.source === 'LOCAL_EXERCISE' || localYear.openedFrom || localYear.openingEntryId) && Number(localYear.id) > Number(incomingYearId);
+    const localOpeningRun = localYear && (appState.openingRuns || []).some((run) => run.companyId === fiscalYear.companyId && String(run.targetYear) === String(localYear.id) && String(run.status) === 'VALIDATED');
+    const keepLocalOpenedYear = localYear && (localYear.source === 'LOCAL_EXERCISE' || localYear.openedFrom || localYear.openingEntryId || localOpeningRun) && Number(localYear.id) > Number(incomingYearId);
     appState.fiscalYears[fiscalYear.companyId] = keepLocalOpenedYear ? localYear : { ...fiscalYear, id: incomingYearId };
     if (!appState.fiscalYearCatalog[fiscalYear.companyId]) appState.fiscalYearCatalog[fiscalYear.companyId] = [];
     if (!appState.fiscalYearCatalog[fiscalYear.companyId].some((item) => String(item.id) === String(fiscalYear.id))) appState.fiscalYearCatalog[fiscalYear.companyId].push({ ...fiscalYear, id: String(fiscalYear.id) });
@@ -4052,10 +4055,27 @@ function openingPlanFromSnapshot(snapshot) {
   return { companyId: snapshot.companyId, sourceYear: snapshot.fiscalYear, sourceEntryIds: snapshot.sourceEntryIds || [], sourceSnapshotId: snapshot.id, lines, totalDebit: lines.reduce((sum, line) => sum + Number(line.debit || 0), 0), totalCredit: lines.reduce((sum, line) => sum + Number(line.credit || 0), 0) };
 }
 
+function openingRunForExercise(sourceYear) {
+  const companyId = appState.activeCompany;
+  const targetYear = String(Number(sourceYear) + 1);
+  const existing = (appState.openingRuns || []).find((item) => item.companyId === companyId && String(item.sourceYear) === String(sourceYear));
+  if (existing) return existing;
+  const entry = appState.integratedEntries.find((item) => item.companyId === companyId
+    && item.journalId === 'AN'
+    && String(item.date || '').startsWith(`${targetYear}-`)
+    && String(item.reference || '').startsWith('AN-')
+    && item.status !== OPERATION_STATES.CANCELLED);
+  if (!entry) return null;
+  const recovered = { companyId, sourceYear: String(sourceYear), targetYear, count: entry.lines?.length || 0, entryId: entry.id, at: entry.createdAt || new Date().toISOString(), status: [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status) ? 'VALIDATED' : 'TO_REVIEW', recovered: true };
+  appState.openingRuns = [recovered, ...(appState.openingRuns || [])];
+  persistAppState();
+  return recovered;
+}
+
 function openingBalancePreview() {
   const year = currentFiscalYear();
   const targetYear = String(Number(year.id) + 1);
-  const previousOpening = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.targetYear) === String(year.id));
+  const previousOpening = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.targetYear) === String(year.id)) || openingRunForExercise(year.id);
   const currentYearWasOpened = Boolean(year.openedFrom || year.openingEntryId || previousOpening?.status === 'VALIDATED');
   if (currentYearWasOpened && !currentFinancialSnapshot()) return { companyId: appState.activeCompany, sourceYear: year.id, targetYear, sourceEntryIds: [], lines: [], totalDebit: 0, totalCredit: 0, opened: true, run: previousOpening || null };
   const snapshot = currentFinancialSnapshot();
