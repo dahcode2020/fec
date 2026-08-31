@@ -4719,6 +4719,13 @@ function renderLivePosting() {
   const reasonNode = $('#entrySuggestionReason');
   const titleNode = $('#entrySuggestionTitle');
   if (!rows || !status || !statusMessage || !totalNode) return;
+  const insertionLocked = currentFiscalYear().status === 'FINALIZED' || currentPeriod().status === 'CLOSED';
+  const insertButton = $('#insertEntryButton');
+  if (insertButton) {
+    insertButton.disabled = insertionLocked;
+    insertButton.title = insertionLocked ? 'L’exercice est arrêté ou la période est clôturée.' : '';
+    insertButton.textContent = insertionLocked ? 'Exercice arrêté' : 'Prévisualiser et insérer';
+  }
   const operation = entryOperation();
   let suggestion;
   try { suggestion = suggestPosting(operation); } catch {
@@ -4836,6 +4843,11 @@ function clearEntry(notify = true) {
 }
 
 function ensureActivePeriodOpen() {
+  const year = currentFiscalYear();
+  if (year.status === 'FINALIZED') {
+    showToast(`L’exercice ${year.id} est arrêté. Aucune nouvelle écriture ne peut être insérée.`);
+    return false;
+  }
   const period = currentPeriod();
   if (period.status === 'CLOSED') {
     showToast(`${period.label} est clôturée. Une réouverture autorisée est nécessaire.`);
