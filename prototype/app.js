@@ -262,7 +262,11 @@ function hydrateAppState() {
   if (!Array.isArray(appState.users) || !appState.users.length) appState.users = [createUser({ id: 'claire-dossou', name: 'Claire Dossou', email: 'claire@acacia.bj' })];
   if (!Array.isArray(appState.memberships)) appState.memberships = [];
   if (!appState.currentUserId || !appState.users.some((user) => user.id === appState.currentUserId)) appState.currentUserId = appState.users[0].id;
-  if (!appState.memberships.length) appState.memberships.push(createMembership({ userId: 'claire-dossou', companyId: appState.activeCompany, moduleId: 'CSR', role: 'ADMIN' }));
+  if (!appState.memberships.length) appState.memberships.push(createMembership({ userId: appState.currentUserId, companyId: appState.activeCompany, moduleId: 'CSR', role: 'ADMIN' }));
+  Object.keys(appState.companies).forEach((companyId) => {
+    const hasAnyMember = appState.memberships.some((membership) => membership.companyId === companyId && membership.active !== false);
+    if (!hasAnyMember) appState.memberships.push(createMembership({ userId: appState.currentUserId, companyId, moduleId: 'CSR', role: 'ADMIN' }));
+  });
 }
 
 async function loadFullSyscohadaPlan() {
@@ -1520,6 +1524,8 @@ function addCompany(event) {
   const dossierId = `${id}-${year}`;
   const company = { id, name, shortName: code, code, legalForm: legalForm || 'Autres', type: legalForm || 'Autres', address, activity, exerciseStart, exerciseEnd, meta: `${legalForm || 'Autres'} · XOF`, ifu: String(formData.get('companyIfu') || '').trim(), color: 'teal', treasury: '0', sales: '0', receivables: '0', expenses: '0' };
   appState.companies[id] = company;
+  const ownerMembership = createMembership({ id: `${appState.currentUserId}_${id}_CSR`, userId: appState.currentUserId, companyId: id, moduleId: 'CSR', role: 'ADMIN' });
+  appState.memberships.push(ownerMembership);
   const addCard = $('.company-card-add');
   addCard?.insertAdjacentHTML('beforebegin', makeCompanyCard(company));
   appState.dossiers.push({ id: dossierId, companyId: id, dossier: generatedDossierCode, period: `${displayDate(exerciseStart)} - ${displayDate(exerciseEnd)}`, exerciseYear: year, sessions: 0, status: 'Disponible', statusClass: 'status-blue' });
@@ -1534,6 +1540,7 @@ function addCompany(event) {
   appState.fiscalYears[id] = { id: year, label: `Exercice ${year}`, status: 'OPEN' };
   appState.fiscalSettings[id] = { years: { [String(year)]: createBeninFiscalSettings({ fiscalYear: year, codeVersion: '2026' }) } };
   queueSyncChange({ entityType: 'COMPANY', entityId: id, companyId: id, payload: company });
+  queueSyncChange({ entityType: 'MEMBERSHIP', entityId: ownerMembership.id, companyId: id, moduleId: 'CSR', payload: ownerMembership });
   queueSyncChange({ entityType: 'DOSSIER', entityId: dossierId, companyId: id, moduleId: 'CSR', payload: appState.dossiers.find((item) => item.id === dossierId) });
   queueSyncChange({ entityType: 'FISCAL_YEAR', entityId: `${id}-${year}`, companyId: id, moduleId: 'CSR', payload: { id: `${id}-${year}`, companyId: id, year, label: `Exercice ${year}`, status: 'OPEN' } });
   persistAppState();
