@@ -3876,11 +3876,30 @@ function switchFiscalYear(yearId) {
   showToast(`${target.label || `Exercice ${target.id}`} est maintenant l’exercice actif.`);
 }
 
+function ensureActiveYearContext() {
+  const companyId = appState.activeCompany;
+  const year = currentFiscalYear();
+  const yearId = String(year.id);
+  if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
+  const storedPeriods = appState.fiscalYearPeriods[companyId][yearId];
+  const validPeriods = Array.isArray(storedPeriods) && storedPeriods.length === 12 && storedPeriods.every((period) => String(period.id || '').startsWith(`${yearId}-`));
+  const periods = validPeriods ? storedPeriods : createMonthlyPeriods(Number(yearId), { status: year.status === 'FINALIZED' ? 'CLOSED' : 'OPEN' });
+  appState.fiscalYearPeriods[companyId][yearId] = periods;
+  appState.periods[companyId] = periods;
+  if (!appState.activePeriodIdsByYear[companyId] || typeof appState.activePeriodIdsByYear[companyId] !== 'object') appState.activePeriodIdsByYear[companyId] = {};
+  const requestedPeriod = appState.activePeriodIdsByYear[companyId][yearId] || appState.activePeriodIds[companyId];
+  const activePeriod = periods.some((period) => period.id === requestedPeriod) ? requestedPeriod : periods[0]?.id || `${yearId}-01`;
+  appState.activePeriodIdsByYear[companyId][yearId] = activePeriod;
+  appState.activePeriodIds[companyId] = activePeriod;
+  ensureFiscalSettingsForCompany(companyId, yearId);
+  return periods;
+}
+
 function renderPeriods() {
   const grid = $('#periodGrid');
   if (!grid) return;
   const currentYear = currentFiscalYear();
-  const periods = appState.periods[appState.activeCompany] || [];
+  const periods = ensureActiveYearContext();
   const activeId = appState.activePeriodIds?.[appState.activeCompany];
   const open = periods.filter((period) => period.status !== 'CLOSED').length;
   const closed = periods.filter((period) => period.status === 'CLOSED').length;
@@ -4101,6 +4120,7 @@ function openNextFiscalYear() {
   appState.activePeriodIdsByYear[appState.activeCompany][String(target.id)] = `${target.id}-01`;
   appState.periods[appState.activeCompany] = periods;
   appState.activePeriodIds[appState.activeCompany] = `${target.id}-01`;
+  ensureActiveYearContext();
   appState.correctionWindows[appState.activeCompany] = createCorrectionWindow({ id: `correction-${appState.activeCompany}-${target.id}`, dossierId: currentDossierCode(appState.activeCompany), companyId: appState.activeCompany, userId: 'claire-dossou', periodId: `${target.id}-01` });
   delete appState.pendingFiscalYears[appState.activeCompany];
   delete appState.pendingPeriods[appState.activeCompany];
@@ -4112,6 +4132,10 @@ function openNextFiscalYear() {
   renderStatements();
   renderEntryQueue();
   renderIntegratedJournal();
+  renderAutomaticTasks();
+  renderAutomaticRuns();
+  renderFiscalPreview({ preserveActiveInput: false });
+  renderClosure();
   showToast(`Exercice ${target.id} ouvert avec les reports à nouveau validés.`);
 }
 
@@ -4235,10 +4259,9 @@ function finalizeCurrentYear() {
 }
 
 function currentPeriod() {
-  const periods = appState.periods[appState.activeCompany] || [];
-  if (!periods.length) { appState.periods[appState.activeCompany] = [{ id: '2025-06', label: 'Juin 2025', start: '2025-06-01', end: '2025-06-30', status: 'OPEN' }]; }
+  const periods = ensureActiveYearContext();
   const activeId = appState.activePeriodIds?.[appState.activeCompany];
-  return appState.periods[appState.activeCompany].find((period) => period.id === activeId) || appState.periods[appState.activeCompany][0];
+  return periods.find((period) => period.id === activeId) || periods[0];
 }
 
 function currentClosureChecks() {
