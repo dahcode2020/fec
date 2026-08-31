@@ -1161,6 +1161,34 @@ function recoverFromBootstrapError() {
   bindAuthForm();
 }
 
+function activateDossierExercise(dossier) {
+  const companyId = dossier.companyId;
+  const yearId = String(dossier.exerciseYear || String(dossier.period || '').match(/\d{4}/)?.[0] || currentFiscalYear().id);
+  if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
+  if (!appState.activePeriodIdsByYear[companyId] || typeof appState.activePeriodIdsByYear[companyId] !== 'object') appState.activePeriodIdsByYear[companyId] = {};
+  const catalog = appState.fiscalYearCatalog[companyId] || (appState.fiscalYearCatalog[companyId] = []);
+  let targetYear = catalog.find((year) => String(year.id) === yearId);
+  if (!targetYear) {
+    targetYear = { id: yearId, label: `Exercice ${yearId}`, status: 'OPEN', source: dossier.source || 'LOCAL_EXERCISE' };
+    catalog.push(targetYear);
+  }
+  const currentYear = appState.fiscalYears[companyId];
+  if (currentYear && String(currentYear.id) !== yearId) {
+    appState.fiscalYearPeriods[companyId][String(currentYear.id)] = appState.periods[companyId] || createMonthlyPeriods(Number(currentYear.id));
+    appState.activePeriodIdsByYear[companyId][String(currentYear.id)] = appState.activePeriodIds[companyId] || `${currentYear.id}-01`;
+  }
+  appState.fiscalYears[companyId] = { ...targetYear, id: yearId };
+  const targetPeriods = appState.fiscalYearPeriods[companyId][yearId] || createMonthlyPeriods(Number(yearId), { status: targetYear.status === 'FINALIZED' ? 'CLOSED' : 'OPEN' });
+  appState.fiscalYearPeriods[companyId][yearId] = targetPeriods;
+  appState.periods[companyId] = targetPeriods;
+  const savedPeriod = appState.activePeriodIdsByYear[companyId][yearId];
+  appState.activePeriodIds[companyId] = targetPeriods.some((period) => period.id === savedPeriod) ? savedPeriod : targetPeriods[0]?.id || `${yearId}-01`;
+  appState.activePeriodIdsByYear[companyId][yearId] = appState.activePeriodIds[companyId];
+  ensureFiscalYearDossier(companyId, yearId);
+  ensureFiscalSettingsForCompany(companyId, yearId);
+  persistAppState();
+}
+
 function openSelectedDossier() {
   const selected = appState.dossiers.find((item) => item.id === appState.selectedDossier && item.status !== 'Archivé');
   const dossier = selected || appState.dossiers.find((item) => item.status !== 'Archivé' && appState.companies[item.companyId]);
@@ -1177,6 +1205,7 @@ function openSelectedDossier() {
     showToast('Vous n’avez pas accès au module de ce dossier.');
     return;
   }
+  activateDossierExercise(dossier);
   persistAppState();
   // Change d’écran avant les rafraîchissements secondaires : une vue ou une
   // donnée locale ancienne ne doit jamais rendre le bouton Ouvrir inerte.
