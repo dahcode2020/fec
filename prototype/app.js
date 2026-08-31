@@ -802,6 +802,10 @@ function renderCompanyMenu() {
 function renderDossiers(query = $('#dossierSearch')?.value || '') {
   const rows = $('#dossierRows');
   if (!rows) return;
+  Object.keys(appState.companies || {}).forEach((companyId) => {
+    const yearId = appState.fiscalYears?.[companyId]?.id;
+    if (yearId) ensureFiscalYearDossier(companyId, yearId);
+  });
   const normalizedQuery = query.trim().toLowerCase();
   const visibleDossiers = appState.dossiers.filter((dossier) => {
     const company = appState.companies[dossier.companyId];
