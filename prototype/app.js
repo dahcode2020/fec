@@ -4038,7 +4038,7 @@ function renderOpening() {
   if (badge) { badge.innerHTML = `<i></i> ${opened ? 'Exercice ouvert' : generated ? 'Reports à contrôler' : finalized ? 'Prêt à générer' : 'En attente de l’arrêté'}`; badge.className = `opening-status-badge ${finalized || opened ? 'is-ready' : ''}`; }
   if (lock) lock.textContent = opened ? `Exercice ${year.id} ouvert` : generated ? 'Reports à contrôler' : finalized ? `Exercice ${year.id} arrêté` : `Exercice ${year.id} ouvert`;
   if (button) { button.disabled = !finalized || generated || !preview.lines.length || !can(USER_PERMISSIONS.OPENING_GENERATE); button.textContent = generated ? 'Reports générés' : finalized ? 'Générer les reports' : 'Attente de l’arrêté'; }
-  if (validateButton) { validateButton.disabled = !generated || opened || preview.run?.status === 'VALIDATED' || !can(USER_PERMISSIONS.OPENING_VALIDATE); validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
+  if (validateButton) { validateButton.disabled = !generated || opened || !can(USER_PERMISSIONS.OPENING_VALIDATE); validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
 }
 
 function generateOpeningBalances() {
