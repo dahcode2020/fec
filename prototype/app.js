@@ -1429,7 +1429,7 @@ async function requestPasswordReset(event) {
 }
 
 function refreshViewData(viewName) {
-  if (viewName === 'periodic') { renderAutomaticTasks(); renderAutomaticRuns(); renderClosure(); }
+  if (viewName === 'periodic') { renderAutomaticTasks(); renderAutomaticRuns(); renderFiscalPreview({ preserveActiveInput: false }); renderClosure(); }
   if (viewName === 'finalization') renderFinalization();
   if (viewName === 'opening') renderOpening();
   if (viewName === 'periods') renderPeriods();
