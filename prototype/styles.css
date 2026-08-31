@@ -32,7 +32,7 @@ button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(77, 121, 232, .25); outline-offset: 2px; }
 
 .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
-.app-shell { display: flex; min-height: 100vh; }
+.app-shell { display: flex; gap: 16px; min-height: 100vh; background: var(--canvas); }
 .sidebar { width: 258px; flex: 0 0 258px; background: var(--navy); color: #d5dbea; padding: 25px 14px 16px; display: flex; flex-direction: column; position: relative; z-index: 5; }
 .brand { display: flex; gap: 11px; align-items: center; padding: 0 12px 29px; color: #fff; }
 .brand strong { display: block; font-size: 25px; line-height: 21px; letter-spacing: -.05em; }
@@ -281,6 +281,7 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
   .report-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 920px) {
+  .app-shell { gap: 0; }
   .sidebar { position: fixed; top: 0; bottom: 0; left: 0; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 12px 0 30px rgba(16,24,40,.2); }
   .sidebar.is-open { transform: translateX(0); }
   .mobile-menu { display: inline-flex; margin-right: 8px; }
