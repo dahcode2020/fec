@@ -3882,10 +3882,22 @@ function switchFiscalYear(yearId) {
   showToast(`${target.label || `Exercice ${target.id}`} est maintenant l’exercice actif.`);
 }
 
+function ensureFiscalYearDossier(companyId, yearId) {
+  const company = appState.companies?.[companyId];
+  if (!company || !yearId) return;
+  const hasDossier = (appState.dossiers || []).some((dossier) => dossier.companyId === companyId && dossier.moduleId === 'CSR' && String(dossier.exerciseYear) === String(yearId) && dossier.status !== 'Archivé');
+  if (hasDossier) return;
+  const dossierCode = makeDossierCode(company.code || company.shortName, `${yearId}-01-01`);
+  appState.dossiers.push({ id: `${companyId}-${yearId}-csr`, companyId, dossier: dossierCode, moduleId: 'CSR', period: `01/01/${yearId} - 31/12/${yearId}`, exerciseYear: String(yearId), sessions: 0, status: 'Actif', statusClass: 'status-green', source: 'LOCAL_EXERCISE' });
+  // Le dossier doit rester disponible après un rechargement ou une fusion distante.
+  persistAppState();
+}
+
 function ensureActiveYearContext() {
   const companyId = appState.activeCompany;
   const year = currentFiscalYear();
   const yearId = String(year.id);
+  ensureFiscalYearDossier(companyId, yearId);
   if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
   const storedPeriods = appState.fiscalYearPeriods[companyId][yearId];
   const validPeriods = Array.isArray(storedPeriods) && storedPeriods.length === 12 && storedPeriods.every((period) => String(period.id || '').startsWith(`${yearId}-`));
