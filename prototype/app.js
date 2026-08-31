@@ -1352,7 +1352,13 @@ function mergeRemoteContext(context, userId) {
     sessions: Number(dossier.sessions || 0),
     statusClass: dossier.status === 'Archivé' ? 'status-muted' : 'status-green'
   }));
-  appState.dossiers = [...(appState.dossiers || []).filter((dossier) => !remoteCompanyIds.has(dossier.companyId)), ...remoteDossiers];
+  const remoteDossierIds = new Set(remoteDossiers.map((dossier) => dossier.id));
+  const localExerciseDossiers = (appState.dossiers || []).filter((dossier) => dossier.source === 'LOCAL_EXERCISE' && !remoteDossierIds.has(dossier.id));
+  appState.dossiers = [
+    ...(appState.dossiers || []).filter((dossier) => !remoteCompanyIds.has(dossier.companyId) && !remoteDossierIds.has(dossier.id) && dossier.source !== 'LOCAL_EXERCISE'),
+    ...localExerciseDossiers,
+    ...remoteDossiers
+  ];
   (context.fiscalYears || []).forEach((fiscalYear) => {
     appState.fiscalYears[fiscalYear.companyId] = { ...fiscalYear, id: String(fiscalYear.id) };
     if (!appState.fiscalYearCatalog[fiscalYear.companyId]) appState.fiscalYearCatalog[fiscalYear.companyId] = [];
@@ -4110,8 +4116,11 @@ function openNextFiscalYear() {
   const targetDossierCode = makeDossierCode(company.code || company.shortName, `${target.id}-01-01`);
   let targetDossier = (appState.dossiers || []).find((item) => item.companyId === appState.activeCompany && item.moduleId === 'CSR' && item.exerciseYear === String(target.id) && item.status !== 'Archivé');
   if (!targetDossier) {
-    targetDossier = { id: `${appState.activeCompany}-${target.id}-csr`, companyId: appState.activeCompany, dossier: targetDossierCode, moduleId: 'CSR', period: `01/01/${target.id} - 31/12/${target.id}`, exerciseYear: String(target.id), sessions: 0, status: 'Actif', statusClass: 'status-green' };
+    targetDossier = { id: `${appState.activeCompany}-${target.id}-csr`, companyId: appState.activeCompany, dossier: targetDossierCode, moduleId: 'CSR', period: `01/01/${target.id} - 31/12/${target.id}`, exerciseYear: String(target.id), sessions: 0, status: 'Actif', statusClass: 'status-green', source: 'LOCAL_EXERCISE' };
     appState.dossiers.push(targetDossier);
+  } else if (targetDossier.source !== 'LOCAL_EXERCISE') {
+    targetDossier = { ...targetDossier, source: 'LOCAL_EXERCISE' };
+    appState.dossiers = appState.dossiers.map((dossier) => dossier.id === targetDossier.id ? targetDossier : dossier);
   }
   appState.selectedDossier = targetDossier.id;
   appState.fiscalYears[appState.activeCompany] = { ...target, dossierCode: targetDossierCode, status: 'OPEN', openedAt: new Date().toISOString() };
