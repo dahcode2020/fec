@@ -4460,7 +4460,7 @@ function validateAutomaticEntry(entryId) {
   const index = appState.integratedEntries.findIndex((entry) => entry.id === entryId && entry.companyId === appState.activeCompany);
   if (index < 0) { showToast('Écriture automatique introuvable.'); return; }
   const entry = appState.integratedEntries[index];
-  if (!['AM', 'AB', 'CT', 'RP'].includes(entry.journalId)) { showToast('Cette écriture ne relève pas d’un journal automatique.'); return; }
+  if (!['AM', 'AB', 'CT', 'RP', 'AN'].includes(entry.journalId)) { showToast('Cette écriture ne relève pas d’un journal automatique.'); return; }
   // The action is idempotent: a double click or an old browser listener must
   // not turn a successful validation into a misleading error message.
   if ([OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) {
@@ -4474,10 +4474,14 @@ function validateAutomaticEntry(entryId) {
   appState.integratedEntries[index] = validated;
   const runCategory = entry.source === 'Calcul fiscal automatique' || String(entry.id || '').startsWith('auto-tax-')
     ? 'FISCAL_TAX'
-    : entry.integrationCategory || ({ AM: 'AMORTISSEMENTS', AB: 'ABONNEMENTS', CT: 'CENTRALISATION', RP: 'RESULTAT' })[entry.journalId];
+    : entry.integrationCategory || ({ AM: 'AMORTISSEMENTS', AB: 'ABONNEMENTS', CT: 'CENTRALISATION', RP: 'RESULTAT', AN: 'REPORTS_A_NOUVEAU' })[entry.journalId];
   const runPeriod = String(entry.date || currentPeriod().id).slice(0, 7);
   const run = appState.automaticRuns.find((item) => item.companyId === entry.companyId && item.category === runCategory && item.period === runPeriod);
   if (run) { run.status = 'VALIDATED'; run.validatedAt = validatedAt; }
+  const openingRun = entry.journalId === 'AN'
+    ? (appState.openingRuns || []).find((item) => item.companyId === entry.companyId && item.entryId === entry.id)
+    : null;
+  if (openingRun) { openingRun.status = 'VALIDATED'; openingRun.validatedAt = validatedAt; }
   const audit = { id: `audit-${Date.now()}`, action: 'AUTOMATIC_ENTRY_VALIDATED', companyId: appState.activeCompany, entryId, journalId: entry.journalId, at: validated.validatedAt, userId: appState.currentUserId };
   appState.auditEvents.push(audit);
   queueSyncChange({ entityType: 'AUDIT_EVENT', entityId: audit.id, companyId: appState.activeCompany, moduleId: 'CSR', payload: audit });
@@ -4512,7 +4516,7 @@ function renderIntegratedJournal() {
     const category = INTEGRATED_JOURNAL_CATEGORIES[categoryId];
     const [label, statusClass] = statusLabel(entry.status);
     const journalClass = ({ AC: 'journal-badge-blue', BQ: 'journal-badge-teal', OD: 'journal-badge-amber', AM: 'journal-badge-amber', AB: 'journal-badge-purple', CT: 'journal-badge-blue', RP: 'journal-badge-teal' })[entry.journalId] || '';
-    const automatic = ['AM', 'AB', 'CT', 'RP'].includes(entry.journalId);
+    const automatic = ['AM', 'AB', 'CT', 'RP', 'AN'].includes(entry.journalId);
     const action = automatic && entry.status === OPERATION_STATES.TO_REVIEW ? `<button class="text-button table-action" type="button" data-action="validate-automatic-entry" data-entry-id="${escapeHtml(entry.id)}">Valider</button>` : automatic ? '<span class="table-action-locked">Verrouillée</span>' : '';
     return `<tr><td><b>${escapeHtml(entry.reference || '—')}</b></td><td>${escapeHtml(displayDate(entry.date))}</td><td><span class="journal-badge ${journalClass}">${escapeHtml(entry.journalId || 'OD')}</span></td><td><span class="integrated-category ${categoryClass(categoryId)}">${escapeHtml(category.shortLabel)}</span></td><td><span class="cell-title">${escapeHtml(entry.label)}</span><small class="cell-subtitle">${escapeHtml(entry.source || 'Imputation synchronisée')}</small></td><td class="align-right">${numberLabel(entry.debit || entry.amount || 0)}</td><td class="align-right">${numberLabel(entry.credit || entry.amount || 0)}</td><td><span class="status ${statusClass}">${label}</span></td><td>${action}</td></tr>`;
   }).join('');
