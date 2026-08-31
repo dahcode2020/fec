@@ -4045,7 +4045,8 @@ function openingBalancePreview() {
   const year = currentFiscalYear();
   const targetYear = String(Number(year.id) + 1);
   const previousOpening = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.targetYear) === String(year.id));
-  if (previousOpening && !currentFinancialSnapshot()) return { companyId: appState.activeCompany, sourceYear: year.id, targetYear, sourceEntryIds: [], lines: [], totalDebit: 0, totalCredit: 0, opened: true, run: null };
+  const currentYearWasOpened = Boolean(year.openedFrom || year.openingEntryId || previousOpening?.status === 'VALIDATED');
+  if (currentYearWasOpened && !currentFinancialSnapshot()) return { companyId: appState.activeCompany, sourceYear: year.id, targetYear, sourceEntryIds: [], lines: [], totalDebit: 0, totalCredit: 0, opened: true, run: previousOpening || null };
   const snapshot = currentFinancialSnapshot();
   const plan = snapshot ? openingPlanFromSnapshot(snapshot) : calculateOpeningBalances(appState.integratedEntries, { companyId: appState.activeCompany, sourceYear: year.id });
   const run = (appState.openingRuns || []).find((item) => item.companyId === appState.activeCompany && String(item.sourceYear) === String(year.id));
@@ -4103,6 +4104,7 @@ function validateOpeningAndOpen() {
   if (!requirePermission(USER_PERMISSIONS.OPENING_VALIDATE)) return;
   const year = currentFiscalYear();
   const preview = openingBalancePreview();
+  if (preview.opened) { showToast(`L’exercice ${year.id} est déjà ouvert.`); return; }
   const run = preview.run;
   if (year.status !== 'FINALIZED' || !run) { showToast('Générez d’abord les reports à nouveau depuis l’exercice arrêté.'); return; }
   if (run.status !== 'VALIDATED') {
