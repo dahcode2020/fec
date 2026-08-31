@@ -4131,6 +4131,7 @@ function openNextFiscalYear() {
   renderFinalization();
   renderStatements();
   renderEntryQueue();
+  renderDossiers();
   renderIntegratedJournal();
   renderAutomaticTasks();
   renderAutomaticRuns();
