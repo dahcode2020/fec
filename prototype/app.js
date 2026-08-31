@@ -774,7 +774,7 @@ function setActiveCompany(companyId, notify = true) {
   renderAutomaticTasks();
   renderAutomaticRuns();
   renderPeriods();
-  renderFiscalPreview();
+  renderFiscalPreview({ preserveActiveInput: false });
   renderClosure();
   renderFinalization();
   renderOpening();
@@ -2339,7 +2339,7 @@ function fiscalSettingDisplay(value) {
   return value === null || value === undefined ? '' : String(value);
 }
 
-function renderFiscalPreview() {
+function renderFiscalPreview({ preserveActiveInput = true } = {}) {
   const beforeNode = $('#fiscalBeforeTax');
   if (!beforeNode) return;
   const settings = currentFiscalSettings();
@@ -2386,7 +2386,7 @@ function renderFiscalPreview() {
     fiscalStationFuelLiters: settings.stationFuelLiters,
     fiscalRegulatoryMinimumTax: settings.regulatoryMinimumTax
   };
-  Object.entries(controls).forEach(([id, value]) => { const input = $(`#${id}`); if (input && document.activeElement !== input) input.value = fiscalSettingDisplay(value); });
+  Object.entries(controls).forEach(([id, value]) => { const input = $(`#${id}`); if (input && (!preserveActiveInput || document.activeElement !== input)) input.value = fiscalSettingDisplay(value); });
   const feeCheckbox = $('#fiscalBroadcastingFeeEnabled');
   if (feeCheckbox) feeCheckbox.checked = settings.broadcastingFeeEnabled !== false;
   beforeNode.innerHTML = `${numberLabel(fiscal.accountingResult)} <em>FCFA</em>`;
