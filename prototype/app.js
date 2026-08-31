@@ -2494,10 +2494,15 @@ function automaticPreview(category) {
   return { ready: true, entries: [{ ...resultEntry, id: `auto-result-${companyId}-${periodId}`, amount: result.totalDebit, debit: result.totalDebit, credit: result.totalCredit, source: `Résultat net ${numberLabel(result.result)} FCFA · ${result.sourceCount} écriture${result.sourceCount > 1 ? 's' : ''}`, sourceEntryIds: result.sourceEntryIds, technicalOnly: true, result: result.result, status: OPERATION_STATES.TO_REVIEW }] };
 }
 
+function automaticEntryBelongsToRun(entry, run) {
+  const isFiscalTax = run.category === 'FISCAL_TAX' && (entry.source === 'Calcul fiscal automatique' || String(entry.id || '').startsWith('auto-tax-'));
+  return entry.companyId === run.companyId && (entry.integrationCategory === run.category || isFiscalTax) && String(entry.date || '').slice(0, 7) === String(run.period);
+}
+
 function automaticRunFor(category) {
   const run = appState.automaticRuns.find((item) => item.companyId === appState.activeCompany && item.category === category && item.period === currentPeriod().id);
   if (!run) return null;
-  const linkedEntries = appState.integratedEntries.filter((entry) => entry.companyId === run.companyId && entry.integrationCategory === run.category && String(entry.date || '').slice(0, 7) === String(run.period));
+  const linkedEntries = appState.integratedEntries.filter((entry) => automaticEntryBelongsToRun(entry, run));
   const allLinkedEntriesValidated = linkedEntries.length >= Number(run.count || 0) && linkedEntries.slice(0, Number(run.count || linkedEntries.length)).every((entry) => [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status));
   return run.status === 'TO_REVIEW' && allLinkedEntriesValidated ? { ...run, status: 'VALIDATED' } : run;
 }
@@ -2512,8 +2517,8 @@ function renderAutomaticRuns() {
   if (!rows) return;
   const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany);
   rows.innerHTML = runs.map((run) => {
-    const definition = AUTOMATIC_DEFINITIONS[run.category];
-    const linkedEntries = appState.integratedEntries.filter((entry) => entry.companyId === run.companyId && entry.integrationCategory === run.category && String(entry.date || '').slice(0, 7) === String(run.period));
+    const definition = AUTOMATIC_DEFINITIONS[run.category] || (run.category === 'FISCAL_TAX' ? { label: 'Impôt sur le résultat', journalId: 'RP' } : null);
+    const linkedEntries = appState.integratedEntries.filter((entry) => automaticEntryBelongsToRun(entry, run));
     const allLinkedEntriesValidated = linkedEntries.length >= Number(run.count || 0) && linkedEntries.slice(0, Number(run.count || linkedEntries.length)).every((entry) => [OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status));
     const [runLabel, runClass] = automaticRunStatus(run.status === 'TO_REVIEW' && allLinkedEntriesValidated ? { ...run, status: 'VALIDATED' } : run);
     return `<tr><td><span class="cell-title">${escapeHtml(definition?.label || run.category)}</span></td><td><span class="journal-badge ${run.category === 'ABONNEMENTS' ? 'journal-badge-purple' : run.category === 'AMORTISSEMENTS' ? 'journal-badge-amber' : 'journal-badge-blue'}">${escapeHtml(definition?.journalId || '—')}</span></td><td>${escapeHtml(run.period)}</td><td>${escapeHtml(run.count)}</td><td>${escapeHtml(new Date(run.at).toLocaleString('fr-FR'))}</td><td><span class="status ${runClass}">${runLabel}</span></td></tr>`;
@@ -4230,12 +4235,17 @@ function currentClosureChecks() {
   const sourceEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && !entry.technicalOnly && entry.status !== OPERATION_STATES.CANCELLED && String(entry.date).startsWith(period.id));
   const isStatementMovement = (movement) => movement.origin === 'STATEMENT' || String(movement.id).startsWith('imported-bank-');
   const companyBanks = appState.bankMovements.filter((movement) => movement.companyId === appState.activeCompany && String(movement.date).startsWith(period.id) && movement.treasuryType !== 'CASH' && isStatementMovement(movement));
-  const runCategories = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === period.id).map((run) => run.category));
+  const periodRuns = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && run.period === period.id);
+  const runCategories = new Set(periodRuns.map((run) => run.category));
+  const fiscalTaxRun = periodRuns.find((run) => run.category === 'FISCAL_TAX');
+  const fiscalTaxEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && (entry.source === 'Calcul fiscal automatique' || String(entry.id || '').startsWith('auto-tax-')) && String(entry.date || '').startsWith(period.id));
+  const fiscalTaxPending = Boolean(fiscalTaxEntries.some((entry) => ![OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status)) || (fiscalTaxRun && fiscalTaxRun.status !== 'VALIDATED' && !fiscalTaxEntries.length));
   const fiscal = fiscalResultForPeriod(period.id);
+  const automaticReady = ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runCategories.has(category)) && !fiscalTaxPending;
   return [
     { id: 'balance', label: 'Équilibres fondamentaux', description: 'Les écritures sources possèdent des lignes équilibrées.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Voir le journal' },
     { id: 'entries', label: 'Saisies validées', description: `${companyEntries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length} saisie(s) restent à contrôler.`, passed: companyEntries.every((entry) => entry.status === OPERATION_STATES.VALIDATED), action: 'entry', actionLabel: 'Contrôler les saisies' },
-    { id: 'automatic', label: 'Traitements automatiques', description: 'Amortissements, abonnements, centralisation et résultat traités.', passed: ['AMORTISSEMENTS', 'ABONNEMENTS', 'CENTRALISATION', 'RESULTAT'].every((category) => runCategories.has(category)), action: 'periodic', actionLabel: 'Voir les traitements' },
+    { id: 'automatic', label: 'Traitements automatiques', description: fiscalTaxPending ? 'Une proposition d’impôt reste à contrôler avant la clôture.' : 'Amortissements, abonnements, centralisation et résultat traités.', passed: automaticReady, action: 'periodic', actionLabel: 'Voir les traitements' },
     { id: 'bank', label: 'Banque et rapprochement', description: companyBanks.length ? `${companyBanks.filter((movement) => movement.status !== 'RECONCILED').length} mouvement(s) bancaire(s) restent à rapprocher.` : 'Aucun mouvement de relevé ne reste à rapprocher.', passed: companyBanks.every((movement) => movement.status === 'RECONCILED'), action: 'bank', actionLabel: 'Ouvrir la banque' },
     { id: 'fiscal', label: 'Résultat fiscal et impôt', description: fiscal.ready ? `Taux ${fiscal.taxRate} % renseigné et calcul disponible.` : fiscal.missingRegulatoryMinimum ? 'Le minimum réglementaire de cette activité reste à renseigner.' : 'Le taux fiscal de la société reste à valider.', passed: fiscal.ready, action: 'periodic', actionLabel: 'Paramétrer le fiscal' },
     { id: 'sync', label: 'Livre journal synchronisé', description: 'Les écritures actives sont présentes dans le livre journal intégré.', passed: sourceEntries.length > 0, action: 'journal', actionLabel: 'Vérifier le livre' }
@@ -4450,7 +4460,9 @@ function validateAutomaticEntry(entryId) {
   const validatedAt = new Date().toISOString();
   const validated = { ...entry, status: OPERATION_STATES.VALIDATED, validatedAt, statusChangedAt: validatedAt };
   appState.integratedEntries[index] = validated;
-  const runCategory = entry.integrationCategory || ({ AM: 'AMORTISSEMENTS', AB: 'ABONNEMENTS', CT: 'CENTRALISATION', RP: 'RESULTAT' })[entry.journalId];
+  const runCategory = entry.source === 'Calcul fiscal automatique' || String(entry.id || '').startsWith('auto-tax-')
+    ? 'FISCAL_TAX'
+    : entry.integrationCategory || ({ AM: 'AMORTISSEMENTS', AB: 'ABONNEMENTS', CT: 'CENTRALISATION', RP: 'RESULTAT' })[entry.journalId];
   const runPeriod = String(entry.date || currentPeriod().id).slice(0, 7);
   const run = appState.automaticRuns.find((item) => item.companyId === entry.companyId && item.category === runCategory && item.period === runPeriod);
   if (run) { run.status = 'VALIDATED'; run.validatedAt = validatedAt; }
