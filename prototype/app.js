@@ -1163,7 +1163,9 @@ function recoverFromBootstrapError() {
 
 function activateDossierExercise(dossier) {
   const companyId = dossier.companyId;
-  const yearId = String(dossier.exerciseYear || String(dossier.period || '').match(/\d{4}/)?.[0] || currentFiscalYear().id);
+  const periodYear = String(dossier.period || '').match(/\d{4}/)?.[0];
+  const codeYear = String(dossier.dossier || dossier.code || '').match(/(?:^|-)(\d{2})$/)?.[1];
+  const yearId = String(periodYear || dossier.exerciseYear || (codeYear ? `20${codeYear}` : currentFiscalYear().id));
   if (!appState.fiscalYearPeriods[companyId] || typeof appState.fiscalYearPeriods[companyId] !== 'object') appState.fiscalYearPeriods[companyId] = {};
   if (!appState.activePeriodIdsByYear[companyId] || typeof appState.activePeriodIdsByYear[companyId] !== 'object') appState.activePeriodIdsByYear[companyId] = {};
   const catalog = appState.fiscalYearCatalog[companyId] || (appState.fiscalYearCatalog[companyId] = []);
