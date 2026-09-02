@@ -778,6 +778,7 @@ function setActiveCompany(companyId, notify = true) {
   renderNavigationCounts();
   renderPeriods();
   renderEditionContext();
+  renderReports();
   renderEntryContext();
   applyOperationalDateDefaults();
   renderFiscalPreview({ preserveActiveInput: false });
@@ -1492,6 +1493,7 @@ function refreshViewData(viewName) {
   if (viewName === 'statements') renderStatements();
   if (viewName === 'editions') renderEditionContext();
   if (viewName === 'journal') renderIntegratedJournal();
+  if (viewName === 'reports') renderReports();
   if (viewName === 'entry') { renderEntryContext(); applyOperationalDateDefaults(); renderLivePosting(); }
   if (viewName === 'sales') { renderInvoiceHistory('SALE'); renderInvoicePartyOptions('SALE'); renderInvoiceLines('SALE'); renderInvoicePreview('SALE'); }
   if (viewName === 'purchases') { renderInvoiceHistory('PURCHASE'); renderInvoicePartyOptions('PURCHASE'); renderInvoiceLines('PURCHASE'); renderInvoicePreview('PURCHASE'); }
@@ -3938,6 +3940,7 @@ function switchFiscalYear(yearId) {
   renderFiscalYearCatalog();
   renderPeriods();
   renderEditionContext();
+  renderReports();
   renderEntryContext();
   applyOperationalDateDefaults();
   renderFinalization();
@@ -4013,6 +4016,7 @@ function selectPeriod(periodId) {
   persistAppState();
   renderPeriods();
   renderEditionContext();
+  renderReports();
   renderEntryContext();
   renderClosure();
   renderFiscalPreview();
@@ -5403,6 +5407,20 @@ function handleParameterAction(action) {
   if (action === 'journal') openView('journal');
   if (action === 'reports' || action === 'editions') openView('editions');
   if (action === 'placeholder') showToast('Ce paramètre sera défini dans l’étape dédiée.');
+}
+
+function renderReports() {
+  const period = currentPeriod();
+  const entries = statementEntries();
+  const statement = buildFinancialStatements(entries, { companyId: appState.activeCompany, period: period.id, statuses: [OPERATION_STATES.IMPUTED, OPERATION_STATES.TO_REVIEW, OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED] });
+  $('#reportPreviewTitle').textContent = 'Aperçu — Balance générale';
+  $('#reportPreviewPeriod').textContent = period.label;
+  const rows = $('#reportPreviewRows');
+  if (!rows) return;
+  const lines = statement.trialBalance.slice(0, 8);
+  rows.innerHTML = lines.length
+    ? `${lines.map((line) => `<div class="mini-row"><span>${escapeHtml(line.accountId)}</span><span>${escapeHtml(line.label || '—')}</span><span>${line.debit ? numberLabel(line.debit) : '—'}</span><span>${line.credit ? numberLabel(line.credit) : '—'}</span></div>`).join('')}<div class="mini-row mini-total"><span></span><b>TOTAUX</b><strong>${numberLabel(statement.totalDebit)}</strong><strong>${numberLabel(statement.totalCredit)}</strong></div>`
+    : '<div class="report-empty">Aucune écriture dans cette période.</div>';
 }
 
 function renderEditionContext() {
