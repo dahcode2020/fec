@@ -775,7 +775,11 @@ function setActiveCompany(companyId, notify = true) {
   renderTreasury();
   renderAutomaticTasks();
   renderAutomaticRuns();
+  renderNavigationCounts();
   renderPeriods();
+  renderEditionContext();
+  renderEntryContext();
+  applyOperationalDateDefaults();
   renderFiscalPreview({ preserveActiveInput: false });
   renderClosure();
   renderFinalization();
@@ -1486,7 +1490,9 @@ function refreshViewData(viewName) {
   if (viewName === 'opening') renderOpening();
   if (viewName === 'periods') renderPeriods();
   if (viewName === 'statements') renderStatements();
+  if (viewName === 'editions') renderEditionContext();
   if (viewName === 'journal') renderIntegratedJournal();
+  if (viewName === 'entry') { renderEntryContext(); applyOperationalDateDefaults(); renderLivePosting(); }
   if (viewName === 'sales') { renderInvoiceHistory('SALE'); renderInvoicePartyOptions('SALE'); renderInvoiceLines('SALE'); renderInvoicePreview('SALE'); }
   if (viewName === 'purchases') { renderInvoiceHistory('PURCHASE'); renderInvoicePartyOptions('PURCHASE'); renderInvoiceLines('PURCHASE'); renderInvoicePreview('PURCHASE'); }
   if (viewName === 'payments') { renderPaymentHistory(); renderLettering(); }
@@ -3362,7 +3368,8 @@ function setPaymentType(type) {
 function resetPayment() {
   paymentAllocations = {};
   $('#paymentForm')?.reset();
-  $('#paymentDate').value = '2025-06-16';
+  $('#paymentDate').value = defaultOperationalDate();
+  $('#paymentDate').dataset.autoDate = 'true';
   $('#paymentReference').value = `REG-2025-${String((appState.payments?.length || 0) + 1).padStart(3, '0')}`;
   $('#paymentAmount').value = '';
   renderPaymentPartyOptions();
@@ -3599,7 +3606,12 @@ function resetInvoice(type) {
   invoiceImputationOverrides[type] = null;
   invoiceDraftLines[type] = type === 'PURCHASE' ? [{ id: `purchase-line-${Date.now()}`, description: 'Fournitures de bureau', quantity: 1, unitPrice: 38500 }] : [{ id: `sale-line-${Date.now()}`, description: 'Accompagnement administratif', quantity: 1, unitPrice: 250000 }];
   const prefix = invoiceConfig(type).formPrefix;
-  $(`#${prefix}InvoiceReference`).value = type === 'PURCHASE' ? `FA-${String((appState.purchaseBills?.length || 0) + 155).padStart(4, '0')}` : `FAC-2025-${String((appState.invoices?.length || 0) + 19).padStart(3, '0')}`;
+  const invoiceDate = defaultOperationalDate();
+  $(`#${prefix}InvoiceDate`).value = invoiceDate;
+  $(`#${prefix}InvoiceDate`).dataset.autoDate = 'true';
+  $(`#${prefix}InvoiceDueDate`).value = addIsoDays(invoiceDate, 30);
+  $(`#${prefix}InvoiceDueDate`).dataset.autoDate = 'true';
+  $(`#${prefix}InvoiceReference`).value = type === 'PURCHASE' ? `FA-${String((appState.purchaseBills?.length || 0) + 155).padStart(4, '0')}` : `FAC-${invoiceDate.slice(0, 4)}-${String((appState.invoices?.length || 0) + 19).padStart(3, '0')}`;
   renderInvoiceLines(type);
   renderInvoicePreview(type);
 }
@@ -3648,7 +3660,7 @@ function currentAccountSetup() {
 }
 
 function usedAccountIds() {
-  return new Set(appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany).flatMap((entry) => entry.lines?.map((line) => line.accountId) || entry.accountIds || []));
+  return new Set(appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && belongsToActiveFiscalYear(entry)).flatMap((entry) => entry.lines?.map((line) => line.accountId) || entry.accountIds || []));
 }
 
 function renderAccountPlan(query = $('#accountSearch')?.value || '') {
@@ -3684,7 +3696,13 @@ function renderAccountPlan(query = $('#accountSearch')?.value || '') {
 const JOURNAL_TYPE_LABELS = { VENTES: 'Ventes', ACHATS: 'Achats', BANQUE: 'Banque', CAISSE: 'Caisse', OPERATIONS_DIVERSES: 'Opérations diverses', AUTRE: 'Autre' };
 
 function usedJournalIds() {
-  return new Set([...appState.integratedEntries, ...appState.recentEntries].filter((entry) => entry.companyId === appState.activeCompany).map((entry) => entry.journalId));
+  return new Set([...appState.integratedEntries, ...appState.recentEntries].filter((entry) => entry.companyId === appState.activeCompany && belongsToActiveFiscalYear(entry)).map((entry) => entry.journalId));
+}
+
+function renderNavigationCounts() {
+  const journalCount = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && belongsToActiveFiscalYear(entry) && entry.status !== OPERATION_STATES.CANCELLED).length;
+  const node = document.querySelector('[data-view="journal"] .nav-count');
+  if (node) node.textContent = String(journalCount);
 }
 
 function renderEntryJournalOptions() {
@@ -3919,6 +3937,9 @@ function switchFiscalYear(yearId) {
   persistAppState();
   renderFiscalYearCatalog();
   renderPeriods();
+  renderEditionContext();
+  renderEntryContext();
+  applyOperationalDateDefaults();
   renderFinalization();
   renderOpening();
   renderStatements();
@@ -3991,6 +4012,8 @@ function selectPeriod(periodId) {
   appState.fiscalYearPeriods[appState.activeCompany][yearId] = appState.periods[appState.activeCompany];
   persistAppState();
   renderPeriods();
+  renderEditionContext();
+  renderEntryContext();
   renderClosure();
   renderFiscalPreview();
   renderStatements();
@@ -4250,6 +4273,62 @@ function belongsToFiscalYear(item, fiscalYearId = activeFiscalYearId()) {
 
 function belongsToActiveFiscalYear(item) {
   return belongsToFiscalYear(item);
+}
+
+function todayIsoDate() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${today.getFullYear()}-${month}-${day}`;
+}
+
+function addIsoDays(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultOperationalDate() {
+  const today = todayIsoDate();
+  const year = currentFiscalYear();
+  const start = `${year.id}-01-01`;
+  const end = `${year.id}-12-31`;
+  return today >= start && today <= end ? today : currentPeriod().start || today;
+}
+
+function applyOperationalDateDefaults() {
+  const topbarDate = $('#topbarDate');
+  if (topbarDate) {
+    const formatted = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+    topbarDate.textContent = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  }
+  const baseDate = defaultOperationalDate();
+  const defaultFields = [
+    ['entryDate', baseDate],
+    ['paymentDate', baseDate],
+    ['salesInvoiceDate', baseDate],
+    ['purchaseInvoiceDate', baseDate]
+  ];
+  const demoDates = new Set(['2025-06-16', '2025-06-15', '2025-07-16']);
+  defaultFields.forEach(([id, value]) => {
+    const input = $(`#${id}`);
+    if (input && (!input.value || input.dataset.autoDate === 'true' || demoDates.has(input.value))) { input.value = value; input.dataset.autoDate = 'true'; }
+  });
+  [['salesInvoiceDueDate', addIsoDays(baseDate, 30)], ['purchaseInvoiceDueDate', addIsoDays(baseDate, 30)]].forEach(([id, value]) => {
+    const input = $(`#${id}`);
+    if (input && (!input.value || input.dataset.autoDate === 'true' || demoDates.has(input.value))) { input.value = value; input.dataset.autoDate = 'true'; }
+  });
+}
+
+function renderEntryContext() {
+  const year = currentFiscalYear();
+  const period = currentPeriod();
+  const status = year.status === 'FINALIZED' ? 'Exercice arrêté' : period.status === 'CLOSED' ? 'Période clôturée' : 'Période ouverte';
+  $('#entryExerciseStart').textContent = displayDate(year.start || `${year.id}-01-01`);
+  $('#entryExerciseEnd').textContent = displayDate(year.end || `${year.id}-12-31`);
+  const statusNode = $('#entryPeriodStatus');
+  if (statusNode) { statusNode.innerHTML = `<i></i> ${status}`; statusNode.classList.toggle('is-closed', status !== 'Période ouverte'); }
 }
 
 function officialEntriesForYear(fiscalYearId = currentFiscalYear().id) {
@@ -4626,6 +4705,7 @@ function validateAutomaticEntry(entryId) {
 function renderIntegratedJournal() {
   const rows = $('#integratedJournalRows');
   if (!rows) return;
+  renderNavigationCounts();
   const journal = integratedJournalForCompany(appState.activeCompany);
   const entriesForYear = journal.entries.filter((entry) => belongsToActiveFiscalYear(entry));
   const scopedJournal = { ...journal, entries: entriesForYear };
@@ -4975,6 +5055,8 @@ function clearEntry(notify = true) {
   $('#entryLabel').value = '';
   $('#entryReference').value = '';
   $('#entryAmount').value = '';
+  $('#entryDate').value = defaultOperationalDate();
+  $('#entryDate').dataset.autoDate = 'true';
   renderLivePosting();
   if (notify) showToast('La saisie a été effacée.');
 }
@@ -5327,6 +5409,12 @@ function handleParameterAction(action) {
   if (action === 'placeholder') showToast('Ce paramètre sera défini dans l’étape dédiée.');
 }
 
+function renderEditionContext() {
+  const period = currentPeriod();
+  $('#editionContextPeriod').textContent = period.label;
+  $('#editionFilterPeriod').textContent = period.label;
+}
+
 function renderEditionGroup(groupId = 'journaux') {
   const group = EDITION_GROUPS[groupId] || EDITION_GROUPS.journaux;
   const label = $('#editionSelectedLabel');
@@ -5353,32 +5441,24 @@ function setEditionMode(mode) {
   showToast(mode === 'control' ? 'Mode contrôle activé.' : 'Mode éditions officielles activé.');
 }
 
-function editionPreviewRows(action, title) {
+function editionPreviewRows(action) {
+  const activeEntries = appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany && belongsToActiveFiscalYear(entry));
   if (action === 'journal') {
-    return appState.integratedEntries.filter((entry) => entry.companyId === appState.activeCompany).slice(0, 8).map((entry) => ({ date: displayDate(entry.date), ref: entry.reference, label: entry.label, debit: entry.debit || entry.amount || 0, credit: entry.credit || entry.amount || 0, status: statusLabel(entry.status)[0] }));
+    return activeEntries.slice(0, 8).map((entry) => ({ date: displayDate(entry.date), ref: entry.reference, label: entry.label, debit: entry.debit || entry.amount || 0, credit: entry.credit || entry.amount || 0, status: statusLabel(entry.status)[0] }));
   }
   if (action === 'assets') {
-    return [
-      { date: '01/01/2025', ref: 'IMM-2025-001', label: 'Ordinateur portable Dell', debit: 850000, credit: 0, status: 'En service' },
-      { date: '30/06/2025', ref: 'OD-0003', label: 'Dotation amortissement — juin', debit: 23667, credit: 23667, status: 'À contrôler' }
-    ];
+    return activeEntries.filter((entry) => entry.journalId === 'AM' || entry.integrationCategory === 'AMORTISSEMENTS').slice(0, 8).map((entry) => ({ date: displayDate(entry.date), ref: entry.reference, label: entry.label, debit: entry.debit || entry.amount || 0, credit: entry.credit || entry.amount || 0, status: statusLabel(entry.status)[0] }));
   }
   if (action === 'treasury') {
-    return [
-      { date: '16/06/2025', ref: 'BQ-0012', label: 'Vente — Bénin Services', debit: 240000, credit: 0, status: 'Rapproché' },
-      { date: '15/06/2025', ref: 'BQ-0011', label: 'Cotonou Bureau — fournitures', debit: 0, credit: 38500, status: 'À rapprocher' }
-    ];
+    return (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && belongsToActiveFiscalYear(movement) && movement.origin !== 'STATEMENT').slice(0, 8).map((movement) => ({ date: displayDate(movement.date), ref: movement.reference, label: movement.label, debit: movement.debit || 0, credit: movement.credit || 0, status: bankStatusLabel(movement.status)[0] }));
   }
   if (action === 'sales') {
-    return [{ date: '16/06/2025', ref: 'FAC-2025-018', label: 'Awa Concept — prestation', debit: 250000, credit: 250000, status: 'Validée' }];
+    return (appState.invoices || []).filter((document) => document.companyId === appState.activeCompany && belongsToActiveFiscalYear(document)).slice(0, 8).map((document) => ({ date: displayDate(document.date), ref: document.reference, label: `${document.thirdPartyName} — facture client`, debit: document.totalInclTax || 0, credit: document.totalInclTax || 0, status: document.status === 'POSTED' ? 'À contrôler' : 'Brouillon' }));
   }
   if (action === 'purchases') {
-    return [{ date: '15/06/2025', ref: 'FA-0154', label: 'Cotonou Bureau — fournitures', debit: 38500, credit: 38500, status: 'Validée' }];
+    return (appState.purchaseBills || []).filter((document) => document.companyId === appState.activeCompany && belongsToActiveFiscalYear(document)).slice(0, 8).map((document) => ({ date: displayDate(document.date), ref: document.reference, label: `${document.thirdPartyName} — facture fournisseur`, debit: document.totalInclTax || 0, credit: document.totalInclTax || 0, status: document.status === 'POSTED' ? 'À contrôler' : 'Brouillon' }));
   }
-  return [
-    { date: '30/06/2025', ref: 'À définir', label: title, debit: 0, credit: 0, status: 'Aperçu' },
-    { date: '—', ref: '—', label: 'Les données seront disponibles après paramétrage', debit: 0, credit: 0, status: 'À définir' }
-  ];
+  return [];
 }
 
 function openEditionPreview(title = 'Livre journal intégré', action = 'journal') {
@@ -5419,7 +5499,11 @@ function bindEvents() {
   $('#passwordResetForm')?.addEventListener('submit', requestPasswordReset);
   window.addEventListener('online', refreshSyncStatus);
   window.addEventListener('offline', refreshSyncStatus);
-  $('#entryForm')?.addEventListener('input', renderLivePosting);
+  $('#entryForm')?.addEventListener('input', (event) => { if (event.target.id === 'entryDate') event.target.dataset.autoDate = 'false'; renderLivePosting(); });
+  ['paymentDate', 'salesInvoiceDate', 'salesInvoiceDueDate', 'purchaseInvoiceDate', 'purchaseInvoiceDueDate'].forEach((id) => {
+    const input = $(`#${id}`);
+    input?.addEventListener('input', () => { input.dataset.autoDate = 'false'; });
+  });
   $('#bankFileInput')?.addEventListener('change', (event) => parseBankFile(event.target.files?.[0]));
   ['Deductions', 'Reintegrations', 'TaxRate', 'MinimumTax', 'CashableProducts', 'ExcludedImmobilized', 'ExcludedStocked', 'ExcludedTransfers', 'ExcludedReversals', 'StationFuelLiters', 'RegulatoryMinimumTax', 'ConventionRate'].forEach((field) => {
     const input = $(`#fiscal${field}`);
