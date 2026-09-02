@@ -4115,6 +4115,12 @@ function openingBalancePreview() {
   return { ...plan, sourceYear: year.id, targetYear, run, opened: false };
 }
 
+function nextFiscalYearAlreadyOpen(companyId, yearId) {
+  const targetDossier = (appState.dossiers || []).find((dossier) => dossier.companyId === companyId && dossier.moduleId === 'CSR' && String(dossier.exerciseYear) === String(yearId) && dossier.status !== 'Archivé');
+  const targetYear = (appState.fiscalYearCatalog?.[companyId] || []).find((year) => String(year.id) === String(yearId));
+  return Boolean(targetDossier && targetYear && ['OPEN', 'FINALIZED'].includes(String(targetYear.status).toUpperCase()));
+}
+
 function renderOpening() {
   const rows = $('#openingRows');
   if (!rows) return;
@@ -4135,10 +4141,11 @@ function renderOpening() {
   const finalized = year.status === 'FINALIZED';
   const generated = Boolean(preview.run);
   const opened = Boolean(preview.opened);
+  const nextOpened = nextFiscalYearAlreadyOpen(appState.activeCompany, preview.targetYear);
   if (badge) { badge.innerHTML = `<i></i> ${opened ? 'Exercice ouvert' : generated ? 'Reports à contrôler' : finalized ? 'Prêt à générer' : 'En attente de l’arrêté'}`; badge.className = `opening-status-badge ${finalized || opened ? 'is-ready' : ''}`; }
   if (lock) lock.textContent = opened ? `Exercice ${year.id} ouvert` : generated ? 'Reports à contrôler' : finalized ? `Exercice ${year.id} arrêté` : `Exercice ${year.id} ouvert`;
   if (button) { button.disabled = !finalized || generated || !preview.lines.length || !can(USER_PERMISSIONS.OPENING_GENERATE); button.textContent = generated ? 'Reports générés' : finalized ? 'Générer les reports' : 'Attente de l’arrêté'; }
-  if (validateButton) { validateButton.disabled = !generated || opened || !can(USER_PERMISSIONS.OPENING_VALIDATE); validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
+  if (validateButton) { validateButton.disabled = !generated || opened || nextOpened || !can(USER_PERMISSIONS.OPENING_VALIDATE); validateButton.textContent = opened ? `Exercice ${year.id} ouvert` : nextOpened ? `Exercice ${preview.targetYear} déjà ouvert` : preview.run?.status === 'VALIDATED' ? `Ouvrir l’exercice ${preview.targetYear}` : `Valider les reports et ouvrir ${preview.targetYear}`; }
 }
 
 function generateOpeningBalances() {
@@ -4167,6 +4174,7 @@ function validateOpeningAndOpen() {
   const year = currentFiscalYear();
   const preview = openingBalancePreview();
   if (preview.opened) { showToast(`L’exercice ${year.id} est déjà ouvert.`); return; }
+  if (nextFiscalYearAlreadyOpen(appState.activeCompany, preview.targetYear)) { showToast(`L’exercice ${preview.targetYear} est déjà ouvert.`); return; }
   const run = preview.run;
   if (year.status !== 'FINALIZED' || !run) { showToast('Générez d’abord les reports à nouveau depuis l’exercice arrêté.'); return; }
   if (run.status !== 'VALIDATED') {
