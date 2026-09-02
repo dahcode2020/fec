@@ -4290,11 +4290,7 @@ function addIsoDays(value, days) {
 }
 
 function defaultOperationalDate() {
-  const today = todayIsoDate();
-  const year = currentFiscalYear();
-  const start = `${year.id}-01-01`;
-  const end = `${year.id}-12-31`;
-  return today >= start && today <= end ? today : currentPeriod().start || today;
+  return todayIsoDate();
 }
 
 function applyOperationalDateDefaults() {
