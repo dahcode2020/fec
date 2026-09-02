@@ -2575,7 +2575,7 @@ function automaticRunStatus(run) {
 function renderAutomaticRuns() {
   const rows = $('#automaticRunsRows');
   if (!rows) return;
-  const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany);
+  const runs = appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && String(run.period || '').startsWith(activeFiscalYearId()));
   rows.innerHTML = runs.map((run) => {
     const definition = AUTOMATIC_DEFINITIONS[run.category] || (run.category === 'FISCAL_TAX' ? { label: 'Impôt sur le résultat', journalId: 'RP' } : null);
     const linkedEntries = appState.integratedEntries.filter((entry) => automaticEntryBelongsToRun(entry, run));
@@ -3029,7 +3029,7 @@ function renderBankMovements() {
   const rows = $('#bankMovementRows');
   if (!rows) return;
   const filter = currentBankView === 'unmatched' ? 'UNMATCHED' : 'ALL';
-  const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && (filter === 'ALL' || movement.status === filter));
+  const movements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && belongsToActiveFiscalYear(movement) && (filter === 'ALL' || movement.status === filter));
   rows.innerHTML = movements.map((movement) => {
     const [statusLabelText, statusClass] = bankStatusLabel(movement.status);
     const matchedEntry = movement.matchedEntryId && appState.integratedEntries.find((entry) => entry.id === movement.matchedEntryId);
@@ -3043,7 +3043,7 @@ function renderBankMovements() {
     return `<tr><td>${escapeHtml(displayDate(movement.date))}</td><td><span class="cell-title">${escapeHtml(movement.label)}</span></td><td><b>${escapeHtml(movement.reference || '—')}</b></td><td class="align-right">${movement.debit ? numberLabel(movement.debit) : '—'}</td><td class="align-right amount-positive">${movement.credit ? numberLabel(movement.credit) : '—'}</td><td>${match ? `<span class="bank-match">${escapeHtml(matchLabel)}</span>` : '<span class="bank-no-match">Aucune correspondance</span>'}</td><td><span class="status ${statusClass}">${statusLabelText}</span></td><td>${action}</td></tr>`;
   }).join('');
   if (!movements.length) rows.innerHTML = '<tr><td colspan="8" class="dossier-empty">Aucun mouvement dans cette vue.</td></tr>';
-  renderBankSummary((appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany));
+  renderBankSummary((appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && belongsToActiveFiscalYear(movement)));
 }
 
 function renderTreasury() {
@@ -3051,7 +3051,7 @@ function renderTreasury() {
   const rows = $('#treasuryMovementRows');
   const company = appState.companies[appState.activeCompany];
   if (!rows || !company) return;
-  const allMovements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany);
+  const allMovements = (appState.bankMovements || []).filter((movement) => movement.companyId === appState.activeCompany && belongsToActiveFiscalYear(movement));
   const movements = allMovements.filter((movement) => movement.origin !== 'STATEMENT');
   const chronological = movements.slice().sort((a, b) => `${a.date || ''} ${a.importedAt || ''}`.localeCompare(`${b.date || ''} ${b.importedAt || ''}`));
   let balance = parseUiAmount(company.treasury || 0);
@@ -3241,7 +3241,7 @@ function paymentDocuments() {
   const type = currentPaymentType === PAYMENT_TYPES.RECEIPT ? 'SALE' : 'PURCHASE';
   const partyId = $('#paymentParty')?.value;
   const collection = type === 'SALE' ? appState.invoices : appState.purchaseBills;
-  return collection.filter((document) => document.companyId === appState.activeCompany && document.thirdPartyId === partyId && ['POSTED', 'PARTIAL'].includes(document.status) && (document.outstanding ?? document.totalInclTax) > 0);
+  return collection.filter((document) => document.companyId === appState.activeCompany && belongsToActiveFiscalYear(document) && document.thirdPartyId === partyId && ['POSTED', 'PARTIAL'].includes(document.status) && (document.outstanding ?? document.totalInclTax) > 0);
 }
 
 function renderPaymentPartyOptions() {
@@ -3305,7 +3305,7 @@ function updatePaymentPreview() {
 function renderPaymentHistory() {
   const rows = $('#paymentRows');
   if (!rows) return;
-  const payments = (appState.payments || []).filter((payment) => payment.companyId === appState.activeCompany);
+  const payments = (appState.payments || []).filter((payment) => payment.companyId === appState.activeCompany && belongsToActiveFiscalYear(payment));
   rows.innerHTML = payments.slice().reverse().map((payment) => {
     const entry = payment.journalEntryId && appState.recentEntries.find((item) => item.id === payment.journalEntryId);
     const editable = !entry || ![OPERATION_STATES.VALIDATED, OPERATION_STATES.CLOSED].includes(entry.status);
@@ -3319,7 +3319,7 @@ function renderPaymentHistory() {
 function renderLettering() {
   const rows = $('#letteringRows');
   if (!rows) return;
-  const documents = [...appState.invoices, ...appState.purchaseBills].filter((document) => document.companyId === appState.activeCompany && document.status !== 'DRAFT');
+  const documents = [...appState.invoices, ...appState.purchaseBills].filter((document) => document.companyId === appState.activeCompany && belongsToActiveFiscalYear(document) && document.status !== 'DRAFT');
   const content = documents.map((document) => `<div class="lettering-row"><span class="lettering-status ${document.lettered ? 'is-lettered' : ''}">${document.lettered ? '✓' : '·'}</span><span><strong>${escapeHtml(document.reference)}</strong><small>${escapeHtml(document.thirdPartyName)} · ${document.type === 'SALE' ? 'Client' : 'Fournisseur'}</small></span><span><small>Facture</small><b>${numberLabel(document.totalInclTax)} FCFA</b></span><span><small>Solde</small><b>${numberLabel(document.outstanding ?? document.totalInclTax)} FCFA</b></span><span class="status ${document.lettered ? 'status-green' : 'status-amber'}">${document.lettered ? 'Lettrée' : 'En attente'}</span></div>`).join('');
   rows.innerHTML = content || '<div class="payment-documents-empty">Aucune facture à lettrer.</div>';
 }
@@ -3571,7 +3571,7 @@ function openInvoiceSource(type, invoiceId) {
 function renderInvoiceHistory(type) {
   const config = invoiceConfig(type);
   const collection = appState[config.collection] || [];
-  const entries = collection.filter((document) => document.companyId === appState.activeCompany);
+  const entries = collection.filter((document) => document.companyId === appState.activeCompany && belongsToActiveFiscalYear(document));
   const rows = $(`#${config.formPrefix}InvoiceRows`);
   if (!rows) return;
   rows.innerHTML = entries.slice().reverse().map((document) => {
@@ -4228,6 +4228,18 @@ function currentFiscalYear() {
   return appState.fiscalYears[appState.activeCompany];
 }
 
+function activeFiscalYearId() {
+  return String(currentFiscalYear().id);
+}
+
+function belongsToFiscalYear(item, fiscalYearId = activeFiscalYearId()) {
+  return String(item?.date || '').startsWith(String(fiscalYearId));
+}
+
+function belongsToActiveFiscalYear(item) {
+  return belongsToFiscalYear(item);
+}
+
 function officialEntriesForYear(fiscalYearId = currentFiscalYear().id) {
   return appState.integratedEntries.filter((entry) => {
     const category = String(entry.integrationCategory || entry.categoryId || '').toUpperCase();
@@ -4269,9 +4281,9 @@ async function prepareFinalSnapshot() {
 }
 
 function currentFinalizationChecks() {
-  const periods = appState.periods[appState.activeCompany] || [];
-  const activeEntries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED);
   const year = currentFiscalYear();
+  const periods = appState.periods[appState.activeCompany] || [];
+  const activeEntries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && belongsToFiscalYear(entry, year.id) && entry.status !== OPERATION_STATES.CANCELLED);
   const sourceEntries = officialEntriesForYear(year.id);
   const runs = new Set(appState.automaticRuns.filter((run) => run.companyId === appState.activeCompany && String(run.period || '').startsWith(String(year.id))).map((run) => `${run.category}:${run.period}`));
   const fiscalSettings = currentFiscalSettings();
@@ -4448,7 +4460,7 @@ function renderEntryQueue() {
   const rows = $('#entryRows');
   if (!rows) return;
   const window = activeCorrectionWindow();
-  const entries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && entry.status !== OPERATION_STATES.CANCELLED);
+  const entries = appState.recentEntries.filter((entry) => entry.companyId === appState.activeCompany && belongsToActiveFiscalYear(entry) && entry.status !== OPERATION_STATES.CANCELLED);
   const pending = entries.filter((entry) => entry.status !== OPERATION_STATES.VALIDATED).length;
   const count = $('#entryQueueCount');
   if (count) count.textContent = String(pending);
@@ -4603,7 +4615,9 @@ function renderIntegratedJournal() {
   const rows = $('#integratedJournalRows');
   if (!rows) return;
   const journal = integratedJournalForCompany(appState.activeCompany);
-  const summary = summarizeIntegratedJournal(journal);
+  const entriesForYear = journal.entries.filter((entry) => belongsToActiveFiscalYear(entry));
+  const scopedJournal = { ...journal, entries: entriesForYear };
+  const summary = summarizeIntegratedJournal(scopedJournal);
   Object.keys(INTEGRATED_JOURNAL_CATEGORIES).forEach((categoryId) => {
     const count = $(`[data-integrated-summary-count="${categoryId}"]`);
     const total = $(`[data-integrated-summary-amount="${categoryId}"]`);
@@ -4612,7 +4626,7 @@ function renderIntegratedJournal() {
   });
   const search = ($('#integratedSearch')?.value || '').trim().toLowerCase();
   const selectedCategory = $('#integratedCategoryFilter')?.value || 'ALL';
-  const entries = journal.entries.filter((entry) => {
+  const entries = entriesForYear.filter((entry) => {
     const categoryId = entry.integratedCategory || classifyIntegratedEntry(entry);
     const matchesCategory = selectedCategory === 'ALL' || categoryId === selectedCategory;
     const matchesSearch = !search || `${entry.reference} ${entry.label} ${categoryId} ${entry.journalId}`.toLowerCase().includes(search);
@@ -4629,7 +4643,7 @@ function renderIntegratedJournal() {
   }).join('');
   if (!entries.length) rows.innerHTML = '<tr><td colspan="9" class="dossier-empty">Aucune écriture dans cette catégorie.</td></tr>';
   const subtitle = $('#integratedJournalSubtitle');
-  if (subtitle) subtitle.textContent = `${journal.entries.length} écritures · ${Object.values(summary).filter((item) => item.count > 0).length - (summary.GENERAL.count ? 1 : 0)} catégories automatiques · Débit et crédit équilibrés`;
+  if (subtitle) subtitle.textContent = `${scopedJournal.entries.length} écritures · ${Object.values(summary).filter((item) => item.count > 0).length - (summary.GENERAL.count ? 1 : 0)} catégories automatiques · Exercice ${activeFiscalYearId()} · Débit et crédit équilibrés`;
   const footer = $('#integratedJournalFooter');
   if (footer) footer.textContent = `${entries.length} écriture${entries.length > 1 ? 's' : ''} affichée${entries.length > 1 ? 's' : ''} · mise à jour après chaque imputation.`;
 }
