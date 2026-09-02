@@ -723,6 +723,8 @@ function setActiveCompany(companyId, notify = true) {
   const hasAccess = (appState.memberships || []).some((membership) => membership.userId === appState.currentUserId && membership.companyId === companyId && membership.active !== false);
   if (!hasAccess) { showToast('Vous n’avez aucun accès à cette société.'); return; }
   appState.activeCompany = companyId;
+  const selectedDossier = (appState.dossiers || []).find((dossier) => dossier.id === appState.selectedDossier && dossier.companyId === companyId && dossier.status !== 'Archivé');
+  if (selectedDossier) activateDossierExercise(selectedDossier);
   renderCurrentUser();
   appState.exportDraft = null;
   appState.fecDraft = null;
