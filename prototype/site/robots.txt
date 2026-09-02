@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://emrys-saas.com/sitemap.xml

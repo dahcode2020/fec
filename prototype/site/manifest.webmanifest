@@ -1,0 +1,11 @@
+{
+  "name": "EMRYS — Gestion Sereine",
+  "short_name": "EMRYS",
+  "description": "Logiciel de gestion modulaire pour les entreprises béninoises.",
+  "lang": "fr",
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#102337",
+  "background_color": "#fbfcfd",
+  "icons": []
+}
