@@ -69,7 +69,11 @@ export function createSyncEngine({ store, remote, deviceId = `device-${Date.now(
         incoming.forEach((event) => {
           if (!store.receiveSyncEvent(event)) { summary.duplicates += 1; summary.cursorAfter = String(event.cursor); return; }
           try { store.applySyncEvent(event); summary.applied += 1; }
-          catch (error) { summary.failed += 1; store.markSyncEventFailed(event.id, error.message); }
+          catch (error) {
+            summary.failed += 1;
+            if (typeof store.markSyncEventInboxFailed === 'function') store.markSyncEventInboxFailed(event.id, error.message);
+            else store.markSyncEventFailed(event.id, error.message);
+          }
           summary.pulled += 1;
           summary.cursorAfter = String(event.cursor);
         });

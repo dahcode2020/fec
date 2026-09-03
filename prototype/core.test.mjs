@@ -63,6 +63,13 @@ import {
   centralizeEntries,
   createBankMovement,
   reconcileBankMovement,
+  calculateVatDeclaration,
+  createVatDeclarationEntry,
+  calculateAibDeclaration,
+  calculateAssetDisposal,
+  createAssetDisposalEntries,
+  calculateExchangeRevaluation,
+  createExchangeRevaluationEntry,
   createPayment,
   paymentToJournalLines,
   encodeFecText,
@@ -222,7 +229,9 @@ test('calcule le résultat d’une période à partir des comptes 6 et 7', () =>
 test('produit une balance et des états sur les écritures validées', () => {
   const entries = [
     { id: 'sale', companyId: 'co-a', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '4111', label: 'Clients', debit: 250000, credit: 0 }, { accountId: '7061', label: 'Services vendus', debit: 0, credit: 250000 }] },
-    { id: 'purchase', companyId: 'co-a', date: '2025-06-10', status: 'TO_REVIEW', lines: [{ accountId: '6047', label: 'Fournitures', debit: 38500, credit: 0 }, { accountId: '4011', label: 'Fournisseur', debit: 0, credit: 38500 }] }
+    { id: 'purchase', companyId: 'co-a', date: '2025-06-10', status: 'TO_REVIEW', lines: [{ accountId: '6047', label: 'Fournitures', debit: 38500, credit: 0 }, { accountId: '4011', label: 'Fournisseur', debit: 0, credit: 38500 }] },
+    { id: 'sale-2026', companyId: 'co-a', date: '2026-03-15', status: 'VALIDATED', lines: [{ accountId: '4111', label: 'Clients 2026', debit: 500000, credit: 0 }, { accountId: '7061', label: 'Services 2026', debit: 0, credit: 500000 }] },
+    { id: 'sale-2027', companyId: 'co-a', date: '2027-01-10', status: 'VALIDATED', lines: [{ accountId: '4111', label: 'Clients 2027', debit: 800000, credit: 0 }, { accountId: '7061', label: 'Services 2027', debit: 0, credit: 800000 }] }
   ];
   assert.equal(buildTrialBalance(entries, { companyId: 'co-a', period: '2025-06', statuses: ['VALIDATED'] }).length, 2);
   const statements = buildFinancialStatements(entries, { companyId: 'co-a', period: '2025-06', statuses: ['VALIDATED', 'TO_REVIEW'] });
@@ -230,6 +239,14 @@ test('produit une balance et des états sur les écritures validées', () => {
   assert.equal(statements.incomeStatement.length, 2);
   assert.equal(statements.resultBeforeTax, 211500);
   assert.equal(statements.totalDebit, statements.totalCredit);
+
+  const statements2026 = buildFinancialStatements(entries, { companyId: 'co-a', period: '2026-03', statuses: ['VALIDATED'] });
+  assert.equal(statements2026.resultBeforeTax, 500000);
+  assert.equal(statements2026.totalDebit, 500000);
+
+  const statements2027 = buildFinancialStatements(entries, { companyId: 'co-a', period: '2027-01', statuses: ['VALIDATED'] });
+  assert.equal(statements2027.resultBeforeTax, 800000);
+  assert.equal(statements2027.totalDebit, 800000);
 });
 
 test('scelle un instantané annuel indépendant des données courantes', () => {
@@ -626,3 +643,235 @@ test('isole les permissions par utilisateur, société et module', () => {
   assert.equal(hasPermission(reader, USER_PERMISSIONS.ENTRIES_CREATE), false);
   assert.throws(() => assertPermission(operator, USER_PERMISSIONS.FISCAL_FINALIZE), (error) => error.code === 'PERMISSION_DENIED');
 });
+
+test('synchronise les états financiers et le périmètre lors d’un changement d’exercice ou de période', () => {
+  const entries = [
+    { id: 'e-2026-03', companyId: 'co-a', date: '2026-03-15', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 300000, credit: 0 }, { accountId: '7061', debit: 0, credit: 300000 }] },
+    { id: 'e-2026-11', companyId: 'co-a', date: '2026-11-20', status: 'VALIDATED', lines: [{ accountId: '6011', debit: 120000, credit: 0 }, { accountId: '4011', debit: 0, credit: 120000 }] },
+    { id: 'e-2027-01', companyId: 'co-a', date: '2027-01-10', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 450000, credit: 0 }, { accountId: '7061', debit: 0, credit: 450000 }] }
+  ];
+
+  const st2026March = buildFinancialStatements(entries, { companyId: 'co-a', period: '2026-03', statuses: ['VALIDATED'] });
+  assert.equal(st2026March.resultBeforeTax, 300000);
+  assert.equal(st2026March.trialBalance.length, 2);
+
+  const st2027Jan = buildFinancialStatements(entries, { companyId: 'co-a', period: '2027-01', statuses: ['VALIDATED'] });
+  assert.equal(st2027Jan.resultBeforeTax, 450000);
+  assert.equal(st2027Jan.trialBalance.length, 2);
+
+  // Vérifie que les données 2026 ne contaminent pas la période 2027
+  assert.ok(!st2027Jan.trialBalance.some((line) => line.accountId === '6011'));
+});
+
+test('garantit l’indépendance stricte des exercices après reports à nouveau', () => {
+  const entries2025 = [
+    { id: 'e-2025-01', companyId: 'co-a', date: '2025-03-10', status: 'VALIDATED', lines: [{ accountId: '5211', debit: 1000000, credit: 0 }, { accountId: '7061', debit: 0, credit: 1000000 }] },
+    { id: 'e-2025-02', companyId: 'co-a', date: '2025-06-15', status: 'VALIDATED', lines: [{ accountId: '6011', debit: 400000, credit: 0 }, { accountId: '5211', debit: 0, credit: 400000 }] }
+  ];
+
+  const opening = calculateOpeningBalances(entries2025, { companyId: 'co-a', sourceYear: '2025', targetYear: '2026' });
+  assert.equal(opening.totalDebit, opening.totalCredit);
+  assert.equal(opening.totalDebit, 600000);
+
+  // L'écriture d'à-nouveaux pour 2026
+  const openingEntry = {
+    id: 'an-2026',
+    companyId: 'co-a',
+    date: '2026-01-01',
+    status: 'VALIDATED',
+    lines: opening.lines
+  };
+
+  const entries2026 = [
+    openingEntry,
+    { id: 'e-2026-01', companyId: 'co-a', date: '2026-02-10', status: 'VALIDATED', lines: [{ accountId: '6061', debit: 50000, credit: 0 }, { accountId: '5211', debit: 0, credit: 50000 }] }
+  ];
+
+  const allEntries = [...entries2025, ...entries2026];
+
+  // Les états de 2026 ne contiennent que les écritures de 2026 (y compris reports à nouveau)
+  const st2026Annual = buildFinancialStatements(allEntries, { companyId: 'co-a', period: '2026', statuses: ['VALIDATED'] });
+  assert.equal(st2026Annual.resultBeforeTax, -50000);
+  assert.ok(!st2026Annual.trialBalance.some((l) => l.accountId === '7061'));
+  assert.ok(st2026Annual.trialBalance.some((l) => l.accountId === '5211'));
+
+  // Les états de 2025 restent intacts
+  const st2025Annual = buildFinancialStatements(allEntries, { companyId: 'co-a', period: '2025', statuses: ['VALIDATED'] });
+  assert.equal(st2025Annual.resultBeforeTax, 600000);
+  assert.ok(!st2025Annual.trialBalance.some((l) => l.accountId === '6061'));
+});
+
+test('calcule la déclaration de TVA mensuelle et génère l’écriture d’apurement', () => {
+  const entries = [
+    // Vente taxable (TVA collectée 18 000 FCFA sur 100 000 HT)
+    { id: 'v-1', companyId: 'co-tva', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 118000, credit: 0 }, { accountId: '7061', debit: 0, credit: 100000 }, { accountId: '4431', debit: 0, credit: 18000 }] },
+    // Achat de biens et services (TVA déductible 7 200 FCFA sur 40 000 HT)
+    { id: 'a-1', companyId: 'co-tva', date: '2025-06-15', status: 'VALIDATED', lines: [{ accountId: '6011', debit: 40000, credit: 0 }, { accountId: '4452', debit: 7200, credit: 0 }, { accountId: '4011', debit: 0, credit: 47200 }] },
+    // Achat immo (TVA déductible 3 600 FCFA sur 20 000 HT)
+    { id: 'im-1', companyId: 'co-tva', date: '2025-06-20', status: 'VALIDATED', lines: [{ accountId: '2441', debit: 20000, credit: 0 }, { accountId: '4451', debit: 3600, credit: 0 }, { accountId: '4811', debit: 0, credit: 23600 }] }
+  ];
+
+  const vat = calculateVatDeclaration(entries, { companyId: 'co-tva', period: '2025-06', previousCredit: 1200 });
+  assert.equal(vat.taxableSalesBase, 100000);
+  assert.equal(vat.collectedVat, 18000);
+  assert.equal(vat.deductibleVatGoods, 7200);
+  assert.equal(vat.deductibleVatAssets, 3600);
+  assert.equal(vat.previousCredit, 1200);
+  assert.equal(vat.totalDeductible, 12000);
+  assert.equal(vat.vatDue, 6000);
+  assert.equal(vat.vatCredit, 0);
+
+  // Génération de l'écriture OD d'apurement
+  const entry = createVatDeclarationEntry({ companyId: 'co-tva', period: '2025-06', vatDeclaration: vat });
+  assert.equal(entry.journalId, 'OD');
+  assert.equal(entry.lines.reduce((s, l) => s + l.debit, 0), 18000);
+  assert.equal(entry.lines.reduce((s, l) => s + l.credit, 0), 18000);
+  assert.ok(entry.lines.some((l) => l.accountId === '4441' && l.credit === 6000));
+});
+
+test('calcule les retenues fiscales AIB 1%, 3% et 5%', () => {
+  const entries = [
+    { id: 'aib-1', companyId: 'co-aib', date: '2025-06-05', status: 'VALIDATED', lines: [{ accountId: '6221', debit: 500000, credit: 0 }, { accountId: '44711', debit: 0, credit: 5000 }, { accountId: '4011', debit: 0, credit: 495000 }] },
+    { id: 'aib-2', companyId: 'co-aib', date: '2025-06-12', status: 'VALIDATED', lines: [{ accountId: '6011', debit: 200000, credit: 0 }, { accountId: '44713', debit: 0, credit: 6000 }, { accountId: '4011', debit: 0, credit: 194000 }] }
+  ];
+
+  const aib = calculateAibDeclaration(entries, { companyId: 'co-aib', period: '2025-06' });
+  assert.equal(aib.aib1Percent, 5000);
+  assert.equal(aib.aib3Percent, 6000);
+  assert.equal(aib.totalCollected, 11000);
+  assert.equal(aib.netPayable, 11000);
+});
+
+test('calcule la cession d’immobilisation et génère les écritures de sortie d’actif', () => {
+  const asset = {
+    id: 'immo-auto-01',
+    name: 'Véhicule de livraison',
+    value: 8000000,
+    account: '2451',
+    accumulatedAccount: '2845'
+  };
+
+  const disposal = calculateAssetDisposal(asset, {
+    disposalDate: '2025-09-30',
+    disposalPrice: 3500000,
+    accumulatedDepreciation: 6000000
+  });
+
+  assert.equal(disposal.grossValue, 8000000);
+  assert.equal(disposal.accumulatedDepreciation, 6000000);
+  assert.equal(disposal.netBookValue, 2000000);
+  assert.equal(disposal.disposalPrice, 3500000);
+  assert.equal(disposal.capitalGainLoss, 1500000);
+  assert.equal(disposal.isGain, true);
+
+  const entries = createAssetDisposalEntries({
+    asset,
+    disposal,
+    companyId: 'co-immo',
+    paymentMode: 'BANK'
+  });
+
+  assert.equal(entries.length, 2);
+  const cessionEntry = entries[0];
+  assert.equal(cessionEntry.lines.reduce((s, l) => s + l.debit, 0), 3500000);
+  assert.equal(cessionEntry.lines.reduce((s, l) => s + l.credit, 0), 3500000);
+
+  const sortEntry = entries[1];
+  assert.equal(sortEntry.lines.reduce((s, l) => s + l.debit, 0), 8000000);
+  assert.equal(sortEntry.lines.reduce((s, l) => s + l.credit, 0), 8000000);
+});
+
+test('calcule la réévaluation des positions en devises et les écarts de conversion', () => {
+  const positions = [
+    { accountId: '5212', accountLabel: 'Compte EUR BOA', type: 'BANK', currency: 'EUR', amountForeign: 10000, bookRate: 655.957 },
+    { accountId: '4012', accountLabel: 'Fournisseur Import USD', type: 'LIABILITY', currency: 'USD', amountForeign: 5000, bookRate: 600 }
+  ];
+
+  const reval = calculateExchangeRevaluation(positions, {
+    closingRates: { EUR: 660.0, USD: 615.0 },
+    baseCurrency: 'XOF'
+  });
+
+  // EUR Bank: +40 430 XOF (gain latent)
+  // USD Debt: -75 000 XOF (perte latente car dette augmentée)
+  assert.equal(reval.totalLatentGain, 40430);
+  assert.equal(reval.totalLatentLoss, 75000);
+  assert.equal(reval.items.length, 2);
+
+  const entry = createExchangeRevaluationEntry({
+    revaluation: reval,
+    companyId: 'co-devise'
+  });
+
+  assert.equal(entry.journalId, 'OD');
+  const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
+  const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
+  assert.equal(totalDebit, totalCredit);
+  assert.equal(totalDebit, 115430);
+});
+
+test('gère la position créditrice de TVA (crédit de TVA à reporter)', () => {
+  const entries = [
+    { id: 'v-1', companyId: 'co-tva-credit', date: '2025-06-10', status: 'VALIDATED', lines: [{ accountId: '4111', debit: 118000, credit: 0 }, { accountId: '7011', debit: 0, credit: 100000 }, { accountId: '4431', debit: 0, credit: 18000 }] },
+    { id: 'v-2', companyId: 'co-tva-credit', date: '2025-06-15', status: 'VALIDATED', lines: [{ accountId: '6011', debit: 200000, credit: 0 }, { accountId: '4452', debit: 36000, credit: 0 }, { accountId: '4011', debit: 0, credit: 236000 }] }
+  ];
+
+  const vat = calculateVatDeclaration(entries, { companyId: 'co-tva-credit', period: '2025-06', priorVatCredit: 5000 });
+  assert.equal(vat.vatCollected, 18000);
+  assert.equal(vat.vatDeductibleGoods, 36000);
+  assert.equal(vat.totalDeductible, 41000);
+  assert.equal(vat.isCredit, true);
+  assert.equal(vat.vatCreditToCarryForward, 23000);
+  assert.equal(vat.netVatToPay, 0);
+
+  const clearingEntry = createVatDeclarationEntry({
+    companyId: 'co-tva-credit',
+    vatResult: vat,
+    date: '2025-06-30'
+  });
+
+  assert.equal(clearingEntry.journalId, 'OD');
+  assert.ok(clearingEntry.lines.some((l) => l.accountId === '4449' && l.debit === 23000));
+  const totalDebit = clearingEntry.lines.reduce((s, l) => s + l.debit, 0);
+  const totalCredit = clearingEntry.lines.reduce((s, l) => s + l.credit, 0);
+  assert.equal(totalDebit, totalCredit);
+});
+
+test('calcule une cession d’immobilisation avec moins-value et mise au rebut', () => {
+  const asset = {
+    id: 'IMM-DEMO-02',
+    name: 'Serveur réseau obsolète',
+    cost: 3000000,
+    account: '2441',
+    accumulatedAccount: '2844'
+  };
+
+  // Mise au rebut (scrap) : prix 0, amortissement 2 200 000 -> VNC 800 000 -> Moins-value 800 000
+  const scrapDisposal = calculateAssetDisposal(asset, {
+    disposalDate: '2025-07-31',
+    disposalPrice: 0,
+    accumulatedDepreciation: 2200000
+  });
+
+  assert.equal(scrapDisposal.grossValue, 3000000);
+  assert.equal(scrapDisposal.accumulatedDepreciation, 2200000);
+  assert.equal(scrapDisposal.netBookValue, 800000);
+  assert.equal(scrapDisposal.capitalGainLoss, -800000);
+  assert.equal(scrapDisposal.isGain, false);
+
+  const entries = createAssetDisposalEntries({
+    asset,
+    disposal: scrapDisposal,
+    companyId: 'co-scrap'
+  });
+
+  // Seule l'écriture de sortie est nécessaire (prix de vente 0)
+  assert.equal(entries.length, 1);
+  const sortieEntry = entries[0];
+  assert.equal(sortieEntry.journalId, 'OD');
+  assert.ok(sortieEntry.lines.some((l) => l.accountId === '8121' && l.debit === 800000));
+  assert.ok(sortieEntry.lines.some((l) => l.accountId === '2844' && l.debit === 2200000));
+  assert.ok(sortieEntry.lines.some((l) => l.accountId === '2441' && l.credit === 3000000));
+});
+
+

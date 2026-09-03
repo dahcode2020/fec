@@ -46,6 +46,38 @@ function trialLimits() {
   return { companies: 1, users: 1, csrEntries: 100, invoices: 20, thirdParties: 20, gpEmployees: 10, gcsfItems: 20, gcDocuments: 50, days: 30 };
 }
 
+async function seedDevDatabase() {
+  try {
+    const existing = store.db.prepare('SELECT id FROM users WHERE email=?').get('claire@acacia.bj');
+    if (!existing) {
+      const record = await passwordRecord('fec-demo');
+      const userId = 'claire-dossou';
+      const workspaceId = 'workspace-acacia';
+      const companyId = 'acacia';
+      const exerciseYear = '2025';
+      const startedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+      store.transaction(() => {
+        store.db.prepare(`INSERT OR IGNORE INTO users (id, name, email, active, password_hash, password_salt, email_verified_at, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)`).run(userId, 'Claire Dossou', 'claire@acacia.bj', record.hash, record.salt, startedAt, startedAt);
+        store.db.prepare(`INSERT OR IGNORE INTO workspace (id, name, created_at) VALUES (?, ?, ?)`).run(workspaceId, 'Acacia & Co', startedAt);
+        store.db.prepare(`INSERT OR IGNORE INTO companies (id, workspace_id, name, short_name, legal_form, address, ifu, activity, country, currency, archived, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`).run(companyId, workspaceId, 'Acacia Conseil', 'AC', 'Entreprise individuelle', 'Cotonou, Bénin', '0202512345678', 'Conseil et gestion', 'BJ', 'XOF', startedAt);
+        store.db.prepare(`INSERT OR IGNORE INTO memberships (id, user_id, company_id, module_id, role, active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)`).run(`membership-${userId}-${companyId}`, userId, companyId, 'CSR', 'ADMIN', startedAt);
+        store.db.prepare(`INSERT OR IGNORE INTO dossiers (id, company_id, code, module_id, exercise_year, exercise_start, exercise_end, status, archived, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`).run('acacia-25-csr', companyId, 'ACACIA-25', 'CSR', exerciseYear, `${exerciseYear}-01-01`, `${exerciseYear}-12-31`, 'Actif', JSON.stringify({ seeded: true }), startedAt);
+        store.db.prepare(`INSERT OR IGNORE INTO fiscal_years (id, company_id, year, label, status, data_json) VALUES (?, ?, ?, ?, ?, ?)`).run(`fy-${companyId}-${exerciseYear}`, companyId, exerciseYear, `Exercice ${exerciseYear}`, 'OPEN', JSON.stringify({ seeded: true }));
+        createMonthlyPeriods(Number(exerciseYear)).forEach((period) => {
+          store.db.prepare(`INSERT OR IGNORE INTO periods (id, company_id, fiscal_year, period_code, start_date, end_date, status, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(`${companyId}-${period.id}`, companyId, exerciseYear, period.id, period.start, period.end, 'OPEN', JSON.stringify(period));
+        });
+        store.db.prepare(`INSERT OR IGNORE INTO trials (id, user_id, workspace_id, plan_code, started_at, expires_at, status, limits_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(`trial-${userId}`, userId, workspaceId, 'CSR · Essai', startedAt, expiresAt, 'ACTIVE', JSON.stringify(trialLimits()), startedAt);
+      });
+      console.log('Utilisateur de démonstration Claire Dossou (claire@acacia.bj) initialisé.');
+    }
+  } catch (err) {
+    console.error('Initialisation dev DB:', err);
+  }
+}
+
+seedDevDatabase();
+
 function sessionFromRequest(request) {
   const cookie = String(request.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('emrys_session='));
   const token = cookie?.slice('emrys_session='.length);
@@ -280,7 +312,20 @@ function staticFile(pathname, response) {
   const relativePath = isApp ? (pathname.slice('/app/'.length) || 'index.html') : (pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, ''));
   const file = resolve(join(base, normalize(relativePath)));
   if (!file.startsWith(`${base}/`) && file !== base || !existsSync(file)) return jsonResponse(response, 404, { code: 'NOT_FOUND', message: 'Page inconnue.' });
-  const type = ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.xml': 'application/xml; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8' })[extname(file)] || 'application/octet-stream';
+  const type = ({
+    '.html': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.ico': 'image/x-icon',
+    '.xml': 'application/xml; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8',
+    '.webmanifest': 'application/manifest+json; charset=utf-8'
+  })[extname(file)] || 'application/octet-stream';
   response.writeHead(200, { 'Content-Type': type, 'Cache-Control': pathname === '/' || isApp ? 'no-store' : 'public, max-age=300' });
   response.end(readFileSync(file));
 }

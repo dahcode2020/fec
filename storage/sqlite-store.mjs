@@ -84,6 +84,7 @@ export function createSqliteWorkspaceStore({ filename = ':memory:' } = {}) {
       return result.changes === 1;
     },
     markSyncEventApplied(id) { db.prepare("UPDATE sync_inbox SET status='APPLIED', applied_at=? WHERE id=?").run(now(), id); },
+    markSyncEventInboxFailed(id, error) { db.prepare("UPDATE sync_inbox SET status='FAILED', error=? WHERE id=?").run(String(error), id); },
     applySyncEvent(event) {
       const payload = event.payload || (typeof event.payload_json === 'string' ? JSON.parse(event.payload_json) : null);
       if (!payload) throw new Error(`Événement ${event.id} sans contenu.`);

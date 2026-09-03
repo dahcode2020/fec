@@ -45,7 +45,9 @@ const amount = (value) => {
 };
 
 const dateFrom = (value) => {
-  const date = value instanceof Date ? new Date(value) : new Date(`${value}T00:00:00Z`);
+  if (value instanceof Date) return new Date(value);
+  const str = String(value || '').trim();
+  const date = str.includes('T') ? new Date(str) : new Date(`${str}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) throw new DomainError(`Date invalide : ${value}`, 'INVALID_DATE');
   return date;
 };
@@ -395,6 +397,26 @@ export function reconcileBankMovement(movement, entry) {
   return { ...movement, status: BANK_MOVEMENT_STATUS.RECONCILED, matchedEntryId: entry.id, reconciledAt: new Date().toISOString() };
 }
 
+export const isSyscohadaChargeAccount = (accountId) => {
+  const acc = String(accountId || '');
+  if (acc.startsWith('6')) return true;
+  if (acc.startsWith('8')) {
+    const secondDigit = Number(acc[1]);
+    return Number.isInteger(secondDigit) ? secondDigit % 2 === 1 : true;
+  }
+  return false;
+};
+
+export const isSyscohadaProductAccount = (accountId) => {
+  const acc = String(accountId || '');
+  if (acc.startsWith('7')) return true;
+  if (acc.startsWith('8')) {
+    const secondDigit = Number(acc[1]);
+    return Number.isInteger(secondDigit) ? secondDigit % 2 === 0 : false;
+  }
+  return false;
+};
+
 export function calculatePeriodResult(entries = [], { companyId, period = null } = {}) {
   const charges = new Map();
   const products = new Map();
@@ -405,16 +427,28 @@ export function calculatePeriodResult(entries = [], { companyId, period = null }
       const accountId = normalizeAccountNumber(line.accountId);
       const debit = amount(line.debit || 0);
       const credit = amount(line.credit || 0);
-      if (accountId.startsWith('6') && debit > 0) { charges.set(accountId, { accountId, label: line.label, amount: (charges.get(accountId)?.amount || 0) + debit }); contributes = true; }
-      if (accountId.startsWith('7') && credit > 0) { products.set(accountId, { accountId, label: line.label, amount: (products.get(accountId)?.amount || 0) + credit }); contributes = true; }
+      if (isSyscohadaChargeAccount(accountId) && (debit > 0 || credit > 0)) {
+        const netCharge = debit - credit;
+        const current = charges.get(accountId) || { accountId, label: line.label || accountId, amount: 0 };
+        current.amount += netCharge;
+        charges.set(accountId, current);
+        contributes = true;
+      }
+      if (isSyscohadaProductAccount(accountId) && (credit > 0 || debit > 0)) {
+        const netProduct = credit - debit;
+        const current = products.get(accountId) || { accountId, label: line.label || accountId, amount: 0 };
+        current.amount += netProduct;
+        products.set(accountId, current);
+        contributes = true;
+      }
     });
     if (contributes) sourceEntryIds.push(entry.id);
   });
-  const chargeLines = [...charges.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label}`, debit: 0, credit: line.amount }));
-  const productLines = [...products.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label}`, debit: line.amount, credit: 0 }));
-  const totalCharges = chargeLines.reduce((sum, line) => sum + line.credit, 0);
-  const totalProducts = productLines.reduce((sum, line) => sum + line.debit, 0);
-  const result = Math.round((totalProducts - totalCharges) * 100) / 100;
+  const chargeLines = [...charges.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label || line.accountId}`, debit: 0, credit: round(line.amount) }));
+  const productLines = [...products.values()].filter((line) => line.amount > 0).map((line) => ({ accountId: line.accountId, label: `Clôture — ${line.label || line.accountId}`, debit: round(line.amount), credit: 0 }));
+  const totalCharges = round(chargeLines.reduce((sum, line) => sum + line.credit, 0));
+  const totalProducts = round(productLines.reduce((sum, line) => sum + line.debit, 0));
+  const result = round(totalProducts - totalCharges);
   const resultAccount = result >= 0 ? '131' : '139';
   // Close class 7 by debiting it and class 6 by crediting it. Only the net
   // result is posted to 131 (profit) or 139 (loss); posting total charges and
@@ -444,8 +478,8 @@ export function buildFinancialStatements(entries = [], { companyId, period = nul
   const trialBalance = buildTrialBalance(entries, { companyId, period, includeTechnical, statuses });
   const balanceSheet = trialBalance.filter((line) => /^[1-5]/.test(line.accountId));
   const incomeStatement = trialBalance.filter((line) => /^[6-8]/.test(line.accountId));
-  const charges = incomeStatement.filter((line) => line.accountId.startsWith('6') || line.accountId.startsWith('8')).reduce((sum, line) => sum + line.debit - line.credit, 0);
-  const products = incomeStatement.filter((line) => line.accountId.startsWith('7') || line.accountId.startsWith('8')).reduce((sum, line) => sum + line.credit - line.debit, 0);
+  const charges = incomeStatement.filter((line) => isSyscohadaChargeAccount(line.accountId)).reduce((sum, line) => sum + line.debit - line.credit, 0);
+  const products = incomeStatement.filter((line) => isSyscohadaProductAccount(line.accountId)).reduce((sum, line) => sum + line.credit - line.debit, 0);
   return { companyId, period, trialBalance, balanceSheet, incomeStatement, totalDebit: trialBalance.reduce((sum, line) => sum + line.debit, 0), totalCredit: trialBalance.reduce((sum, line) => sum + line.credit, 0), charges: round(charges), products: round(products), resultBeforeTax: round(products - charges), generatedAt: new Date().toISOString() };
 }
 
@@ -708,10 +742,10 @@ export function calculateOpeningBalances(entries = [], { companyId, sourceYear }
       const accountId = normalizeAccountNumber(line.accountId);
       const debit = Number(line.debit || 0);
       const credit = Number(line.credit || 0);
-      if (accountId.startsWith('6')) totalCharges += debit;
-      if (accountId.startsWith('7')) totalProducts += credit;
+      if (isSyscohadaChargeAccount(accountId)) totalCharges += (debit - credit);
+      if (isSyscohadaProductAccount(accountId)) totalProducts += (credit - debit);
       if (!/^[1-5]/.test(accountId)) return;
-      const current = byAccount.get(accountId) || { accountId, label: line.label, debit: 0, credit: 0 };
+      const current = byAccount.get(accountId) || { accountId, label: line.label || accountId, debit: 0, credit: 0 };
       current.debit += debit;
       current.credit += credit;
       byAccount.set(accountId, current);
@@ -722,8 +756,8 @@ export function calculateOpeningBalances(entries = [], { companyId, sourceYear }
   const lines = [];
   byAccount.forEach((line) => {
     const balance = Math.round((line.debit - line.credit) * 100) / 100;
-    if (balance > 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: balance, credit: 0 });
-    if (balance < 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label}`, debit: 0, credit: Math.abs(balance) });
+    if (balance > 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label || line.accountId}`, debit: balance, credit: 0 });
+    if (balance < 0) lines.push({ accountId: line.accountId, label: `À-nouveau — ${line.label || line.accountId}`, debit: 0, credit: Math.abs(balance) });
   });
   const result = Math.round((totalProducts - totalCharges) * 100) / 100;
   if (result > 0) lines.push({ accountId: '131', label: 'À-nouveau — résultat bénéficiaire', debit: 0, credit: result });
@@ -1673,3 +1707,339 @@ export function assertPermission(membership, permission) {
 export function roleLabel(role) {
   return USER_ROLE_LABELS[role] || 'Rôle inconnu';
 }
+
+/**
+ * Déclaration de TVA mensuelle selon les règles SYSCOHADA et CGI Bénin
+ */
+export function calculateVatDeclaration(entries = [], { companyId, period, previousCredit = 0, priorVatCredit = 0 }) {
+  if (!companyId || !period) throw new DomainError('La société et la période sont requises pour la déclaration TVA.', 'INVALID_VAT_PARAMS');
+  const periodPrefix = String(period);
+  const relevantEntries = entries.filter((e) => e.companyId === companyId && String(e.date || '').startsWith(periodPrefix) && e.status !== OPERATION_STATES.CANCELLED);
+
+  let taxableSalesBase = 0;
+  let collectedVat = 0;
+  let deductibleVatGoods = 0;
+  let deductibleVatAssets = 0;
+
+  relevantEntries.forEach((entry) => {
+    (entry.lines || []).forEach((line) => {
+      const acc = String(line.accountId || '');
+      const deb = Number(line.debit || 0);
+      const cred = Number(line.credit || 0);
+
+      // Chiffre d'affaires taxable (comptes 70)
+      if (acc.startsWith('70') || acc.startsWith('71') || acc.startsWith('72')) {
+        taxableSalesBase += (cred - deb);
+      }
+      // TVA collectée (4431 / 4432)
+      if (acc.startsWith('4431') || acc.startsWith('4432') || acc.startsWith('443')) {
+        collectedVat += (cred - deb);
+      }
+      // TVA déductible sur biens et services (4452, 4454)
+      if (acc.startsWith('4452') || acc.startsWith('4454') || acc.startsWith('4453')) {
+        deductibleVatGoods += (deb - cred);
+      }
+      // TVA déductible sur immobilisations (4451)
+      if (acc.startsWith('4451')) {
+        deductibleVatAssets += (deb - cred);
+      }
+    });
+  });
+
+  taxableSalesBase = Math.max(0, amount(taxableSalesBase));
+  collectedVat = Math.max(0, amount(collectedVat));
+  deductibleVatGoods = Math.max(0, amount(deductibleVatGoods));
+  deductibleVatAssets = Math.max(0, amount(deductibleVatAssets));
+  const effectivePriorCredit = Math.max(0, amount(previousCredit || priorVatCredit || 0));
+
+  const totalDeductible = amount(deductibleVatGoods + deductibleVatAssets + effectivePriorCredit);
+  const diff = amount(collectedVat - totalDeductible);
+
+  const vatDue = diff > 0 ? diff : 0;
+  const vatCredit = diff < 0 ? Math.abs(diff) : 0;
+
+  return {
+    companyId,
+    period,
+    taxableSalesBase,
+    taxableBase: taxableSalesBase,
+    collectedVat,
+    vatCollected: collectedVat,
+    deductibleVatGoods,
+    vatDeductibleGoods: deductibleVatGoods,
+    deductibleVatAssets,
+    vatDeductibleAssets: deductibleVatAssets,
+    previousCredit: effectivePriorCredit,
+    priorVatCredit: effectivePriorCredit,
+    totalDeductible,
+    vatDue,
+    netVatToPay: vatDue,
+    vatCredit,
+    vatCreditToCarryForward: vatCredit,
+    isCredit: diff < 0
+  };
+}
+
+export function createVatDeclarationEntry({ companyId, period = null, vatDeclaration = null, vatResult = null, dossierId = null, date = null }) {
+  const dec = vatDeclaration || vatResult;
+  if (!dec) throw new DomainError('Déclaration TVA manquante.', 'MISSING_VAT_DECLARATION');
+  const declarationPeriod = period || dec.period || '2025-06';
+  const entryDate = date || `${declarationPeriod}-28`;
+  const lines = [];
+
+  const collected = dec.collectedVat ?? dec.vatCollected ?? 0;
+  const dedGoods = dec.deductibleVatGoods ?? dec.vatDeductibleGoods ?? 0;
+  const dedAssets = dec.deductibleVatAssets ?? dec.vatDeductibleAssets ?? 0;
+  const prevCredit = dec.previousCredit ?? dec.priorVatCredit ?? 0;
+  const due = dec.vatDue ?? dec.netVatToPay ?? 0;
+  const credit = dec.vatCredit ?? dec.vatCreditToCarryForward ?? 0;
+
+  // 1. Solde de la TVA collectée (Débit 4431)
+  if (collected > 0) {
+    lines.push({ accountId: '4431', label: `TVA collectée décomptée — ${declarationPeriod}`, debit: collected, credit: 0 });
+  }
+  // 2. Solde de la TVA déductible sur biens & services (Crédit 4452)
+  if (dedGoods > 0) {
+    lines.push({ accountId: '4452', label: `TVA déductible régularisée — ${declarationPeriod}`, debit: 0, credit: dedGoods });
+  }
+  // 3. Solde de la TVA déductible sur immobilisations (Crédit 4451)
+  if (dedAssets > 0) {
+    lines.push({ accountId: '4451', label: `TVA déductible immo régularisée — ${declarationPeriod}`, debit: 0, credit: dedAssets });
+  }
+  // 4. Utilisation du crédit antérieur (Crédit 4449)
+  if (prevCredit > 0) {
+    lines.push({ accountId: '4449', label: `Report crédit TVA antérieur — ${declarationPeriod}`, debit: 0, credit: prevCredit });
+  }
+  // 5. Constatation de la TVA due (Crédit 4441) ou du Crédit à reporter (Débit 4449)
+  if (due > 0) {
+    lines.push({ accountId: '4441', label: `État, TVA due à décaisser — ${declarationPeriod}`, debit: 0, credit: due });
+  } else if (credit > 0) {
+    lines.push({ accountId: '4449', label: `État, crédit de TVA à reporter — ${declarationPeriod}`, debit: credit, credit: 0 });
+  }
+
+  return createJournalEntry({
+    companyId,
+    journalId: 'OD',
+    date: entryDate,
+    reference: `TVA-${declarationPeriod.replace('-', '')}`,
+    label: `Déclaration mensuelle de TVA — ${declarationPeriod}`,
+    lines
+  }, { dossierId, source: 'SYSTEM', periodOpen: true });
+}
+
+/**
+ * Calcul et suivi des Retenues AIB béninoises (1%, 3%, 5%)
+ */
+export function calculateAibDeclaration(entries = [], { companyId, period }) {
+  if (!companyId || !period) throw new DomainError('La société et la période sont requises.', 'INVALID_AIB_PARAMS');
+  const periodPrefix = String(period);
+  const relevantEntries = entries.filter((e) => e.companyId === companyId && String(e.date || '').startsWith(periodPrefix) && e.status !== OPERATION_STATES.CANCELLED);
+
+  let aib1Percent = 0;
+  let aib3Percent = 0;
+  let aib5Percent = 0;
+  let aibDeductible = 0;
+  const details = [];
+
+  relevantEntries.forEach((entry) => {
+    (entry.lines || []).forEach((line) => {
+      const acc = String(line.accountId || '');
+      const deb = Number(line.debit || 0);
+      const cred = Number(line.credit || 0);
+
+      // AIB Collecté (4471 / 447)
+      if (acc.startsWith('44711') || (acc.startsWith('4471') && (line.label || '').includes('1%'))) {
+        const val = cred - deb;
+        if (val > 0) { aib1Percent += val; details.push({ rate: 0.01, aibAmount: val, amount: val, baseAmount: Math.round(val / 0.01), date: entry.date, reference: entry.reference, label: line.label, thirdPartyName: entry.thirdPartyName || line.label }); }
+      } else if (acc.startsWith('44713') || (acc.startsWith('4471') && (line.label || '').includes('3%'))) {
+        const val = cred - deb;
+        if (val > 0) { aib3Percent += val; details.push({ rate: 0.03, aibAmount: val, amount: val, baseAmount: Math.round(val / 0.03), date: entry.date, reference: entry.reference, label: line.label, thirdPartyName: entry.thirdPartyName || line.label }); }
+      } else if (acc.startsWith('44715') || (acc.startsWith('4471') && (line.label || '').includes('5%'))) {
+        const val = cred - deb;
+        if (val > 0) { aib5Percent += val; details.push({ rate: 0.05, aibAmount: val, amount: val, baseAmount: Math.round(val / 0.05), date: entry.date, reference: entry.reference, label: line.label, thirdPartyName: entry.thirdPartyName || line.label }); }
+      } else if (acc.startsWith('4471') || acc.startsWith('447')) {
+        const val = cred - deb;
+        if (val > 0) { aib1Percent += val; details.push({ rate: 0.01, aibAmount: val, amount: val, baseAmount: Math.round(val / 0.01), date: entry.date, reference: entry.reference, label: line.label, thirdPartyName: entry.thirdPartyName || line.label }); }
+      }
+
+      // AIB Subi / Déductible (4491 / 449)
+      if (acc.startsWith('4491') || acc.startsWith('449')) {
+        const val = deb - cred;
+        if (val > 0) { aibDeductible += val; }
+      }
+    });
+  });
+
+  const totalCollected = amount(aib1Percent + aib3Percent + aib5Percent);
+  return {
+    companyId,
+    period,
+    aib1Percent: amount(aib1Percent),
+    totalAib1: amount(aib1Percent),
+    aib3Percent: amount(aib3Percent),
+    totalAib3: amount(aib3Percent),
+    aib5Percent: amount(aib5Percent),
+    totalAib5: amount(aib5Percent),
+    totalCollected,
+    totalAibRetained: totalCollected,
+    aibDeductible: amount(aibDeductible),
+    netPayable: Math.max(0, amount(totalCollected - aibDeductible)),
+    details,
+    items: details
+  };
+}
+
+/**
+ * Calcul de la cession / sortie d'immobilisation
+ */
+export function calculateAssetDisposal(asset, { disposalDate, disposalPrice = 0, accumulatedDepreciation = 0 }) {
+  if (!asset) throw new DomainError('Immobilisation requise.', 'INVALID_ASSET');
+  const grossValue = Number(asset.cost || asset.value || asset.grossValue || 0);
+  const accumDep = Math.min(grossValue, Math.max(0, Number(accumulatedDepreciation || 0)));
+  const netBookValue = Math.max(0, grossValue - accumDep);
+  const price = Math.max(0, Number(disposalPrice || 0));
+  const capitalGainLoss = price - netBookValue;
+
+  return {
+    assetId: asset.id || asset.assetName,
+    assetName: asset.name || asset.assetName || 'Immobilisation',
+    account: asset.account || '2441',
+    depreciationAccount: asset.accumulatedAccount || '2844',
+    disposalDate: disposalDate || new Date().toISOString().slice(0, 10),
+    grossValue,
+    accumulatedDepreciation: accumDep,
+    netBookValue,
+    disposalPrice: price,
+    capitalGainLoss,
+    isGain: capitalGainLoss >= 0
+  };
+}
+
+export function createAssetDisposalEntries({ asset, disposal, companyId, dossierId = null, paymentMode = 'BANK' }) {
+  if (!disposal) throw new DomainError('Données de cession manquantes.', 'INVALID_DISPOSAL');
+  const date = disposal.disposalDate || new Date().toISOString().slice(0, 10);
+  const entries = [];
+
+  // 1. Constatation du produit de cession
+  const treasuryAccount = paymentMode === 'CASH' ? '5711' : paymentMode === 'BANK' ? '5211' : '4851';
+  if (disposal.disposalPrice > 0) {
+    entries.push(createJournalEntry({
+      companyId,
+      journalId: paymentMode === 'RECEIVABLE' ? 'OD' : paymentMode === 'CASH' ? 'CA' : 'BQ',
+      date,
+      reference: `CES-${date.replace(/-/g, '').slice(2, 8)}`,
+      label: `Cession d'immobilisation — ${disposal.assetName}`,
+      lines: [
+        { accountId: treasuryAccount, label: `Prix de cession — ${disposal.assetName}`, debit: disposal.disposalPrice, credit: 0 },
+        { accountId: '8221', label: `Produit de cession d'immo — ${disposal.assetName}`, debit: 0, credit: disposal.disposalPrice }
+      ]
+    }, { dossierId, source: 'SYSTEM', periodOpen: true }));
+  }
+
+  // 2. Sortie de l'actif (Journal OD)
+  const disposalLines = [
+    { accountId: disposal.depreciationAccount || '2844', label: `Amortissements cumulés soldés — ${disposal.assetName}`, debit: disposal.accumulatedDepreciation, credit: 0 },
+    { accountId: '8121', label: `VNC des immobilisations cédées — ${disposal.assetName}`, debit: disposal.netBookValue, credit: 0 },
+    { accountId: disposal.account || '2441', label: `Valeur brute d'origine — ${disposal.assetName}`, debit: 0, credit: disposal.grossValue }
+  ];
+
+  const filteredLines = disposalLines.filter((line) => line.debit > 0 || line.credit > 0);
+
+  entries.push(createJournalEntry({
+    companyId,
+    journalId: 'OD',
+    date,
+    reference: `SORT-${date.replace(/-/g, '').slice(2, 8)}`,
+    label: `Sortie d'actif — ${disposal.assetName}`,
+    lines: filteredLines
+  }, { dossierId, source: 'SYSTEM', periodOpen: true }));
+
+  return entries;
+}
+
+/**
+ * Calcul des écarts de conversion / réévaluation en devises
+ */
+export function calculateExchangeRevaluation(positions = [], { closingRates = {}, baseCurrency = 'XOF' } = {}) {
+  let totalLatentLoss = 0; // Compte 478 (Écart de conversion Actif)
+  let totalLatentGain = 0; // Compte 479 (Écart de conversion Passif)
+  const items = [];
+
+  positions.forEach((pos) => {
+    const currency = pos.currency || 'EUR';
+    const foreignAmount = Number(pos.amountForeign || 0);
+    const bookRate = Number(pos.bookRate || 1);
+    const closingRate = Number(closingRates[currency] || bookRate);
+
+    const bookValue = amount(foreignAmount * bookRate);
+    const closingValue = amount(foreignAmount * closingRate);
+    const diff = amount(closingValue - bookValue);
+
+    const isAsset = pos.type === 'ASSET' || pos.type === 'RECEIVABLE' || pos.type === 'BANK';
+    let latentLoss = 0;
+    let latentGain = 0;
+
+    if (isAsset) {
+      if (diff < 0) latentLoss = Math.abs(diff);
+      else if (diff > 0) latentGain = diff;
+    } else {
+      // Passif / Dette
+      if (diff > 0) latentLoss = diff;
+      else if (diff < 0) latentGain = Math.abs(diff);
+    }
+
+    totalLatentLoss += latentLoss;
+    totalLatentGain += latentGain;
+
+    items.push({
+      accountId: pos.accountId,
+      accountLabel: pos.accountLabel || 'Position devise',
+      currency,
+      foreignAmount,
+      bookRate,
+      closingRate,
+      bookValue,
+      closingValue,
+      latentLoss,
+      latentGain
+    });
+  });
+
+  return {
+    baseCurrency,
+    totalLatentLoss: amount(totalLatentLoss),
+    totalLatentGain: amount(totalLatentGain),
+    items
+  };
+}
+
+export function createExchangeRevaluationEntry({ revaluation, companyId, date = new Date().toISOString().slice(0, 10), dossierId = null }) {
+  if (!revaluation || (!revaluation.totalLatentLoss && !revaluation.totalLatentGain)) {
+    throw new DomainError('Aucun écart de conversion à comptabiliser.', 'INVALID_REVALUATION');
+  }
+
+  const lines = [];
+
+  revaluation.items.forEach((item) => {
+    if (item.latentLoss > 0) {
+      // Perte latente : Débit 478 (Écart de conversion - Actif), Crédit compte de devise
+      lines.push({ accountId: '478', label: `Écart conversion Actif (perte latente) — ${item.currency}`, debit: item.latentLoss, credit: 0 });
+      lines.push({ accountId: item.accountId, label: `Réévaluation cours clôture — ${item.currency}`, debit: 0, credit: item.latentLoss });
+    }
+    if (item.latentGain > 0) {
+      // Gain latent : Débit compte de devise, Crédit 479 (Écart de conversion - Passif)
+      lines.push({ accountId: item.accountId, label: `Réévaluation cours clôture — ${item.currency}`, debit: item.latentGain, credit: 0 });
+      lines.push({ accountId: '479', label: `Écart conversion Passif (gain latent) — ${item.currency}`, debit: 0, credit: item.latentGain });
+    }
+  });
+
+  return createJournalEntry({
+    companyId,
+    journalId: 'OD',
+    date,
+    reference: `REVAL-${date.replace(/-/g, '').slice(2, 8)}`,
+    label: `Réévaluation devises au cours de clôture`,
+    lines
+  }, { dossierId, source: 'SYSTEM', periodOpen: true });
+}
+

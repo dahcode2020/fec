@@ -12,7 +12,7 @@ cpSync(publicSite, output, { recursive: true });
 
 const appOutput = resolve(output, 'app');
 mkdirSync(appOutput, { recursive: true });
-for (const file of ['index.html', 'styles.css', 'app.js', 'sync-client.js']) cpSync(resolve(application, file), resolve(appOutput, file));
+for (const file of ['index.html', 'styles.css', 'app.js', 'sync-client.js', 'core.js']) cpSync(resolve(application, file), resolve(appOutput, file));
 cpSync(resolve(application, 'data'), resolve(appOutput, 'data'), { recursive: true });
 
 // The application is deliberately a static client at this stage. Its API

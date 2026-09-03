@@ -131,6 +131,11 @@
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="m15 17 2 2 3-3"/></svg>
           <span>Reports à nouveau</span>
         </button>
+        <button class="nav-item" type="button" data-view="taxes">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h16M9 4v16"/><path d="M14 14h2M14 17h2"/></svg>
+          <span>Déclarations fiscales</span>
+          <span class="nav-dot nav-dot-purple"></span>
+        </button>
 
         <span class="nav-label nav-label-spaced">GESTION</span>
         <button class="nav-item" type="button" data-view="sales">
@@ -365,8 +370,7 @@
         </section>
 
         <section class="view" id="view-periods" data-view-panel="periods">
-          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Configuration <span>/</span> Exercices &amp; périodes</p><h1>Exercices &amp; périodes</h1><p class="page-subtitle">Ouvrez, contrôlez et clôturez les périodes de <strong data-company-name>Acacia Conseil</strong>.</p></div><div class="heading-actions"><span class="periods-year-badge"><i></i> <span id="periodsActiveYearBadge">Exercice 2025</span></span><button class="button button-primary" type="button" data-action="open-view" data-view="closing">Contrôler la clôture</button></div></div>
-          <div class="fiscal-year-catalog" id="fiscalYearCatalog"></div>
+          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Configuration <span>/</span> Périodes de l’exercice</p><h1>Périodes de l’exercice</h1><p class="page-subtitle">Ouvrez, contrôlez et clôturez les périodes de <strong data-company-name>Acacia Conseil</strong>.</p></div><div class="heading-actions"><span class="periods-year-badge"><i></i> <span id="periodsActiveYearBadge">Exercice 2025</span></span><button class="button button-primary" type="button" data-action="open-view" data-view="closing">Contrôler la clôture</button></div></div>
           <div class="periods-banner"><span class="periods-banner-icon" id="periodsBannerYear">2025</span><div><span class="eyebrow">EXERCICE COMPTABLE</span><strong><span id="periodsBannerLabel">Exercice 2025</span> · <span data-company-name>Acacia Conseil</span></strong><small>Les 12 périodes sont préparées. Sélectionnez une période pour travailler dans son contexte.</small></div><span class="periods-open-status"><i></i> <span id="periodsBannerStatus">Exercice ouvert</span></span></div>
           <div class="periods-summary"><article class="periods-summary-card"><small>PÉRIODES OUVERTES</small><strong id="openPeriodsCount">12</strong><span>Prêtes à recevoir des saisies</span></article><article class="periods-summary-card"><small>PÉRIODES CLÔTURÉES</small><strong id="closedPeriodsCount">0</strong><span>Verrouillées</span></article><article class="periods-summary-card"><small>PÉRIODE ACTIVE</small><strong id="activePeriodLabel">Juin</strong><span id="activePeriodDates">01/06 — 30/06/2025</span></article><article class="periods-summary-card periods-summary-note"><span class="metric-icon purple-icon">⌁</span><div><small>RÈGLE</small><strong>Une période à la fois</strong><span>La saisie reprend la période active.</span></div></article></div>
           <article class="panel periods-panel"><div class="panel-heading"><div><span class="eyebrow">CALENDRIER DE L’EXERCICE</span><h2 id="periodsPanelTitle">Les périodes de 2025</h2><p>La clôture annuelle nécessite la clôture des douze périodes.</p></div><span class="periods-legend"><i class="legend-open"></i> Ouverte <i class="legend-closed"></i> Clôturée <i class="legend-active"></i> Active</span></div><div class="period-grid" id="periodGrid"></div></article>
@@ -383,8 +387,9 @@
         </section>
 
         <section class="view" id="view-statements" data-view-panel="statements">
-          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Éditions <span>/</span> États financiers</p><h1>États financiers CSR</h1><p class="page-subtitle">Prévisualisez les états de <strong data-company-name>Acacia Conseil</strong> avant leur archivage.</p></div><div class="heading-actions"><span class="statement-regime-badge" id="statementRegimeBadge"><i></i> Système normal</span><button class="button button-secondary" type="button" data-action="preview-statement"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg> Aperçu</button><button class="button button-primary" type="button" data-action="export-statements"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg> Exporter</button></div></div>
-          <div class="statement-toolbar"><div class="statement-period"><span class="eyebrow">PÉRIODE</span><strong id="statementPeriodLabel">Juin 2025</strong><small id="statementPeriodStatus">Données de contrôle · écritures validées et en revue</small></div><div class="statement-mode-switch"><button class="statement-mode is-active" type="button" data-statement-mode="control">Contrôle</button><button class="statement-mode" type="button" data-statement-mode="official">Officiel</button></div><button class="select-button" type="button" data-action="open-view" data-view="periods">Changer la période <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
+          <div class="page-heading"><div><p class="breadcrumb">Espace de travail <span>/</span> Éditions <span>/</span> États financiers</p><h1>États financiers CSR</h1><p class="page-subtitle">Prévisualisez les états de <strong data-company-name>Acacia Conseil</strong> avant leur archivage.</p></div><div class="heading-actions"><span class="statement-year-badge" id="statementYearBadge"><i></i> Exercice 2025 · Ouvert</span><span class="statement-regime-badge" id="statementRegimeBadge"><i></i> Système normal</span><button class="button button-secondary" type="button" data-action="preview-statement"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg> Aperçu</button><button class="button button-primary" type="button" data-action="export-statements"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg> Exporter</button></div></div>
+          <div class="statement-archive-notice" id="statementArchiveNotice" hidden><span class="statement-archive-icon">i</span><div><strong>Consultation historique : <span id="statementArchiveYear">Exercice 2026</span> (Arrêté)</strong><p>Vous consultez les données d’un exercice clos. Pour travailler sur l’exercice en cours, changez de période.</p></div><button class="button button-secondary button-small" type="button" data-action="open-statement-period-modal">Changer de période</button></div>
+          <div class="statement-toolbar"><div class="statement-period"><span class="eyebrow">PÉRIODE &amp; EXERCICE</span><strong id="statementPeriodLabel">Juin 2025 · Exercice 2025</strong><small id="statementPeriodStatus">Données de contrôle · écritures validées et en revue</small></div><div class="statement-mode-switch"><button class="statement-mode is-active" type="button" data-statement-mode="control">Contrôle</button><button class="statement-mode" type="button" data-statement-mode="official">Officiel</button></div><button class="select-button" type="button" data-action="open-statement-period-modal">Changer de période <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
           <div class="statement-summary"><article><small>COMPTES AFFICHÉS</small><strong id="statementAccountCount">0</strong><span>Balance générale</span></article><article><small>TOTAL DÉBIT</small><strong id="statementDebitTotal">0 <em>FCFA</em></strong><span id="statementDebitStatus">Périmètre contrôlé</span></article><article><small>TOTAL CRÉDIT</small><strong id="statementCreditTotal">0 <em>FCFA</em></strong><span>Équilibre calculé</span></article><article class="statement-result-card"><small>RÉSULTAT AVANT IMPÔT</small><strong id="statementResultTotal">0 <em>FCFA</em></strong><span>Calculé sur les comptes 6 et 7</span></article></div>
           <div class="statement-tabs" role="tablist" aria-label="États financiers"><button class="statement-tab is-active" type="button" data-statement-tab="trial">Balance générale</button><button class="statement-tab" type="button" data-statement-tab="income">Compte de résultat</button><button class="statement-tab" type="button" data-statement-tab="balance">Bilan</button><button class="statement-tab" type="button" data-statement-tab="cashflow">Flux de trésorerie</button><button class="statement-tab" type="button" data-statement-tab="notes">Notes et annexes</button></div>
           <article class="panel statement-panel"><div class="panel-heading"><div><span class="eyebrow">APERÇU DE L’ÉTAT</span><h2 id="statementSelectedTitle">Balance générale</h2><p id="statementSelectedDescription">Comptes et soldes du périmètre sélectionné.</p></div><span class="statement-preview-status" id="statementPreviewStatus"><i></i> Aperçu non définitif</span></div><div class="statement-table-wrap" id="statementTableContent"></div></article>
@@ -395,10 +400,11 @@
           <div class="page-heading">
             <div>
               <p class="breadcrumb">Pilotage <span>/</span> Vue d’ensemble</p>
-              <h1>Bonjour Claire <span class="wave">✦</span></h1>
-              <p class="page-subtitle">Voici la situation de <strong data-company-name>Acacia Conseil</strong> au 16 juin 2025.</p>
+              <h1 id="dashboardGreeting">Bonjour Claire <span class="wave">✦</span></h1>
+              <p class="page-subtitle" id="dashboardSubtitle">Voici la situation de <strong data-company-name>Acacia Conseil</strong> pour l’exercice actif.</p>
             </div>
             <div class="heading-actions">
+              <span class="periods-year-badge" id="dashboardYearBadge"><i></i> Exercice 2025</span>
               <button class="button button-secondary" type="button" data-action="open-view" data-view="imports"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg> Importer</button>
               <button class="button button-primary" type="button" data-action="show-quick"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nouvelle opération</button>
             </div>
@@ -407,72 +413,177 @@
           <div class="metric-grid">
             <article class="metric-card metric-card-main">
               <div class="metric-top"><span class="metric-label">TRÉSORERIE DISPONIBLE</span><span class="metric-icon green-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM4 10h16M8 15h3"/><path d="M7 7V5h10v2"/></svg></span></div>
-              <div class="metric-value" data-money="treasury">2 840 500 <small>FCFA</small></div>
-              <div class="metric-foot"><span class="trend trend-up">↗ 8,4 %</span><span>vs. mois dernier</span></div>
+              <div class="metric-value" data-money="treasury" id="dashboardTreasury">2 840 500 <small>FCFA</small></div>
+              <div class="metric-foot"><span class="trend trend-up">↗ Banques &amp; Caisse</span><span>solde net</span></div>
             </article>
             <article class="metric-card">
-              <div class="metric-top"><span class="metric-label">VENTES DU MOIS</span><span class="metric-icon blue-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h15l-1.5 9h-11Z"/><path d="M5 6 4 3H2"/></svg></span></div>
-              <div class="metric-value" data-money="sales">1 265 000 <small>FCFA</small></div>
-              <div class="metric-foot"><span class="trend trend-up">↗ 12,1 %</span><span>vs. mois dernier</span></div>
+              <div class="metric-top"><span class="metric-label">CHIFFRE D’AFFAIRES</span><span class="metric-icon blue-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h15l-1.5 9h-11Z"/><path d="M5 6 4 3H2"/></svg></span></div>
+              <div class="metric-value" data-money="sales" id="dashboardSales">1 265 000 <small>FCFA</small></div>
+              <div class="metric-foot"><span class="trend trend-up">↗ Produits (Classe 7)</span><span id="dashboardSalesCount">Cumul exercice</span></div>
             </article>
             <article class="metric-card">
-              <div class="metric-top"><span class="metric-label">À ENCAISSER</span><span class="metric-icon amber-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5c.3-1 1.2-1.5 2.5-1.5 1.5 0 2.5.7 2.5 1.8 0 2.7-5 1-5 3.7 0 1.1 1 1.9 2.5 1.9 1.3 0 2.2-.5 2.5-1.5"/></svg></span></div>
-              <div class="metric-value" data-money="receivables">486 000 <small>FCFA</small></div>
-              <div class="metric-foot"><span class="muted">4 factures ouvertes</span></div>
+              <div class="metric-top"><span class="metric-label">CRÉANCES CLIENTS</span><span class="metric-icon amber-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5c.3-1 1.2-1.5 2.5-1.5 1.5 0 2.5.7 2.5 1.8 0 2.7-5 1-5 3.7 0 1.1 1 1.9 2.5 1.9 1.3 0 2.2-.5 2.5-1.5"/></svg></span></div>
+              <div class="metric-value" data-money="receivables" id="dashboardReceivables">486 000 <small>FCFA</small></div>
+              <div class="metric-foot"><span class="muted" id="dashboardReceivablesCount">Compte 411 · À encaisser</span></div>
             </article>
             <article class="metric-card">
-              <div class="metric-top"><span class="metric-label">DÉPENSES DU MOIS</span><span class="metric-icon red-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span></div>
-              <div class="metric-value" data-money="expenses">392 400 <small>FCFA</small></div>
-              <div class="metric-foot"><span class="trend trend-down">↘ 3,2 %</span><span>vs. mois dernier</span></div>
+              <div class="metric-top"><span class="metric-label">CHARGES D’EXPLOITATION</span><span class="metric-icon red-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span></div>
+              <div class="metric-value" data-money="expenses" id="dashboardExpenses">392 400 <small>FCFA</small></div>
+              <div class="metric-foot"><span class="trend trend-down">↘ Charges (Classe 6)</span><span id="dashboardExpensesCount">Cumul exercice</span></div>
             </article>
           </div>
 
           <div class="dashboard-grid">
             <article class="panel chart-panel">
               <div class="panel-heading">
-                <div><h2>Activité financière</h2><p>Ventes et dépenses · Juin 2025</p></div>
-                <button class="select-button" type="button">Ce mois-ci <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div><h2 id="dashboardChartHeading">Activité financière</h2><p id="dashboardChartSubtitle">Ventes (Classe 7) et Dépenses (Classe 6)</p></div>
+                <button class="select-button" type="button" data-action="open-view" data-view="statements">Voir les états <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
               </div>
               <div class="chart-legend"><span><i class="legend-dot legend-green"></i> Ventes</span><span><i class="legend-dot legend-blue"></i> Dépenses</span></div>
               <div class="chart-area" aria-label="Graphique de l’activité financière">
-                <div class="y-labels"><span>600k</span><span>450k</span><span>300k</span><span>150k</span><span>0</span></div>
-                <div class="chart-plot">
+                <div class="y-labels" id="dashboardYLabels"><span>600k</span><span>450k</span><span>300k</span><span>150k</span><span>0</span></div>
+                <div class="chart-plot" id="dashboardChartPlot">
                   <div class="grid-line line-1"></div><div class="grid-line line-2"></div><div class="grid-line line-3"></div><div class="grid-line line-4"></div><div class="grid-line line-5"></div>
-                  <div class="bars-row">
-                    <div class="bar-group"><div class="bar bar-green" style="height: 42%" title="Semaine 1 · 550 000 FCFA"></div><div class="bar bar-blue" style="height: 20%" title="Semaine 1 · 230 000 FCFA"></div><small>03 juin</small></div>
-                    <div class="bar-group"><div class="bar bar-green" style="height: 60%" title="Semaine 2 · 780 000 FCFA"></div><div class="bar bar-blue" style="height: 27%" title="Semaine 2 · 320 000 FCFA"></div><small>10 juin</small></div>
-                    <div class="bar-group"><div class="bar bar-green" style="height: 48%" title="Semaine 3 · 640 000 FCFA"></div><div class="bar bar-blue" style="height: 19%" title="Semaine 3 · 220 000 FCFA"></div><small>17 juin</small></div>
-                    <div class="bar-group is-muted"><div class="bar bar-green" style="height: 30%"></div><div class="bar bar-blue" style="height: 15%"></div><small>24 juin</small></div>
-                  </div>
+                  <div class="bars-row" id="dashboardBarsRow"></div>
                 </div>
               </div>
             </article>
 
             <article class="panel control-panel">
-              <div class="panel-heading"><div><h2>À contrôler</h2><p>Les prochaines actions</p></div><span class="control-total">3</span></div>
-              <div class="control-list">
-                <button class="control-item" type="button" data-action="open-view" data-view="imports"><span class="control-symbol control-symbol-purple">↓</span><span><strong>Balance à intégrer</strong><small>Fichier reçu · il y a 12 min</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-                <button class="control-item" type="button" data-action="open-view" data-view="assets"><span class="control-symbol control-symbol-amber">◴</span><span><strong>Dotation de juin</strong><small>2 immobilisations à générer</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-                <button class="control-item" type="button" data-action="open-view" data-view="sales"><span class="control-symbol control-symbol-blue">€</span><span><strong>Facture à relancer</strong><small>Échéance dépassée · 86 000 FCFA</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <div class="panel-heading"><div><h2>À contrôler</h2><p>Les prochaines actions du dossier</p></div><span class="control-total" id="dashboardAlertsTotal">3</span></div>
+              <div class="control-list" id="dashboardControlList">
+                <button class="control-item" type="button" data-action="open-view" data-view="journal"><span class="control-symbol control-symbol-purple">↓</span><span><strong>Écritures en revue</strong><small>À valider dans le livre journal</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button class="control-item" type="button" data-action="open-view" data-view="assets"><span class="control-symbol control-symbol-amber">◴</span><span><strong>Amortissements</strong><small>Dotations de l'exercice</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button class="control-item" type="button" data-action="open-view" data-view="bank"><span class="control-symbol control-symbol-blue">€</span><span><strong>Rapprochement bancaire</strong><small>Mouvements en attente</small></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
               </div>
-              <button class="text-button" type="button" data-action="open-view" data-view="journal">Voir toutes les actions <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+              <button class="text-button" type="button" data-action="open-view" data-view="journal">Voir le livre journal <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
             </article>
           </div>
 
           <div class="bottom-grid">
             <article class="panel table-panel">
-              <div class="panel-heading"><div><h2>Dernières opérations</h2><p>Les mouvements récents de votre société</p></div><button class="text-button" type="button" data-action="open-view" data-view="journal">Tout voir <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
-              <div class="table-wrap"><table><thead><tr><th>OPÉRATION</th><th>DATE</th><th>CATÉGORIE</th><th class="align-right">MONTANT</th><th>STATUT</th></tr></thead><tbody>
+              <div class="panel-heading"><div><h2>Dernières opérations</h2><p>Mouvements récents de la société active</p></div><button class="text-button" type="button" data-action="open-view" data-view="journal">Tout voir <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
+              <div class="table-wrap"><table><thead><tr><th>OPÉRATION</th><th>DATE</th><th>CATÉGORIE</th><th class="align-right">MONTANT</th><th>STATUT</th></tr></thead><tbody id="dashboardRecentRows">
                 <tr><td><span class="table-icon table-icon-green">↗</span><span class="cell-title">Vente — Bénin Services</span></td><td>16 juin 2025</td><td>Prestation</td><td class="align-right amount-positive">+ 240 000</td><td><span class="status status-green">Validée</span></td></tr>
                 <tr><td><span class="table-icon table-icon-blue">↙</span><span class="cell-title">Achat — Cotonou Bureau</span></td><td>15 juin 2025</td><td>Fournitures</td><td class="align-right">− 38 500</td><td><span class="status status-green">Validée</span></td></tr>
-                <tr><td><span class="table-icon table-icon-amber">↗</span><span class="cell-title">Vente — Awa Concept</span></td><td>13 juin 2025</td><td>Prestation</td><td class="align-right amount-positive">+ 180 000</td><td><span class="status status-amber">À encaisser</span></td></tr>
-                <tr><td><span class="table-icon table-icon-purple">◎</span><span class="cell-title">Frais — NSIA Banque</span></td><td>12 juin 2025</td><td>Frais bancaires</td><td class="align-right">− 4 800</td><td><span class="status status-green">Validée</span></td></tr>
               </tbody></table></div>
             </article>
             <article class="panel cash-panel">
-              <div class="panel-heading"><div><h2>Répartition des soldes</h2><p>Trésorerie disponible</p></div><button class="icon-button small" type="button" aria-label="Options"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
-              <div class="donut-wrap"><div class="donut"><div class="donut-center"><strong>2,84 M</strong><small>FCFA</small></div></div><div class="donut-legend"><span><i class="legend-dot legend-green"></i><b>Banque</b><strong>2 340 500</strong></span><span><i class="legend-dot legend-blue"></i><b>Caisse</b><strong>500 000</strong></span></div></div>
+              <div class="panel-heading"><div><h2>Répartition des soldes</h2><p>Trésorerie disponible</p></div><button class="icon-button small" type="button" aria-label="Options" data-action="open-view" data-view="treasury"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+              <div class="donut-wrap" id="dashboardDonutWrap">
+                <div class="donut" id="dashboardDonutElement">
+                  <div class="donut-center" id="dashboardDonutCenter"><strong>2,84 M</strong><small>FCFA</small></div>
+                </div>
+                <div class="donut-legend" id="dashboardDonutLegend">
+                  <span><i class="legend-dot legend-green"></i><b>Banque</b><strong id="dashboardBankBalance">2 340 500 FCFA</strong></span>
+                  <span><i class="legend-dot legend-blue"></i><b>Caisse</b><strong id="dashboardCashBalance">500 000 FCFA</strong></span>
+                </div>
+              </div>
               <button class="button button-secondary button-full" type="button" data-action="open-view" data-view="treasury">Ouvrir la trésorerie</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-taxes" data-view-panel="taxes">
+          <div class="page-heading">
+            <div>
+              <p class="breadcrumb">Espace de travail <span>/</span> CSR <span>/</span> Fiscalité &amp; Déclarations</p>
+              <h1>Déclarations fiscales (Bénin)</h1>
+              <p class="page-subtitle">Générez vos déclarations mensuelles de TVA et retenues AIB conformes au CGI béninois.</p>
+            </div>
+            <div class="heading-actions">
+              <span class="periods-year-badge" id="taxesActiveYearBadge"><i></i> Exercice 2025</span>
+              <button class="button button-secondary" type="button" data-action="open-view" data-view="statements">Voir les états</button>
+            </div>
+          </div>
+
+          <div class="tax-tabs" role="tablist">
+            <button class="tax-tab is-active" type="button" data-tax-tab="vat">Déclaration TVA (18 %)</button>
+            <button class="tax-tab" type="button" data-tax-tab="aib">Retenues AIB (1%, 3%, 5%)</button>
+            <button class="tax-tab" type="button" data-tax-tab="reval">Réévaluation Devises</button>
+          </div>
+
+          <!-- Volet TVA -->
+          <div class="tax-panel-wrap" id="vatTaxPane">
+            <div class="vat-summary-grid">
+              <article class="metric-card"><small>TVA COLLECTÉE (4431)</small><strong id="vatCollectedAmount">0 FCFA</strong><span>Sur chiffre d’affaires taxable</span></article>
+              <article class="metric-card"><small>TVA DÉDUCTIBLE (445)</small><strong id="vatDeductibleAmount">0 FCFA</strong><span>Achats &amp; Immobilisations</span></article>
+              <article class="metric-card"><small>REPORT CRÉDIT ANTÉRIEUR</small><strong id="vatPriorCreditAmount">0 FCFA</strong><span>Compte 4449</span></article>
+              <article class="metric-card metric-card-main"><small id="vatResultLabel">NET À PAYER</small><strong id="vatNetAmount">0 FCFA</strong><span id="vatResultDetail">Au titre de la période</span></article>
+            </div>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="eyebrow">BORDEREAU MENSUEL DE TVA</span>
+                  <h2 id="vatPeriodTitle">Déclaration de TVA · Juin 2025</h2>
+                  <p>Décompte automatique des comptes 443 et 445 de la période active.</p>
+                </div>
+                <div class="panel-actions">
+                  <select class="select-button select-native" id="vatPeriodSelect"></select>
+                  <button class="button button-primary button-small" type="button" data-action="generate-vat-entry" id="generateVatButton">Générer l’écriture d’apurement</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="statement-data-table">
+                  <thead><tr><th>LIGNE DE DÉCLARATION</th><th>COMPTES SOURCES</th><th class="align-right">BASE HT</th><th class="align-right">TAUX</th><th class="align-right">MONTANT TAXE</th></tr></thead>
+                  <tbody id="vatCalculationRows"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+
+          <!-- Volet AIB -->
+          <div class="tax-panel-wrap" id="aibTaxPane" hidden>
+            <div class="vat-summary-grid">
+              <article class="metric-card"><small>AIB 1 % (PRESTATIONS FORMELLES)</small><strong id="aib1Amount">0 FCFA</strong><span>Fournisseurs avec IFU</span></article>
+              <article class="metric-card"><small>AIB 3 % (MARCHANDISES / TPS)</small><strong id="aib3Amount">0 FCFA</strong><span>Achats marchands</span></article>
+              <article class="metric-card"><small>AIB 5 % (NON IMMATRICULÉS)</small><strong id="aib5Amount">0 FCFA</strong><span>Prestataires informels</span></article>
+              <article class="metric-card metric-card-main"><small>TOTAL AIB RETENU</small><strong id="aibTotalAmount">0 FCFA</strong><span>À reverser au Trésor</span></article>
+            </div>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="eyebrow">REGISTRE DES RETENUES À LA SOURCE</span>
+                  <h2>Bordereau des retenues AIB de la période</h2>
+                  <p>Liste des opérations de charges soumises aux retenues AIB.</p>
+                </div>
+                <button class="button button-secondary button-small" type="button" data-action="export-aib-report">Exporter le bordereau AIB</button>
+              </div>
+              <div class="table-wrap">
+                <table class="statement-data-table">
+                  <thead><tr><th>DATE</th><th>PIÈCE / TIERS</th><th>TAUX AIB</th><th class="align-right">MONTANT BRUT</th><th class="align-right">RETENUE AIB</th><th>ÉTAT</th></tr></thead>
+                  <tbody id="aibDetailRows"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+
+          <!-- Volet Réévaluation Devises -->
+          <div class="tax-panel-wrap" id="revalTaxPane" hidden>
+            <div class="vat-summary-grid">
+              <article class="metric-card"><small>PERTES LATENTES (478)</small><strong id="revalLossAmount">0 FCFA</strong><span>Écart conversion Actif</span></article>
+              <article class="metric-card"><small>GAINS LATENTS (479)</small><strong id="revalGainAmount">0 FCFA</strong><span>Écart conversion Passif</span></article>
+              <article class="metric-card"><small>POSITIONS DEVISES</small><strong id="revalPositionCount">2</strong><span>Comptes EUR / USD</span></article>
+              <article class="metric-card metric-card-main"><small>IMPACT NET LATENT</small><strong id="revalNetAmount">0 FCFA</strong><span>Avant clôture</span></article>
+            </div>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="eyebrow">RÉÉVALUATION DES POSITIONS DE FIN DE PÉRIODE</span>
+                  <h2>Écarts de conversion en devises</h2>
+                  <p>Ajustement des soldes de trésorerie et dettes en devises étrangères au cours de clôture.</p>
+                </div>
+                <button class="button button-primary button-small" type="button" data-action="generate-exchange-entry">Générer l’écriture d’écart</button>
+              </div>
+              <div class="table-wrap">
+                <table class="statement-data-table">
+                  <thead><tr><th>COMPTE DEVISE</th><th>DEVISE</th><th class="align-right">MONTANT DEVISE</th><th class="align-right">COURS HISTORIQUE</th><th class="align-right">COURS CLÔTURE</th><th class="align-right">VALEUR RÉÉVALUÉE</th><th>ÉCART CONVERSION</th></tr></thead>
+                  <tbody id="revalRows"></tbody>
+                </table>
+              </div>
             </article>
           </div>
         </section>
@@ -508,10 +619,10 @@
         </section>
 
         <section class="view" id="view-assets" data-view-panel="assets">
-          <div class="page-heading"><div><p class="breadcrumb">Gestion <span>/</span> Immobilisations</p><h1>Immobilisations</h1><p class="page-subtitle">Suivez vos biens et générez vos dotations sans refaire les calculs à la main.</p></div><div class="heading-actions"><button class="button button-secondary" type="button" data-action="open-view" data-view="reports">Voir les états</button><button class="button button-primary" type="button" data-action="show-asset-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Ajouter une immobilisation</button></div></div>
-          <div class="asset-summary"><article class="summary-card"><span class="metric-icon purple-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5"/></svg></span><div><small>VALEUR BRUTE</small><strong>1 420 000 <em>FCFA</em></strong></div></article><article class="summary-card"><span class="metric-icon blue-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h14M7 16h10M9 13h6M11 5h2M12 5v8"/></svg></span><div><small>AMORTI CUMULÉ</small><strong>238 000 <em>FCFA</em></strong></div></article><article class="summary-card"><span class="metric-icon green-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16 4-4 3 2 7-7"/><path d="M15 7h4v4"/></svg></span><div><small>VALEUR NETTE</small><strong>1 182 000 <em>FCFA</em></strong></div></article><article class="summary-card summary-card-action"><div><small>PROCHAINE DOTATION</small><strong>30 juin 2025</strong><span>2 immobilisations · 23 667 FCFA</span></div><button class="button button-primary button-small" type="button" data-action="generate-depreciation">Générer</button></article></div>
-          <article class="panel table-panel"><div class="panel-heading"><div><h2>Registre des immobilisations</h2><p>3 biens enregistrés · Méthode linéaire</p></div><div class="panel-actions"><div class="search-field compact"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" placeholder="Rechercher"></div><button class="select-button" type="button">En service <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div></div><div class="table-wrap"><table><thead><tr><th>IMMOBILISATION</th><th>MISE EN SERVICE</th><th>DURÉE</th><th>MÉTHODE</th><th class="align-right">VALEUR BRUTE</th><th>STATUT</th><th></th></tr></thead><tbody id="assetRows"><tr><td><span class="table-icon table-icon-purple">▣</span><span class="cell-title">Ordinateur portable Dell</span><small class="cell-subtitle">IMM-2025-001 · Matériel informatique</small></td><td>01 jan 2025</td><td>3 ans</td><td>Linéaire</td><td class="align-right">850 000</td><td><span class="status status-green">En service</span></td><td><button class="icon-button small" type="button" aria-label="Voir le détail"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></td></tr><tr><td><span class="table-icon table-icon-blue">▤</span><span class="cell-title">Imprimante laser</span><small class="cell-subtitle">IMM-2025-002 · Matériel de bureau</small></td><td>15 fév 2025</td><td>5 ans</td><td>Linéaire</td><td class="align-right">420 000</td><td><span class="status status-green">En service</span></td><td><button class="icon-button small" type="button" aria-label="Voir le détail"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></td></tr><tr><td><span class="table-icon table-icon-amber">▥</span><span class="cell-title">Climatiseur bureau</span><small class="cell-subtitle">IMM-2025-003 · Installations</small></td><td>01 mars 2025</td><td>5 ans</td><td>Linéaire</td><td class="align-right">150 000</td><td><span class="status status-amber">À contrôler</span></td><td><button class="icon-button small" type="button" aria-label="Voir le détail"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></td></tr></tbody></table></div></article>
-          <div class="depreciation-callout"><span class="callout-icon">◴</span><div><strong>Votre prochaine dotation est prête à être contrôlée.</strong><p>FEC calculera la dotation de juin, puis vous présentera l’écriture avant sa validation dans le journal des opérations diverses.</p></div><button class="text-button" type="button" data-action="generate-depreciation">Prévisualiser l’écriture <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
+          <div class="page-heading"><div><p class="breadcrumb">Gestion <span>/</span> Immobilisations</p><h1>Immobilisations</h1><p class="page-subtitle">Suivez vos biens, calculez leurs dotations et gérez les cessions d'actifs.</p></div><div class="heading-actions"><button class="button button-secondary" type="button" data-action="open-view" data-view="reports">Voir les états</button><button class="button button-primary" type="button" data-action="show-asset-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Ajouter une immobilisation</button></div></div>
+          <div class="asset-summary"><article class="summary-card"><span class="metric-icon purple-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5"/></svg></span><div><small>VALEUR BRUTE</small><strong id="assetTotalGross">1 420 000 <em>FCFA</em></strong></div></article><article class="summary-card"><span class="metric-icon blue-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h14M7 16h10M9 13h6M11 5h2M12 5v8"/></svg></span><div><small>AMORTI CUMULÉ</small><strong id="assetTotalDepreciation">238 000 <em>FCFA</em></strong></div></article><article class="summary-card"><span class="metric-icon green-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16 4-4 3 2 7-7"/><path d="M15 7h4v4"/></svg></span><div><small>VALEUR NETTE</small><strong id="assetTotalNet">1 182 000 <em>FCFA</em></strong></div></article><article class="summary-card summary-card-action"><div><small>PROCHAINE DOTATION</small><strong id="assetNextDate">30 juin 2025</strong><span id="assetNextDetail">2 immobilisations · 23 667 FCFA</span></div><button class="button button-primary button-small" type="button" data-action="generate-depreciation">Générer</button></article></div>
+          <article class="panel table-panel"><div class="panel-heading"><div><h2>Registre des immobilisations</h2><p id="assetRegisterSubtitle">Biens enregistrés · Méthode linéaire SYSCOHADA</p></div><div class="panel-actions"><div class="search-field compact"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 5 5"/></svg><input id="assetSearchInput" type="search" placeholder="Rechercher..."></div></div></div><div class="table-wrap"><table><thead><tr><th>IMMOBILISATION</th><th>MISE EN SERVICE</th><th>DURÉE</th><th>MÉTHODE</th><th class="align-right">VALEUR BRUTE</th><th class="align-right">VNC</th><th>STATUT</th><th>ACTIONS</th></tr></thead><tbody id="assetRows"></tbody></table></div></article>
+          <div class="depreciation-callout"><span class="callout-icon">◴</span><div><strong>Votre prochaine dotation est prête à être contrôlée.</strong><p>FEC calculera la dotation de fin de période, puis vous présentera l’écriture avant sa validation dans le journal des opérations diverses.</p></div><button class="text-button" type="button" data-action="generate-depreciation">Prévisualiser l’écriture <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
         </section>
 
         <section class="view" id="view-imports" data-view-panel="imports">
@@ -559,7 +670,81 @@
   <div class="modal fec-correction-modal" id="fecCorrectionModal" role="dialog" aria-modal="true" aria-labelledby="fecCorrectionTitle" hidden><div class="modal-header"><div><span class="eyebrow">CORRECTION CIBLÉE FEC</span><h2 id="fecCorrectionTitle">Compléter une écriture</h2><p class="modal-subtitle"><span id="fecCorrectionContext">VE · FAC-0000 · ligne 1</span> · <span id="fecCorrectionStatus">Écriture à contrôler</span></p></div><button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="fec-correction-note"><span>i</span><p>Cette correction modifie la donnée comptable source. Elle sera enregistrée dans la piste d’audit et le précontrôle FEC sera relancé.</p></div><form id="fecCorrectionForm"><input type="hidden" id="fecCorrectionEntryId"><input type="hidden" id="fecCorrectionLineNumber"><div class="fec-correction-section"><span class="form-section-label">INFORMATIONS DE L’ÉCRITURE</span><div class="form-grid"><label class="field"><span>Référence de pièce <b>*</b></span><input id="fecCorrectionReference" type="text" required></label><label class="field"><span>Date de pièce <b>*</b></span><input id="fecCorrectionPieceDate" type="date" required></label><label class="field field-span-2"><span>Libellé de l’écriture <b>*</b></span><input id="fecCorrectionLabel" type="text" required></label><label class="field"><span>Date de validation</span><input id="fecCorrectionValidationDate" type="date"><small class="field-help">Obligatoire si l’écriture est validée.</small></label><label class="field"><span>Compte <b>*</b></span><select id="fecCorrectionAccount" required></select></label></div></div><div class="fec-correction-section"><span class="form-section-label">TIERS ET RÈGLEMENT</span><div class="form-grid"><label class="field field-span-2"><span>Tiers auxiliaire</span><select id="fecCorrectionThirdParty"></select></label><label class="field"><span>Date de règlement</span><input id="fecCorrectionSettlementDate" type="date"></label><label class="field"><span>Mode de règlement</span><input id="fecCorrectionSettlementMode" type="text" placeholder="Virement, espèces…"></label></div><p class="field-help fec-correction-smt-help">Les informations de règlement sont utilisées pour les champs supplémentaires du SMT.</p></div><label class="field fec-correction-reason"><span>Motif de la correction <b>*</b></span><textarea id="fecCorrectionReason" rows="3" placeholder="Ex. Référence de facture retrouvée dans la pièce justificative" required></textarea></label><div class="modal-actions"><button class="button button-secondary" type="button" data-action="close-modal">Annuler</button><button class="button button-primary" type="submit">Enregistrer et relancer le contrôle</button></div></form></div>
   <div class="modal dossier-modal" id="companyModal" role="dialog" aria-modal="true" aria-labelledby="companyModalTitle" hidden><div class="modal-header"><div><span class="eyebrow">NOUVEAU DOSSIER</span><h2 id="companyModalTitle">Créer un dossier</h2><p class="modal-subtitle">Les informations de votre société et de son premier exercice.</p></div><button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="companyForm"><div class="dossier-form-section"><span class="form-section-label">IDENTITÉ DE LA SOCIÉTÉ</span><div class="form-grid"><label class="field field-span-2"><span>Nom de la société <b>*</b></span><input name="companyName" type="text" placeholder="Ex. Les Jardins de Cotonou" autocomplete="organization" required></label><label class="field"><span>Forme juridique <b>*</b></span><select name="legalForm" id="legalForm" required><option value="">Sélectionner</option><option value="SARL">SARL</option><option value="SA">SA</option><option value="SAS">SAS</option><option value="ETS">ETS</option><option value="AUTRES">Autres</option></select></label><label class="field" id="legalFormOtherField" hidden><span>Préciser la forme</span><input name="legalFormOther" type="text" placeholder="Forme juridique"></label><label class="field field-span-2"><span>Adresse <b>*</b></span><input name="companyAddress" type="text" placeholder="Ex. Cotonou, quartier Haie Vive" autocomplete="street-address" required></label><label class="field"><span>IFU <b>*</b></span><input name="companyIfu" type="text" placeholder="Ex. 3202400000000" inputmode="numeric" required></label><label class="field"><span>Activité principale <b>*</b></span><input name="companyActivity" type="text" placeholder="Ex. Conseil et services" required></label></div></div><div class="dossier-form-section"><span class="form-section-label">IDENTIFICATION DU DOSSIER</span><div class="form-grid"><label class="field"><span>Code ou sigle <b>*</b></span><input name="companyCode" id="companyCode" type="text" placeholder="Ex. ACACIA" maxlength="18" autocomplete="off" required><small class="field-help">Il apparaîtra dans la liste des dossiers.</small></label><div class="dossier-code-preview"><span class="field-label">CODE DU DOSSIER</span><strong id="dossierCodePreview">SIGLE-YY</strong><small>Le suffixe correspond à l’année d’ouverture de l’exercice.</small></div><label class="field"><span>Début de l’exercice <b>*</b></span><input name="exerciseStart" id="exerciseStart" type="date" value="2025-01-01" required></label><label class="field"><span>Fin de l’exercice <b>*</b></span><input name="exerciseEnd" id="exerciseEnd" type="date" value="2025-12-31" required></label></div><div class="exercise-preview"><span class="exercise-preview-icon">◷</span><span><small>PÉRIODE D’EXERCICE</small><strong id="exercisePreview">01/01/2025 — 31/12/2025</strong></span><span class="exercise-hint">Le <b>-25</b> est généré automatiquement.</span></div></div><div class="modal-note"><span>✦</span><p>Le plan comptable SYSCOHADA, les journaux et les paramètres du dossier seront configurés à l’étape suivante.</p></div><div class="modal-actions"><button class="button button-secondary" type="button" data-action="close-modal">Annuler</button><button class="button button-primary" type="submit">Créer le dossier <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></form></div>
   <div class="modal" id="assetModal" role="dialog" aria-modal="true" aria-labelledby="assetModalTitle" hidden><div class="modal-header"><div><span class="eyebrow">REGISTRE DES ACTIFS</span><h2 id="assetModalTitle">Ajouter une immobilisation</h2></div><button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="assetForm"><label class="field"><span>Désignation <b>*</b></span><input name="assetName" type="text" placeholder="Ex. Téléphone professionnel" required></label><div class="form-grid"><label class="field"><span>Valeur d’origine <b>*</b></span><input name="assetValue" type="text" placeholder="0 FCFA" required></label><label class="field"><span>Mise en service <b>*</b></span><input name="assetDate" type="text" value="16/06/2025" required></label><label class="field"><span>Durée d’utilisation</span><select name="assetDuration"><option>3 ans</option><option>5 ans</option><option>10 ans</option></select></label><label class="field"><span>Méthode</span><select name="assetMethod"><option>Linéaire</option><option>À définir avec le comptable</option></select></label></div><div class="modal-note"><span>◴</span><p>Un plan d’amortissement prévisionnel sera calculé automatiquement. Vous le contrôlerez avant toute écriture.</p></div><div class="modal-actions"><button class="button button-secondary" type="button" data-action="close-modal">Annuler</button><button class="button button-primary" type="submit">Créer et calculer le plan</button></div></form></div>
+  <div class="modal" id="assetDisposalModal" role="dialog" aria-modal="true" aria-labelledby="assetDisposalTitle" hidden>
+    <div class="modal-header">
+      <div>
+        <span class="eyebrow">SORTIE D'ACTIF · CESSION</span>
+        <h2 id="assetDisposalTitle">Céder ou sortir une immobilisation</h2>
+        <p class="modal-subtitle">Calculez la VNC et enregistrez automatiquement la plus ou moins-value.</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <form id="assetDisposalForm">
+      <input type="hidden" id="disposalAssetId">
+      <div class="form-grid">
+        <label class="field field-span-2"><span>Immobilisation sélectionnée <b>*</b></span><input id="disposalAssetName" type="text" readonly disabled></label>
+        <label class="field"><span>Date de cession <b>*</b></span><input id="disposalDate" type="date" required></label>
+        <label class="field"><span>Prix de cession (FCFA) <b>*</b></span><input id="disposalPrice" type="number" min="0" value="0" required></label>
+        <label class="field"><span>Mode de règlement</span><select id="disposalPaymentMode"><option value="BANK">Banque (5211)</option><option value="CASH">Caisse (5711)</option><option value="RECEIVABLE">Créance sur cession (4851)</option></select></label>
+        <label class="field"><span>Motif de sortie</span><select id="disposalReason"><option value="SALE">Cession / Vente</option><option value="SCRAP">Mise au rebut</option><option value="THEFT">Perte ou vol</option></select></label>
+      </div>
+      <div class="disposal-calc-preview">
+        <div class="disposal-stat"><span>VALEUR BRUTE (2X)</span><b id="disposalGrossValue">0 FCFA</b></div>
+        <div class="disposal-stat"><span>AMORTISSEMENTS (28X)</span><b id="disposalAccumulated">0 FCFA</b></div>
+        <div class="disposal-stat"><span>VALEUR NETTE (VNC)</span><b id="disposalVnc">0 FCFA</b></div>
+        <div class="disposal-stat disposal-stat-result"><span>PLUS / MOINS-VALUE</span><b id="disposalGainLoss">0 FCFA</b></div>
+      </div>
+      <div class="modal-note"><span>✦</span><p>Deux écritures seront générées dans le journal : produit de cession (8221) et sortie de l'actif (8121, 28x et 2x).</p></div>
+      <div class="modal-actions">
+        <button class="button button-secondary" type="button" data-action="close-modal">Annuler</button>
+        <button class="button button-primary" type="submit">Enregistrer la cession</button>
+      </div>
+    </form>
+  </div>
+  <div class="modal" id="memberModal" role="dialog" aria-modal="true" aria-labelledby="memberModalTitle" hidden>
+    <div class="modal-header">
+      <div>
+        <span class="eyebrow">GESTION DES UTILISATEURS</span>
+        <h2 id="memberModalTitle">Inviter un collaborateur</h2>
+        <p class="modal-subtitle">Attribuez un rôle et des droits d'accès à la société active.</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <form id="memberForm">
+      <div class="form-grid">
+        <label class="field field-span-2"><span>Nom complet <b>*</b></span><input id="memberName" type="text" placeholder="Ex. Koffi Mensah" required></label>
+        <label class="field field-span-2"><span>Adresse e-mail <b>*</b></span><input id="memberEmail" type="email" placeholder="koffi@entreprise.bj" required></label>
+        <label class="field"><span>Rôle dans la société <b>*</b></span><select id="memberRole" required><option value="OPERATOR">Opérateur de saisie</option><option value="CONTROLLER">Contrôleur / Comptable</option><option value="ADMIN">Administrateur</option><option value="READER">Lecture seule</option></select></label>
+        <label class="field"><span>Module autorisé</span><select id="memberModule"><option value="CSR">CSR · Comptabilité SYSCOHADA</option><option value="ALL">Tous les modules activés</option></select></label>
+      </div>
+      <div class="modal-note"><span>✦</span><p>L’utilisateur recevra ses accès et pourra se connecter directement.</p></div>
+      <div class="modal-actions">
+        <button class="button button-secondary" type="button" data-action="close-modal">Annuler</button>
+        <button class="button button-primary" type="submit">Ajouter le collaborateur</button>
+      </div>
+    </form>
+  </div>
   <div class="quick-menu" id="quickMenu" hidden><div class="quick-menu-header"><strong>Nouvelle opération</strong><button class="icon-button small" type="button" data-action="close-quick"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><button type="button" data-action="open-entry-invoice" data-invoice-type="SALE"><span class="quick-icon quick-green">↗</span><span><b>Une vente</b><small>Facture client et imputation</small></span></button><button type="button" data-action="open-entry-invoice" data-invoice-type="PURCHASE"><span class="quick-icon quick-blue">↙</span><span><b>Un achat</b><small>Facture fournisseur et paiement</small></span></button><button type="button" data-action="show-asset-modal"><span class="quick-icon quick-purple">◈</span><span><b>Une immobilisation</b><small>Calculer son amortissement</small></span></button><button type="button" data-action="open-view" data-view="treasury"><span class="quick-icon quick-amber">₣</span><span><b>Un mouvement de trésorerie</b><small>Encaissement ou décaissement</small></span></button></div>
+  <div class="modal statement-period-modal" id="statementPeriodModal" role="dialog" aria-modal="true" aria-labelledby="statementPeriodTitle" hidden>
+    <div class="modal-header">
+      <div>
+        <span class="eyebrow">PÉRIMÈTRE DES ÉTATS</span>
+        <h2 id="statementPeriodTitle">Changer de période</h2>
+        <p class="modal-subtitle">Sélectionnez la période à afficher pour l’exercice en cours.</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Fermer" data-action="close-modal"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="statement-period-modal-body">
+      <div class="statement-modal-section">
+        <span class="form-section-label">PÉRIODES DE L’EXERCICE EN COURS</span>
+        <div class="statement-modal-period-grid" id="statementModalPeriods"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="button button-secondary" type="button" data-action="close-modal">Fermer</button>
+      <button class="text-button" type="button" data-action="open-periods-view">Gérer les périodes <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+  </div>
   <div class="toast" id="toast" role="status" aria-live="polite"><span class="toast-check">✓</span><span id="toastMessage">Action effectuée</span></div>
   <script type="module" src="app.js"></script>
 </body>
