@@ -1049,13 +1049,367 @@ td:first-child { color: var(--ink); } .align-right { text-align: right; }.amount
 .entry-bank-source strong, .entry-bank-source small { display:block; }
 .entry-bank-source small { margin-top:3px; color:#8aa5b5; font-size:8px; }
 
-/* Déclarations fiscales & TVA */
-.tax-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-.tax-tab { border: none; background: transparent; padding: 8px 16px; font-weight: 700; font-size: 13px; color: var(--muted); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
-.tax-tab:hover { color: var(--ink); background: var(--bg-soft); }
-.tax-tab.is-active { color: var(--primary, #5046e5); background: #eef2ff; }
-.vat-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-.tax-panel-wrap { display: flex; flex-direction: column; gap: 16px; }
+/* Déclarations fiscales & TVA — Design épuré */
+.tax-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 22px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.tax-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  font-weight: 750;
+  font-size: 11px;
+  color: #64748b;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+.tax-tab:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.7);
+}
+.tax-tab.is-active {
+  color: #0f172a;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.tax-tab-icon {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+}
+.tax-tab-badge {
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+}
+.tax-tab.is-active .tax-tab-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tax-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.vat-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.tax-metric-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 112px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.tax-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border-color: #cbd5e1;
+}
+.tax-metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #cbd5e1;
+}
+.tax-metric-card.card-accent-blue::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.tax-metric-card.card-accent-purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.tax-metric-card.card-accent-amber::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.tax-metric-card.card-accent-green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.tax-metric-card.card-accent-red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+.tax-metric-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tax-metric-card-top small {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.tax-metric-tag {
+  font-size: 8px;
+  font-weight: 850;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #475569;
+  letter-spacing: 0.02em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.tax-metric-value {
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+  margin: 10px 0 4px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.tax-metric-desc {
+  font-size: 9px;
+  color: #94a3b8;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tax-metric-desc i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.tax-metric-main {
+  background: linear-gradient(145deg, #f8fafc 0%, #ffffff 100%);
+  border-color: #cbd5e1;
+}
+.tax-metric-main.is-credit {
+  background: linear-gradient(145deg, #f0fdf4 0%, #ffffff 100%);
+  border-color: #86efac;
+}
+.tax-metric-main.is-credit .tax-metric-value {
+  color: #15803d;
+}
+.tax-metric-main.is-credit .tax-metric-tag {
+  background: #dcfce7;
+  color: #166534;
+}
+.tax-metric-main.is-payable {
+  background: linear-gradient(145deg, #fef2f2 0%, #ffffff 100%);
+  border-color: #fca5a5;
+}
+.tax-metric-main.is-payable .tax-metric-value {
+  color: #b91c1c;
+}
+.tax-metric-main.is-payable .tax-metric-tag {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tax-main-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+.tax-main-panel .panel-heading {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 18px;
+}
+.panel-subtitle {
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.tax-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.tax-table thead th {
+  padding: 10px 14px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.tax-table tbody td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--ink);
+  vertical-align: middle;
+}
+.tax-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.tax-account-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 750;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 3px 7px;
+  letter-spacing: 0.02em;
+}
+.tax-account-chip.chip-purple {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border-color: #ede9fe;
+}
+.tax-account-chip.chip-amber {
+  color: #d97706;
+  background: #fffbeb;
+  border-color: #fef3c7;
+}
+
+.tax-rate-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 850;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #334155;
+}
+.tax-aib-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 850;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+.tax-aib-1 { background: #e0f2fe; color: #0369a1; }
+.tax-aib-3 { background: #ede9fe; color: #6d28d9; }
+.tax-aib-5 { background: #fef3c7; color: #b45309; }
+
+.tax-curr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 850;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.curr-eur { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+.curr-usd { background: #f0fdf4; color: #15803d; border: 1px solid #dcfce7; }
+
+.tax-val-plus {
+  color: #16a34a;
+  font-weight: 750;
+}
+.tax-val-minus {
+  color: #64748b;
+  font-weight: 750;
+}
+
+.tax-total-row td {
+  background: #f8fafc !important;
+  border-top: 2px solid #cbd5e1 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  padding: 14px !important;
+  font-size: 12px;
+}
+.tax-total-row strong {
+  color: #0f172a;
+  font-weight: 850;
+}
+
+.tax-diff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.diff-gain { background: #dcfce7; color: #15803d; }
+.diff-loss { background: #fee2e2; color: #b91c1c; }
+
+.tax-subtext {
+  display: block;
+  font-size: 9px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.tax-footer-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.tax-callout-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.tax-callout-text {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.tax-callout-text strong {
+  color: #334155;
+  margin-right: 4px;
+}
+
+@media (max-width: 900px) {
+  .vat-summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .vat-summary-grid { grid-template-columns: 1fr; }
+  .tax-tabs { width: 100%; }
+}
 
 /* Sortie d'actif / Cession modal */
 .disposal-calc-preview { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 14px 0; }

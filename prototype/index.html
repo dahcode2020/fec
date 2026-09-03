@@ -489,46 +489,112 @@
             <div>
               <p class="breadcrumb">Espace de travail <span>/</span> CSR <span>/</span> Fiscalité &amp; Déclarations</p>
               <h1>Déclarations fiscales (Bénin)</h1>
-              <p class="page-subtitle">Générez vos déclarations mensuelles de TVA et retenues AIB conformes au CGI béninois.</p>
+              <p class="page-subtitle">Déclarations périodiques de TVA (e-TVA), retenues à la source AIB et réévaluation des devises selon le CGI béninois 2026.</p>
             </div>
             <div class="heading-actions">
               <span class="periods-year-badge" id="taxesActiveYearBadge"><i></i> Exercice 2025</span>
-              <button class="button button-secondary" type="button" data-action="open-view" data-view="statements">Voir les états</button>
+              <button class="button button-secondary" type="button" data-action="open-view" data-view="statements">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+                Voir les états financiers
+              </button>
             </div>
           </div>
 
-          <div class="tax-tabs" role="tablist">
-            <button class="tax-tab is-active" type="button" data-tax-tab="vat">Déclaration TVA (18 %)</button>
-            <button class="tax-tab" type="button" data-tax-tab="aib">Retenues AIB (1%, 3%, 5%)</button>
-            <button class="tax-tab" type="button" data-tax-tab="reval">Réévaluation Devises</button>
+          <div class="tax-tabs" role="tablist" aria-label="Volets fiscaux">
+            <button class="tax-tab is-active" type="button" data-tax-tab="vat">
+              <span class="tax-tab-icon">📄</span>
+              <span>Déclaration TVA</span>
+              <span class="tax-tab-badge">18 % · 443/445</span>
+            </button>
+            <button class="tax-tab" type="button" data-tax-tab="aib">
+              <span class="tax-tab-icon">🧾</span>
+              <span>Retenues AIB</span>
+              <span class="tax-tab-badge">1%, 3%, 5% · 4472</span>
+            </button>
+            <button class="tax-tab" type="button" data-tax-tab="reval">
+              <span class="tax-tab-icon">💱</span>
+              <span>Réévaluation devises</span>
+              <span class="tax-tab-badge">476 / 477</span>
+            </button>
           </div>
 
           <!-- Volet TVA -->
           <div class="tax-panel-wrap" id="vatTaxPane">
             <div class="vat-summary-grid">
-              <article class="metric-card"><small>TVA COLLECTÉE (4431)</small><strong id="vatCollectedAmount">0 FCFA</strong><span>Sur chiffre d’affaires taxable</span></article>
-              <article class="metric-card"><small>TVA DÉDUCTIBLE (445)</small><strong id="vatDeductibleAmount">0 FCFA</strong><span>Achats &amp; Immobilisations</span></article>
-              <article class="metric-card"><small>REPORT CRÉDIT ANTÉRIEUR</small><strong id="vatPriorCreditAmount">0 FCFA</strong><span>Compte 4449</span></article>
-              <article class="metric-card metric-card-main"><small id="vatResultLabel">NET À PAYER</small><strong id="vatNetAmount">0 FCFA</strong><span id="vatResultDetail">Au titre de la période</span></article>
+              <article class="tax-metric-card card-accent-blue">
+                <div class="tax-metric-card-top">
+                  <small>TVA Collectée</small>
+                  <span class="tax-metric-tag">4431</span>
+                </div>
+                <strong class="tax-metric-value" id="vatCollectedAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Sur ventes &amp; prestations taxables</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-purple">
+                <div class="tax-metric-card-top">
+                  <small>TVA Déductible</small>
+                  <span class="tax-metric-tag">4452 / 4451</span>
+                </div>
+                <strong class="tax-metric-value" id="vatDeductibleAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Biens, services &amp; immobilisations</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-amber">
+                <div class="tax-metric-card-top">
+                  <small>Crédit Antérieur Reporté</small>
+                  <span class="tax-metric-tag">4449</span>
+                </div>
+                <strong class="tax-metric-value" id="vatPriorCreditAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Report du mois précédent</span>
+              </article>
+
+              <article class="tax-metric-card tax-metric-main card-accent-green" id="vatResultCard">
+                <div class="tax-metric-card-top">
+                  <small id="vatResultLabel">NET À PAYER</small>
+                  <span class="tax-metric-tag" id="vatResultAccountTag">4441</span>
+                </div>
+                <strong class="tax-metric-value" id="vatNetAmount">0 FCFA</strong>
+                <span class="tax-metric-desc" id="vatResultDetail"><i></i> Au titre de la période active</span>
+              </article>
             </div>
 
-            <article class="panel">
+            <article class="panel tax-main-panel">
               <div class="panel-heading">
                 <div>
-                  <span class="eyebrow">BORDEREAU MENSUEL DE TVA</span>
+                  <span class="eyebrow">BORDEREAU MENSUEL DE TVA · e-TVA / CGI BÉNIN</span>
                   <h2 id="vatPeriodTitle">Déclaration de TVA · Juin 2025</h2>
-                  <p>Décompte automatique des comptes 443 et 445 de la période active.</p>
+                  <p class="panel-subtitle">Décompte automatisé des comptes de TVA collectée (4431), déductible (4452/4451) et apurement.</p>
                 </div>
                 <div class="panel-actions">
                   <select class="select-button select-native" id="vatPeriodSelect"></select>
-                  <button class="button button-primary button-small" type="button" data-action="generate-vat-entry" id="generateVatButton">Générer l’écriture d’apurement</button>
+                  <button class="button button-primary button-small" type="button" data-action="generate-vat-entry" id="generateVatButton">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Générer l’écriture d’apurement (OD)
+                  </button>
                 </div>
               </div>
+
               <div class="table-wrap">
-                <table class="statement-data-table">
-                  <thead><tr><th>LIGNE DE DÉCLARATION</th><th>COMPTES SOURCES</th><th class="align-right">BASE HT</th><th class="align-right">TAUX</th><th class="align-right">MONTANT TAXE</th></tr></thead>
+                <table class="tax-table">
+                  <thead>
+                    <tr>
+                      <th>LIGNE DE DÉCLARATION</th>
+                      <th>COMPTES SYSCOHADA</th>
+                      <th class="align-right">BASE HT</th>
+                      <th class="align-right">TAUX</th>
+                      <th class="align-right">MONTANT TAXE</th>
+                    </tr>
+                  </thead>
                   <tbody id="vatCalculationRows"></tbody>
                 </table>
+              </div>
+
+              <div class="tax-footer-callout">
+                <div class="tax-callout-icon">ℹ</div>
+                <div class="tax-callout-text">
+                  <strong>Réglementation e-TVA (CGI Bénin 2026) :</strong>
+                  <span>Le taux normal de TVA est fixé à 18 %. La déclaration mensuelle et l’apurement au Trésor public ou la demande de report de crédit (compte 4449) doivent être effectués avant le 15 du mois suivant.</span>
+                </div>
               </div>
             </article>
           </div>
@@ -536,26 +602,80 @@
           <!-- Volet AIB -->
           <div class="tax-panel-wrap" id="aibTaxPane" hidden>
             <div class="vat-summary-grid">
-              <article class="metric-card"><small>AIB 1 % (PRESTATIONS FORMELLES)</small><strong id="aib1Amount">0 FCFA</strong><span>Fournisseurs avec IFU</span></article>
-              <article class="metric-card"><small>AIB 3 % (MARCHANDISES / TPS)</small><strong id="aib3Amount">0 FCFA</strong><span>Achats marchands</span></article>
-              <article class="metric-card"><small>AIB 5 % (NON IMMATRICULÉS)</small><strong id="aib5Amount">0 FCFA</strong><span>Prestataires informels</span></article>
-              <article class="metric-card metric-card-main"><small>TOTAL AIB RETENU</small><strong id="aibTotalAmount">0 FCFA</strong><span>À reverser au Trésor</span></article>
+              <article class="tax-metric-card card-accent-blue">
+                <div class="tax-metric-card-top">
+                  <small>AIB 1 % (Prestataires IFU)</small>
+                  <span class="tax-metric-tag">44721</span>
+                </div>
+                <strong class="tax-metric-value" id="aib1Amount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Prestataires formels immatriculés</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-purple">
+                <div class="tax-metric-card-top">
+                  <small>AIB 3 % (Marchandises / TPS)</small>
+                  <span class="tax-metric-tag">44723</span>
+                </div>
+                <strong class="tax-metric-value" id="aib3Amount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Achats de biens &amp; marchandises</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-amber">
+                <div class="tax-metric-card-top">
+                  <small>AIB 5 % (Non immatriculés)</small>
+                  <span class="tax-metric-tag">44725</span>
+                </div>
+                <strong class="tax-metric-value" id="aib5Amount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Prestataires sans numéro IFU</span>
+              </article>
+
+              <article class="tax-metric-card tax-metric-main card-accent-green">
+                <div class="tax-metric-card-top">
+                  <small>Total AIB Retenu</small>
+                  <span class="tax-metric-tag">4472</span>
+                </div>
+                <strong class="tax-metric-value" id="aibTotalAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> À reverser à la DGID</span>
+              </article>
             </div>
 
-            <article class="panel">
+            <article class="panel tax-main-panel">
               <div class="panel-heading">
                 <div>
-                  <span class="eyebrow">REGISTRE DES RETENUES À LA SOURCE</span>
+                  <span class="eyebrow">REGISTRE DES RETENUES À LA SOURCE (AIB) · CGI BÉNIN</span>
                   <h2>Bordereau des retenues AIB de la période</h2>
-                  <p>Liste des opérations de charges soumises aux retenues AIB.</p>
+                  <p class="panel-subtitle">Liste exhaustive des charges et prestations soumises à la retenue à la source AIB (1%, 3%, 5%).</p>
                 </div>
-                <button class="button button-secondary button-small" type="button" data-action="export-aib-report">Exporter le bordereau AIB</button>
+                <div class="panel-actions">
+                  <button class="button button-secondary button-small" type="button" data-action="export-aib-report">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    Exporter le bordereau AIB
+                  </button>
+                </div>
               </div>
+
               <div class="table-wrap">
-                <table class="statement-data-table">
-                  <thead><tr><th>DATE</th><th>PIÈCE / TIERS</th><th>TAUX AIB</th><th class="align-right">MONTANT BRUT</th><th class="align-right">RETENUE AIB</th><th>ÉTAT</th></tr></thead>
+                <table class="tax-table">
+                  <thead>
+                    <tr>
+                      <th>DATE</th>
+                      <th>PIÈCE / FOURNISSEUR &amp; TIERS</th>
+                      <th>TAUX LÉGAL</th>
+                      <th class="align-right">BASE HT</th>
+                      <th class="align-right">RETENUE AIB</th>
+                      <th>STATUT FISCAL</th>
+                    </tr>
+                  </thead>
                   <tbody id="aibDetailRows"></tbody>
                 </table>
+              </div>
+
+              <div class="tax-footer-callout">
+                <div class="tax-callout-icon">ℹ</div>
+                <div class="tax-callout-text">
+                  <strong>Acompte sur Impôt Assis sur les Bénéfices (AIB) :</strong>
+                  <span>En vertu des articles 182 à 185 du CGI, les entreprises assujetties effectuent une retenue à la source de 1 % sur les prestataires immatriculés, 3 % sur les achats marchands et 5 % sur les personnes non immatriculées à l'IFU.</span>
+                </div>
               </div>
             </article>
           </div>
@@ -563,26 +683,81 @@
           <!-- Volet Réévaluation Devises -->
           <div class="tax-panel-wrap" id="revalTaxPane" hidden>
             <div class="vat-summary-grid">
-              <article class="metric-card"><small>PERTES LATENTES (478)</small><strong id="revalLossAmount">0 FCFA</strong><span>Écart conversion Actif</span></article>
-              <article class="metric-card"><small>GAINS LATENTS (479)</small><strong id="revalGainAmount">0 FCFA</strong><span>Écart conversion Passif</span></article>
-              <article class="metric-card"><small>POSITIONS DEVISES</small><strong id="revalPositionCount">2</strong><span>Comptes EUR / USD</span></article>
-              <article class="metric-card metric-card-main"><small>IMPACT NET LATENT</small><strong id="revalNetAmount">0 FCFA</strong><span>Avant clôture</span></article>
+              <article class="tax-metric-card card-accent-red">
+                <div class="tax-metric-card-top">
+                  <small>Pertes de change latentes</small>
+                  <span class="tax-metric-tag">476</span>
+                </div>
+                <strong class="tax-metric-value" id="revalLossAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Écart de conversion Actif</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-green">
+                <div class="tax-metric-card-top">
+                  <small>Gains de change latents</small>
+                  <span class="tax-metric-tag">477</span>
+                </div>
+                <strong class="tax-metric-value" id="revalGainAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Écart de conversion Passif</span>
+              </article>
+
+              <article class="tax-metric-card card-accent-blue">
+                <div class="tax-metric-card-top">
+                  <small>Positions en devises</small>
+                  <span class="tax-metric-tag">EUR / USD</span>
+                </div>
+                <strong class="tax-metric-value" id="revalPositionCount">2</strong>
+                <span class="tax-metric-desc"><i></i> Comptes de trésorerie &amp; tiers</span>
+              </article>
+
+              <article class="tax-metric-card tax-metric-main card-accent-purple">
+                <div class="tax-metric-card-top">
+                  <small>Impact Net Latent</small>
+                  <span class="tax-metric-tag">Clôture</span>
+                </div>
+                <strong class="tax-metric-value" id="revalNetAmount">0 FCFA</strong>
+                <span class="tax-metric-desc"><i></i> Variation nette de fin d'exercice</span>
+              </article>
             </div>
 
-            <article class="panel">
+            <article class="panel tax-main-panel">
               <div class="panel-heading">
                 <div>
-                  <span class="eyebrow">RÉÉVALUATION DES POSITIONS DE FIN DE PÉRIODE</span>
-                  <h2>Écarts de conversion en devises</h2>
-                  <p>Ajustement des soldes de trésorerie et dettes en devises étrangères au cours de clôture.</p>
+                  <span class="eyebrow">RÉÉVALUATION DES POSITIONS DE FIN DE PÉRIODE · SYSCOHADA</span>
+                  <h2>Écarts de conversion et positions en devises étrangères</h2>
+                  <p class="panel-subtitle">Ajustement au cours de clôture des créances (411), dettes (401) et banques (521) en devises.</p>
                 </div>
-                <button class="button button-primary button-small" type="button" data-action="generate-exchange-entry">Générer l’écriture d’écart</button>
+                <div class="panel-actions">
+                  <button class="button button-primary button-small" type="button" data-action="generate-exchange-entry">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Générer l’écriture d’écart (OD)
+                  </button>
+                </div>
               </div>
+
               <div class="table-wrap">
-                <table class="statement-data-table">
-                  <thead><tr><th>COMPTE DEVISE</th><th>DEVISE</th><th class="align-right">MONTANT DEVISE</th><th class="align-right">COURS HISTORIQUE</th><th class="align-right">COURS CLÔTURE</th><th class="align-right">VALEUR RÉÉVALUÉE</th><th>ÉCART CONVERSION</th></tr></thead>
+                <table class="tax-table">
+                  <thead>
+                    <tr>
+                      <th>COMPTE / INTITULÉ</th>
+                      <th>DEVISE</th>
+                      <th class="align-right">SOLDE DEVISE</th>
+                      <th class="align-right">COURS LIVRE</th>
+                      <th class="align-right">COURS CLÔTURE</th>
+                      <th class="align-right">VALEUR RÉÉVALUÉE (FCFA)</th>
+                      <th>ÉCART CONVERSION (SYSCOHADA)</th>
+                    </tr>
+                  </thead>
                   <tbody id="revalRows"></tbody>
                 </table>
+              </div>
+
+              <div class="tax-footer-callout">
+                <div class="tax-callout-icon">ℹ</div>
+                <div class="tax-callout-text">
+                  <strong>Traitement SYSCOHADA des devises étrangères :</strong>
+                  <span>Les pertes probables de change sont inscrites au compte 476 (Écarts de conversion - Actif) et font l'objet d'une provision pour risques et charges (697 / 19). Les gains latents sont comptabilisés au compte 477 (Écarts de conversion - Passif).</span>
+                </div>
               </div>
             </article>
           </div>

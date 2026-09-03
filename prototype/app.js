@@ -1988,57 +1988,81 @@ function renderVatPane() {
   $('#vatDeductibleAmount').textContent = `${numberLabel(vatResult.totalDeductible)} FCFA`;
   $('#vatPriorCreditAmount').textContent = `${numberLabel(vatResult.priorVatCredit)} FCFA`;
 
+  const resultCard = $('#vatResultCard');
   const resultLabel = $('#vatResultLabel');
+  const resultAccountTag = $('#vatResultAccountTag');
   const netEl = $('#vatNetAmount');
   const detailEl = $('#vatResultDetail');
 
   if (vatResult.isCredit) {
+    if (resultCard) {
+      resultCard.classList.remove('is-payable', 'card-accent-red');
+      resultCard.classList.add('is-credit', 'card-accent-green');
+    }
     if (resultLabel) resultLabel.textContent = 'CRÉDIT DE TVA À REPORTER';
+    if (resultAccountTag) resultAccountTag.textContent = '4449';
     if (netEl) netEl.textContent = `${numberLabel(vatResult.vatCreditToCarryForward)} FCFA`;
-    if (detailEl) detailEl.textContent = 'À imputer sur les mois suivants (4449)';
+    if (detailEl) detailEl.innerHTML = '<i></i> Imputable sur les mois suivants (compte 4449)';
   } else {
+    if (resultCard) {
+      resultCard.classList.remove('is-credit', 'card-accent-green');
+      resultCard.classList.add('is-payable', 'card-accent-red');
+    }
     if (resultLabel) resultLabel.textContent = 'TVA NETTE À PAYER';
+    if (resultAccountTag) resultAccountTag.textContent = '4441';
     if (netEl) netEl.textContent = `${numberLabel(vatResult.netVatToPay)} FCFA`;
-    if (detailEl) detailEl.textContent = 'À reverser à la DGID avant le 15 (4441)';
+    if (detailEl) detailEl.innerHTML = '<i></i> À reverser à la DGID avant le 15 (compte 4441)';
   }
 
   const rows = $('#vatCalculationRows');
   if (rows) {
     rows.innerHTML = `
       <tr>
-        <td><b>1. Ventes et prestations imposables (Base HT)</b></td>
-        <td>Comptes 701, 706</td>
-        <td class="align-right">${numberLabel(vatResult.taxableBase)}</td>
-        <td class="align-right">18 %</td>
-        <td class="align-right amount-positive">+ ${numberLabel(vatResult.vatCollected)}</td>
+        <td>
+          <b>1. Ventes et prestations imposables (Base HT)</b>
+          <small class="tax-subtext">Opérations taxées au taux standard au Bénin</small>
+        </td>
+        <td><span class="tax-account-chip">701 / 706</span></td>
+        <td class="align-right">${numberLabel(vatResult.taxableBase)} FCFA</td>
+        <td class="align-right"><span class="tax-rate-pill">18 %</span></td>
+        <td class="align-right tax-val-plus">+ ${numberLabel(vatResult.vatCollected)} FCFA</td>
       </tr>
       <tr>
-        <td><b>2. TVA déductible sur biens et services (Achats)</b></td>
-        <td>Compte 4452</td>
-        <td class="align-right">${numberLabel(Math.round(vatResult.vatDeductibleGoods / 0.18))}</td>
-        <td class="align-right">18 %</td>
-        <td class="align-right">− ${numberLabel(vatResult.vatDeductibleGoods)}</td>
+        <td>
+          <b>2. TVA déductible sur biens et services (Achats)</b>
+          <small class="tax-subtext">TVA récupérable sur charges d’exploitation</small>
+        </td>
+        <td><span class="tax-account-chip chip-purple">4452</span></td>
+        <td class="align-right">${numberLabel(Math.round(vatResult.vatDeductibleGoods / 0.18))} FCFA</td>
+        <td class="align-right"><span class="tax-rate-pill">18 %</span></td>
+        <td class="align-right tax-val-minus">− ${numberLabel(vatResult.vatDeductibleGoods)} FCFA</td>
       </tr>
       <tr>
-        <td><b>3. TVA déductible sur immobilisations</b></td>
-        <td>Compte 4451</td>
-        <td class="align-right">${numberLabel(Math.round(vatResult.vatDeductibleAssets / 0.18))}</td>
-        <td class="align-right">18 %</td>
-        <td class="align-right">− ${numberLabel(vatResult.vatDeductibleAssets)}</td>
+        <td>
+          <b>3. TVA déductible sur immobilisations</b>
+          <small class="tax-subtext">TVA sur investissements d’actifs amortissables</small>
+        </td>
+        <td><span class="tax-account-chip chip-purple">4451</span></td>
+        <td class="align-right">${numberLabel(Math.round(vatResult.vatDeductibleAssets / 0.18))} FCFA</td>
+        <td class="align-right"><span class="tax-rate-pill">18 %</span></td>
+        <td class="align-right tax-val-minus">− ${numberLabel(vatResult.vatDeductibleAssets)} FCFA</td>
       </tr>
       <tr>
-        <td><b>4. Report de crédit de TVA antérieur</b></td>
-        <td>Compte 4449</td>
+        <td>
+          <b>4. Report de crédit de TVA antérieur</b>
+          <small class="tax-subtext">Crédit issu de la déclaration précédente</small>
+        </td>
+        <td><span class="tax-account-chip chip-amber">4449</span></td>
         <td class="align-right">—</td>
         <td class="align-right">—</td>
-        <td class="align-right">− ${numberLabel(vatResult.priorVatCredit)}</td>
+        <td class="align-right tax-val-minus">− ${numberLabel(vatResult.priorVatCredit)} FCFA</td>
       </tr>
-      <tr class="statement-total-row">
-        <td><strong>${vatResult.isCredit ? 'SOLDE : CRÉDIT DE TVA' : 'SOLDE : TVA NETTE À PAYER'}</strong></td>
-        <td><strong>${vatResult.isCredit ? '4449' : '4441'}</strong></td>
+      <tr class="tax-total-row">
+        <td><strong>${vatResult.isCredit ? 'SOLDE FINAL : CRÉDIT DE TVA À REPORTER' : 'SOLDE FINAL : TVA NETTE DUE À REVERSER'}</strong></td>
+        <td><span class="tax-account-chip ${vatResult.isCredit ? 'chip-amber' : ''}">${vatResult.isCredit ? '4449' : '4441'}</span></td>
         <td class="align-right"><strong>—</strong></td>
         <td class="align-right"><strong>—</strong></td>
-        <td class="align-right"><strong>${numberLabel(vatResult.isCredit ? vatResult.vatCreditToCarryForward : vatResult.netVatToPay)} FCFA</strong></td>
+        <td class="align-right"><strong class="${vatResult.isCredit ? 'tax-val-plus' : ''}">${numberLabel(vatResult.isCredit ? vatResult.vatCreditToCarryForward : vatResult.netVatToPay)} FCFA</strong></td>
       </tr>
     `;
   }
@@ -2116,16 +2140,23 @@ function renderAibPane() {
     if (aibResult.items.length === 0) {
       rows.innerHTML = '<tr><td colspan="6" class="dossier-empty">Aucune retenue AIB détectée sur cette période.</td></tr>';
     } else {
-      rows.innerHTML = aibResult.items.map((item) => `
-        <tr>
-          <td>${escapeHtml(displayDate(item.date))}</td>
-          <td><b>${escapeHtml(item.reference)}</b> · ${escapeHtml(item.thirdPartyName || item.label)}</td>
-          <td><span class="role role-controller">${item.rate * 100} %</span></td>
-          <td class="align-right">${numberLabel(item.baseAmount)} FCFA</td>
-          <td class="align-right amount-positive">${numberLabel(item.aibAmount)} FCFA</td>
-          <td><span class="status status-green">Retenu</span></td>
-        </tr>
-      `).join('');
+      rows.innerHTML = aibResult.items.map((item) => {
+        const ratePct = item.rate * 100;
+        const pillClass = ratePct === 1 ? 'tax-aib-1' : ratePct === 3 ? 'tax-aib-3' : 'tax-aib-5';
+        return `
+          <tr>
+            <td>${escapeHtml(displayDate(item.date))}</td>
+            <td>
+              <strong>${escapeHtml(item.thirdPartyName || item.label)}</strong>
+              <small class="tax-subtext">Réf: <b>${escapeHtml(item.reference)}</b> ${item.ifu ? `· IFU: ${escapeHtml(item.ifu)}` : ''}</small>
+            </td>
+            <td><span class="tax-aib-pill ${pillClass}">${ratePct} %</span></td>
+            <td class="align-right">${numberLabel(item.baseAmount)} FCFA</td>
+            <td class="align-right tax-val-plus"><b>${numberLabel(item.aibAmount)} FCFA</b></td>
+            <td><span class="status status-green">Retenu (4472)</span></td>
+          </tr>
+        `;
+      }).join('');
     }
   }
 }
@@ -2190,17 +2221,21 @@ function renderRevalPane() {
     } else {
       rows.innerHTML = reval.items.map((item) => {
         const hasGain = item.latentGain > 0;
-        const diffText = hasGain ? `+ ${numberLabel(item.latentGain)} FCFA (479)` : `− ${numberLabel(item.latentLoss)} FCFA (478)`;
-        const diffClass = hasGain ? 'amount-positive' : 'amount-negative';
+        const diffText = hasGain ? `+ ${numberLabel(item.latentGain)} FCFA (477)` : `− ${numberLabel(item.latentLoss)} FCFA (476)`;
+        const diffClass = hasGain ? 'diff-gain' : 'diff-loss';
+        const currClass = item.currency.toLowerCase() === 'eur' ? 'curr-eur' : 'curr-usd';
         return `
           <tr>
-            <td><b>${escapeHtml(item.accountId)}</b> · ${escapeHtml(item.accountLabel)}</td>
-            <td><span class="journal-badge journal-badge-blue">${escapeHtml(item.currency)}</span></td>
-            <td class="align-right">${numberLabel(item.foreignAmount)} ${escapeHtml(item.currency)}</td>
-            <td class="align-right">${item.bookRate}</td>
-            <td class="align-right">${item.closingRate}</td>
-            <td class="align-right">${numberLabel(item.closingValue)} FCFA</td>
-            <td class="align-right ${diffClass}"><b>${diffText}</b></td>
+            <td>
+              <span class="tax-account-chip">${escapeHtml(item.accountId)}</span>
+              <strong style="margin-left: 6px;">${escapeHtml(item.accountLabel)}</strong>
+            </td>
+            <td><span class="tax-curr-pill ${currClass}">${escapeHtml(item.currency)}</span></td>
+            <td class="align-right"><b>${numberLabel(item.foreignAmount)} ${escapeHtml(item.currency)}</b></td>
+            <td class="align-right">${item.bookRate.toFixed(3)}</td>
+            <td class="align-right">${item.closingRate.toFixed(3)}</td>
+            <td class="align-right"><b>${numberLabel(item.closingValue)} FCFA</b></td>
+            <td><span class="tax-diff-badge ${diffClass}">${diffText}</span></td>
           </tr>
         `;
       }).join('');
