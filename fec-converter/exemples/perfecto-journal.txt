@@ -1,0 +1,30 @@
+Journaux du 01/01/2025  au 31/12/2025
+
+																	1ère saisie		Dernière saisie
+
+Date	N° pièce	Compte	Intitulé	Référence	Débit	Crédit	En devise	Echéance	Immobilis.	Commande	Centre	Activité	Catégorie	Financement	Cpt alternatif	Ana. diverses	Libellé	Opérateur	Date saisie	Opérateur	Date saisie
+
+Journal <AN> A-nouveaux
+
+01/01/2025	000001	101000	Capital social	AN-2025-001	0	2000000											Report des soldes	Comptable	07/01/2025	Comptable	08/01/2025
+01/01/2025	000001	411000	Clients	AN-2025-001	500000	0											Report des soldes	Comptable	07/01/2025	Comptable	08/01/2025
+01/01/2025	000001	521100	Banque locale	AN-2025-001	1500000	0											Report des soldes	Comptable	07/01/2025	Comptable	08/01/2025
+
+Journal <ACH> Achats
+
+02/01/2025	000001	601100	Achat de marchandises	SI25-0001	626529	0											S/Achat de marchandises	Comptable	07/01/2025	Comptable	08/01/2025
+02/01/2025	000001	445000	TVA Récupérable	SI25-0001	112775	0											TVA récupérable 18 %	Comptable	07/01/2025	Comptable	08/01/2025
+02/01/2025	000001	447801	AIB sur achat	SI25-0001	6265	0											AIB 1 % sur achat	Comptable	07/01/2025	Comptable	08/01/2025
+02/01/2025	000001	401001	Fournisseur EXEMPLE	SI25-0001	0	745569											S/Facture SI25-0001	Comptable	07/01/2025	Comptable	08/01/2025
+03/01/2025	000002	601100	Achat de marchandises	SI25-0002	1000000	0											S/Achat de marchandises	Comptable	07/01/2025	Comptable	08/01/2025
+03/01/2025	000002	445000	TVA Récupérable	SI25-0002	180000	0											TVA récupérable 18 %	Comptable	07/01/2025	Comptable	08/01/2025
+03/01/2025	000002	447801	AIB sur achat	SI25-0002	10000	0											AIB 1 % sur achat	Comptable	07/01/2025	Comptable	08/01/2025
+03/01/2025	000002	401001	Fournisseur EXEMPLE	SI25-0002	0	1190000											S/Facture SI25-0002	Comptable	07/01/2025	Comptable	08/01/2025
+Total Journal <ACH> Achats
+
+Journal <BQ> Banque
+
+10/01/2025	000001	401001	Fournisseur EXEMPLE	REG25-0001	745569	0											Règlement virement SI25-0001	Comptable	07/01/2025	Comptable	08/01/2025
+10/01/2025	000001	521100	Banque locale	REG25-0001	0	745569											Virement fournisseur	Comptable	07/01/2025	Comptable	08/01/2025
+
+Total général

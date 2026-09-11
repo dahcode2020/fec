@@ -14,7 +14,7 @@
         <span class="brand-mark">FEC</span>
         <div>
           <h1>Convertisseur FEC — Bénin (DGI)</h1>
-          <p>Grand livre, journal ou balance issu de Sage, Ciel, EBP, Odoo → Fichier des Écritures Comptables selon l'arrêté du 23 avril 2020.</p>
+          <p>Grand livre, journal ou balance issu de Sage, Ciel, EBP, Odoo ou PERFECTO → Fichier des Écritures Comptables selon l'arrêté du 23 avril 2020.</p>
         </div>
       </div>
       <div class="badges">
@@ -93,6 +93,7 @@
         <button class="button button-small" type="button" id="loadExampleSage">Essayer l'exemple Sage 100</button>
         <button class="button button-small" type="button" id="loadExampleOdoo">Essayer l'exemple Odoo</button>
         <button class="button button-small" type="button" id="loadExampleBalance">Essayer la balance (reports)</button>
+        <button class="button button-small" type="button" id="loadExamplePerfecto">Essayer l'exemple PERFECTO</button>
         <button class="button button-small button-secondary" type="button" id="downloadTemplate">👁 Modèle générique CSV (voir &amp; copier)</button>
       </div>
       <div class="grid grid-3" style="margin-top:14px">
@@ -126,6 +127,7 @@
             <li><strong>Sage 50 / Ciel / SAARI :</strong> États &gt; Grand livre (ou Brouillard) &gt; bouton Fichier &gt; Texte standard (<span class="mono">.txt</span>).</li>
             <li><strong>EBP :</strong> Exports &gt; Écritures comptables &gt; CSV.</li>
             <li><strong>Odoo :</strong> Comptabilité &gt; Rapports &gt; Grand livre &gt; Exporter (CSV ou XLSX).</li>
+            <li><strong>PERFECTO :</strong> exportez le journal en texte (copier-coller depuis la fenêtre « Journal » dans le Bloc-notes, puis Enregistrer en <span class="mono">.txt</span>). Les sections <span class="mono">Journal &lt;ACH&gt; Achats</span> sont lues automatiquement, avec leurs titres et totaux ignorés.</li>
             <li><strong>Autre logiciel :</strong> exportez le journal ou le grand livre en CSV, puis utilisez le mappage manuel de l'étape 3.</li>
           </ol>
         </div>

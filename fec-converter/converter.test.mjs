@@ -6,7 +6,8 @@ import {
   buildInternalLines, balanceRowsToInternalLines, prepareFecFromLines,
   buildFecText, validateFecText, splitRecords, fecFileBaseName,
   buildNoticeText, buildReportText, buildManifestText,
-  encodeFecBytes, createZipArchive, sha256Hex, buildGenericTemplate
+  encodeFecBytes, createZipArchive, sha256Hex, buildGenericTemplate,
+  parsePerfectoText, extractPerfectoSections, detectPerfectoText
 } from './converter.js';
 
 test('détecte le séparateur point-virgule (Sage/Ciel)', () => {
@@ -258,4 +259,100 @@ test('profils logiciels documentés', () => {
   assert.ok(ids.includes('odoo'));
   assert.ok(ids.includes('generique'));
   assert.ok(ids.includes('balance'));
+  assert.ok(ids.includes('perfecto'));
+});
+
+// ---------------------------------------------------------------------------
+// PERFECTO : export « Journaux » par sections (Journal <XXX> libellé)
+// Données 100 % fictives — jamais de données client réelles dans les tests.
+// ---------------------------------------------------------------------------
+
+const PERFECTO_HEADERS = ['Date', 'N° pièce', 'Compte', 'Intitulé', 'Référence', 'Débit', 'Crédit',
+  'En devise', 'Echéance', 'Immobilis.', 'Commande', 'Centre', 'Activité', 'Catégorie',
+  'Financement', 'Cpt alternatif', 'Ana. diverses', 'Libellé', 'Opérateur', 'Date saisie',
+  'Opérateur', 'Date saisie'];
+
+function perfectoRow(date, piece, compte, intitule, ref, debit, credit, libelle) {
+  const cells = new Array(22).fill('');
+  cells[0] = date; cells[1] = piece; cells[2] = compte; cells[3] = intitule;
+  cells[4] = ref; cells[5] = String(debit); cells[6] = String(credit);
+  cells[17] = libelle; cells[18] = 'CPT1'; cells[19] = '07/01/2025';
+  cells[20] = 'CPT2'; cells[21] = '08/01/2025';
+  return cells.join('\t');
+}
+
+function perfectoSample() {
+  return [
+    'Journaux du 01/01/2025  au 31/12/2025',
+    '',
+    PERFECTO_HEADERS.join('\t'),
+    '',
+    'Journal <AN> A-nouveaux',
+    '',
+    perfectoRow('01/01/2025', '000001', '101000', 'Capital social', 'AN-2025-001', 0, 2000000, 'Report'),
+    perfectoRow('01/01/2025', '000001', '521100', 'Banque locale', 'AN-2025-001', 2000000, 0, 'Report'),
+    '',
+    'Journal <ACH> Achats',
+    '',
+    perfectoRow('02/01/2025', '000001', '601100', 'Achat de marchandises', 'SI25-0001', 626529, 0, 'S/Achat'),
+    perfectoRow('02/01/2025', '000001', '445000', 'TVA Récupérable', 'SI25-0001', 112775, 0, 'TVA 18 %'),
+    perfectoRow('02/01/2025', '000001', '447801', 'AIB sur achat', 'SI25-0001', 6265, 0, 'AIB 1 %'),
+    perfectoRow('02/01/2025', '000001', '401001', 'Fournisseur EXEMPLE', 'SI25-0001', 0, 745569, 'S/Facture'),
+    'Total Journal <ACH> Achats',
+    '',
+    'Total général'
+  ].join('\r\n');
+}
+
+test('PERFECTO : détection des sections et colonnes virtuelles de journal', () => {
+  const text = perfectoSample();
+  assert.equal(detectPerfectoText(text), true);
+  assert.equal(detectPerfectoText('Journal;Date;Compte\nVE;01/01/2025;411\n'), false);
+  const parsed = parsePerfectoText(text);
+  assert.equal(parsed.delimiter, '\t');
+  assert.equal(parsed.rows.length, 6);
+  assert.deepEqual(parsed.headers.slice(0, 2), ['Journal', 'Libellé journal']);
+  assert.ok(parsed.rows.every((row) => row.length === 24));
+  assert.equal(parsed.rows[0][0], 'AN');
+  assert.equal(parsed.rows[0][1], 'A-nouveaux');
+  assert.equal(parsed.rows[2][0], 'ACH');
+  assert.deepEqual(parsed.journals.map((j) => `${j.code}/${j.lines}`), ['AN/2', 'ACH/4']);
+  assert.ok(parsed.skipped.some((s) => s.reason === 'TOTAL'));
+});
+
+test('PERFECTO : chaîne complète -> FEC valide, dernière saisie = DateValid', () => {
+  const parsed = parsePerfectoText(perfectoSample());
+  const mapping = autoMapHeaders(parsed.headers, 'perfecto');
+  for (const target of ['journalCode', 'journalLabel', 'entryNum', 'entryDate', 'accountNum',
+    'accountLabel', 'pieceRef', 'entryLabel', 'debit', 'credit', 'validDate']) {
+    assert.ok(mapping[target] >= 0, `${target} mappé`);
+  }
+  // La dernière « Date saisie » (dernière saisie) est prise comme date de validation.
+  assert.equal(mapping.validDate, 23);
+  const { lines, issues } = buildInternalLines(parsed.rows, mapping, { dateOrder: 'DMY' });
+  assert.equal(issues.length, 0);
+  assert.equal(lines.length, 6);
+  const prepared = prepareFecFromLines(lines, { regime: 'NORMAL', startDate: '2025-01-01', endDate: '2025-12-31' });
+  assert.equal(prepared.valid, true);
+  assert.equal(prepared.entryCount, 2);
+  const fecText = buildFecText(prepared, { delimiter: '\t' });
+  const validation = validateFecText(fecText, { regime: 'NORMAL', delimiter: '\t' });
+  assert.equal(validation.valid, true);
+  const firstData = fecText.split('\r\n')[1].split('\t');
+  assert.equal(firstData[0], 'AN');
+  assert.equal(firstData[3], '20250101');
+  assert.equal(firstData[8], 'AN-2025-001');
+  assert.equal(firstData[15], '20250108');
+});
+
+test('PERFECTO : tolère les chevrons échappés et les lignes rattachées', () => {
+  const matrix = [
+    ['Journal &lt;BQ&gt; Banque'],
+    ['01/01/2025', '000001', '521100', 'Banque', 'R-1', '100', '0']
+  ];
+  const extracted = extractPerfectoSections(matrix);
+  assert.equal(extracted.rows.length, 1);
+  assert.equal(extracted.rows[0][0], 'BQ');
+  assert.equal(extracted.rows[0][1], 'Banque');
+  assert.equal(extracted.rows[0][2], '01/01/2025');
 });

@@ -47,6 +47,7 @@ avertissement permanent.
 | `saari_ciel` | Grand livre / brouillard / journal TXT | `;`/tab | `JJ/MM/AAAA` | Référence pièce parfois = N° de pièce |
 | `ebp` | Export des écritures CSV | `;` | `JJ/MM/AAAA` | Proche de Ciel |
 | `odoo` | Grand livre / `account.move.line` CSV/XLSX | `,`/`;` | `AAAA-MM-JJ` | En-têtes anglais possibles |
+| `perfecto` | Journal texte en sections `Journal <XXX> …` | tab | `JJ/MM/AAAA` | Parseur de sections dédié, colonnes Journal virtuelles |
 | `generique` | Modèle CSV fourni (18/21 colonnes FEC) | `;` | `JJ/MM/AAAA` | Mapping immédiat |
 | `balance` | Balance générale | auto | — | Reports `AN`/`REPORT` uniquement |
 
@@ -54,6 +55,17 @@ Chaque profil définit : séparateur et formats par défaut, synonymes d'en-têt
 (normalisés : minuscules, sans accents) pour le mapping automatique, et un texte
 d'aide expliquant comment exporter depuis le logiciel. La suggestion automatique
 score les profils selon les en-têtes trouvés (seuil : 3 correspondances).
+
+**PERFECTO (outil local béninois)** : l'export « Journaux » est un texte tabulé
+organisé en sections (`Journal <ACH> Achats`, …), avec titres, ligne
+`1ère saisie / Dernière saisie` et totaux intercalés. Le parseur dédié
+(`parsePerfectoText` / `extractPerfectoSections`) ignore ces lignes parasites,
+rattache chaque ligne d'écriture à son journal (colonnes virtuelles
+`Journal` / `Libellé journal`), et mappe : `Date` → date d'écriture,
+`N° pièce` (regroupement par journal + N°), `Compte` / `Intitulé`,
+`Référence` → référence de pièce, `Libellé` → libellé d'écriture,
+`En devise` → montant en devise, **dernière** `Date saisie` → date de
+validation. Exemple synthétique : `fec-converter/exemples/perfecto-journal.txt`.
 
 ## 4. Lecture des fichiers
 
@@ -125,7 +137,7 @@ Le **mode diagnostic** lève le blocage mais préfixe les fichiers
 - `fec-converter/converter.test.mjs` : 17 tests (`npm run test:converter`) —
   séparateurs, dates, montants, suggestion de profil, chaîne Sage→FEC valide,
   SMT, balance→REPORT, découpage, encodages, ZIP, notice/rapport, modèle.
-- `fec-converter/exemples/` : Sage 100, Ciel/SAARI, Odoo, balance d'ouverture.
+- `fec-converter/exemples/` : Sage 100, Ciel/SAARI, Odoo, balance d'ouverture, journal PERFECTO.
 - Lancement : `npm run preview:converter` → `http://localhost:4175`.
 
 ## 9. Points à valider avant usage professionnel

@@ -341,6 +341,27 @@ export const SOFTWARE_PROFILES = Object.freeze([
     }
   }),
   Object.freeze({
+    id: 'perfecto', label: 'PERFECTO (livre journal TXT)', origin: 'Livre journal TXT : sections « Journal <CODE> … » + tableau Date, N° pièce, Compte…',
+    hint: 'Export TXT du livre journal PERFECTO : le code journal est lu dans les lignes « Journal <XXX> … », les titres et totaux sont ignorés. Tabulation, dates JJ/MM/AAAA, validation = dernière date de saisie.',
+    delimiter: '\t', dateOrder: 'DMY', decimal: 'auto',
+    sectionParser: 'perfecto',
+    lastMatchTargets: ['validDate'],
+    synonyms: {
+      journalCode: ['journal'],
+      journalLabel: ['libellejournal'],
+      entryNum: ['npiece', 'numpiece', 'numeropiece'],
+      entryDate: ['date'],
+      accountNum: ['compte'],
+      accountLabel: ['intitule', 'intitulecompte'],
+      pieceRef: ['reference', 'ref'],
+      entryLabel: ['libelle'],
+      debit: ['debit'],
+      credit: ['credit'],
+      foreignAmount: ['endevise'],
+      validDate: ['datesaisie', 'datevalidation']
+    }
+  }),
+  Object.freeze({
     id: 'generique', label: 'Générique SYSCOHADA (modèle)', origin: 'Modèle CSV fourni par le convertisseur',
     hint: 'Utilisez le modèle téléchargeable : 18/21 colonnes déjà nommées comme le FEC.',
     delimiter: ';', dateOrder: 'DMY', decimal: 'auto',
@@ -395,17 +416,24 @@ export function suggestProfiles(headers) {
 export function autoMapHeaders(headers, profileId) {
   const profile = getProfile(profileId);
   const normalized = headers.map(norm);
+  // Certains profils (ex. PERFECTO avec deux colonnes « Date saisie »)
+  // préfèrent la DERNIÈRE occurrence pour quelques cibles.
+  const lastTargets = new Set(profile.lastMatchTargets || []);
   const mapping = {};
   Object.entries(profile.synonyms).forEach(([target, synonyms]) => {
+    const preferLast = lastTargets.has(target);
     let found = -1;
     for (const synonym of synonyms) {
-      const index = normalized.indexOf(synonym);
+      const index = preferLast ? normalized.lastIndexOf(synonym) : normalized.indexOf(synonym);
       if (index >= 0) { found = index; break; }
     }
     // Recherche floue : en-tête contenant le synonyme (ou l'inverse).
     if (found < 0) {
+      const order = preferLast
+        ? normalized.map((_, i) => i).reverse()
+        : normalized.map((_, i) => i);
       outer: for (const synonym of synonyms) {
-        for (let i = 0; i < normalized.length; i += 1) {
+        for (const i of order) {
           const header = normalized[i];
           if (!header || !synonym) continue;
           if ((header.includes(synonym) && synonym.length >= 5) || (synonym.includes(header) && header.length >= 6)) {
@@ -1265,6 +1293,103 @@ export async function sha256Hex(bytes) {
   // Repli Node (crypto natif).
   const { createHash } = await import('node:crypto');
   return createHash('sha256').update(source).digest('hex');
+}
+
+// ---------------------------------------------------------------------------
+// PERFECTO : livre journal TXT organisé en sections par journal
+// ---------------------------------------------------------------------------
+
+const PERFECTO_SECTION_RE = /^Journal\s*[<\uFF1C]\s*([^>\uFF1E&]+?)\s*[>\uFF1E]\s*(.*)$/i;
+
+function normalizePerfectoLine(line) {
+  return String(line ?? '').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
+}
+
+export function isPerfectoSectionRow(firstCell) {
+  return PERFECTO_SECTION_RE.test(normalizePerfectoLine(String(firstCell || '').trim()));
+}
+
+export function parsePerfectoSectionRow(firstCell) {
+  const match = normalizePerfectoLine(String(firstCell || '').trim()).match(PERFECTO_SECTION_RE);
+  if (!match) return null;
+  return { code: match[1].trim().toUpperCase(), label: match[2].trim() };
+}
+
+function isPerfectoHeaderRow(cells) {
+  const joined = cells.map(norm).join('|');
+  return norm(cells[0] || '') === 'date' && joined.includes('compte') && joined.includes('debit');
+}
+
+const PERFECTO_DATA_START = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/;
+
+function isPerfectoDataRow(cells) {
+  return PERFECTO_DATA_START.test(String(cells[0] || '').trim());
+}
+
+/**
+ * Extrait les sections « Journal <CODE> libellé » d'une matrice PERFECTO.
+ * Deux colonnes virtuelles (Journal, Libellé journal) sont injectées en tête
+ * pour uniformiser le mapping avec les autres profils. Titres, lignes vides
+ * et totaux sont ignorés et comptabilisés dans `skipped`.
+ */
+export function extractPerfectoSections(matrix) {
+  const headers = [];
+  const rows = [];
+  const skipped = [];
+  const journals = [];
+  let currentJournal = { code: '', label: '' };
+  let headerFound = false;
+  matrix.forEach((cells, index) => {
+    const lineNum = index + 1;
+    const line = Array.isArray(cells) ? cells.map((c) => String(c ?? '').trim()) : [];
+    if (!line.some((c) => c !== '')) return; // Ligne vide ignorée silencieusement
+    const first = line[0] || '';
+    const section = parsePerfectoSectionRow(first);
+    if (section && line.slice(1).every((c) => c === '')) {
+      currentJournal = section;
+      if (!journals.some((j) => j.code === section.code)) journals.push({ ...section, lines: 0 });
+      return;
+    }
+    if (!headerFound && isPerfectoHeaderRow(line)) {
+      headers.push('Journal', 'Libellé journal', ...line);
+      headerFound = true;
+      return;
+    }
+    if (isPerfectoDataRow(line)) {
+      if (!currentJournal.code) {
+        skipped.push({ line: lineNum, reason: 'HORS_SECTION', text: first });
+        return;
+      }
+      if (!headerFound) {
+        // Copier-coller partiel sans la ligne d'en-tête : colonnes génériques.
+        headers.push('Journal', 'Libellé journal', ...line.map((_, i) => `Colonne ${i + 1}`));
+        headerFound = true;
+      }
+      rows.push([currentJournal.code, currentJournal.label, ...line]);
+      const journal = journals.find((j) => j.code === currentJournal.code);
+      if (journal) journal.lines += 1;
+      return;
+    }
+    const reason = /^total/i.test(first) ? 'TOTAL' : 'HORS_TABLEAU';
+    skipped.push({ line: lineNum, reason, text: line.join(' ').slice(0, 80) });
+  });
+  return { headers, rows, skipped, journals };
+}
+
+export function parsePerfectoText(text) {
+  const cleaned = String(text || '').replace(/^\uFEFF/, '');
+  const lines = cleaned.split(/\r?\n/);
+  // Délimiteur détecté depuis la ligne d'en-tête (commençant par Date).
+  const headerLine = lines.find((l) => /^\s*Date\s*[\t;,|]/.test(l)) || '';
+  const delimiter = headerLine.includes('\t') ? '\t' : detectDelimiter(lines.filter((l) => l.trim()).slice(0, 20).join('\n'));
+  const matrix = lines.map((line) => splitLine(line, delimiter));
+  return { ...extractPerfectoSections(matrix), delimiter };
+}
+
+/** Détection rapide d'un journal PERFECTO (sections + ligne Date…). */
+export function detectPerfectoText(text) {
+  const sample = String(text || '').slice(0, 20000);
+  return /^Journal\s*(<|&lt;)/im.test(sample) && /^\s*Date\s*[\t;,|]/m.test(sample);
 }
 
 // ---------------------------------------------------------------------------

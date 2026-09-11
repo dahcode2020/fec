@@ -5,7 +5,8 @@ import {
   buildFecText, validateFecText, splitRecords, fecFileBaseName,
   buildNoticeText, buildReportText, buildManifestText,
   encodeFecBytes, createZipArchive, sha256Hex, buildGenericTemplate,
-  fecFieldsForRegime
+  fecFieldsForRegime, parsePerfectoText, extractPerfectoSections,
+  detectPerfectoText, isPerfectoSectionRow
 } from './converter.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -198,8 +199,26 @@ async function handleFile(file) {
       refreshSheetSelector();
       chip.textContent = `📄 ${file.name} — ${(file.size / 1024).toFixed(1)} Ko`;
     }
-    // Suggestion du profil au premier import (si l'utilisateur n'a pas choisi).
+    // Détection PERFECTO (sections « Journal <XXX> … ») prioritaire.
     if (!state.profileTouched) {
+      let isPerfecto = false;
+      if (state.workbook) {
+        try {
+          const matrix = workbookToMatrix(state.workbook, state.sheetName);
+          isPerfecto = matrix.slice(0, 80).some((row) => isPerfectoSectionRow(row[0]));
+        } catch { isPerfecto = false; }
+      } else {
+        isPerfecto = detectPerfectoText(state.rawText);
+      }
+      if (isPerfecto) {
+        state.profileId = 'perfecto';
+        $('#profileSelect').value = 'perfecto';
+        applyProfileDefaults();
+        toast('Journal PERFECTO détecté : profil appliqué.');
+      }
+    }
+    // Suggestion du profil au premier import (si l'utilisateur n'a pas choisi).
+    if (!state.profileTouched && state.profileId !== 'perfecto') {
       const preview = quickParse();
       if (preview.headers.length) {
         const ranked = suggestProfiles(preview.headers);
@@ -221,13 +240,22 @@ async function handleFile(file) {
 }
 
 function quickParse() {
+  const isPerfecto = getProfile(state.profileId).sectionParser === 'perfecto';
   if (state.workbook) {
     const matrix = workbookToMatrix(state.workbook, state.sheetName).filter((row) => row.some((c) => c !== ''));
+    if (isPerfecto) {
+      const extracted = extractPerfectoSections(matrix);
+      return { headers: extracted.headers, rows: extracted.rows, delimiter: '\t', perfecto: extracted };
+    }
     const skip = Number($('#srcSkipRows').value) || 0;
     const sliced = matrix.slice(skip);
     if (!sliced.length) return { headers: [], rows: [] };
     if ($('#srcHasHeader').checked) return { headers: sliced[0], rows: sliced.slice(1) };
     return { headers: sliced[0].map((_, i) => `Colonne ${i + 1}`), rows: sliced };
+  }
+  if (isPerfecto) {
+    const extracted = parsePerfectoText(state.rawText);
+    return { headers: extracted.headers, rows: extracted.rows, delimiter: extracted.delimiter, perfecto: extracted };
   }
   const delimiterChoice = $('#srcDelimiter').value;
   return parseDelimitedText(state.rawText, {
@@ -247,6 +275,7 @@ function refreshImport() {
 
   const stats = $('#importStats');
   const delimiterLabel = { '\t': 'tabulation', ';': 'point-virgule', ',': 'virgule', '|': 'barre verticale' }[state.parsed.delimiter] || state.parsed.delimiter;
+  const perfectoNote = parsed.perfecto ? `<div class="notice notice-blue"><span class="icon">ℹ</span><div><strong>Journal PERFECTO détecté :</strong> ${parsed.perfecto.journals.length} code(s) — ${escapeHtml(parsed.perfecto.journals.map((j) => `${j.code} (${j.lines})`).join(' · '))}. ${parsed.perfecto.skipped.length} ligne(s) de titre/total ignorée(s). Les deux colonnes virtuelles <span class="mono">Journal</span> et <span class="mono">Libellé journal</span> sont ajoutées automatiquement.</div></div>` : '';
   stats.innerHTML = state.parsed.rows.length ? `
     <div class="stats">
       <div class="stat"><small>COLONNES</small><strong>${state.parsed.headers.length}</strong></div>
@@ -254,6 +283,7 @@ function refreshImport() {
       <div class="stat"><small>SÉPARATEUR</small><strong style="font-size:14px">${delimiterLabel}</strong></div>
       <div class="stat"><small>PROFIL</small><strong style="font-size:14px">${getProfile(state.profileId).label}</strong></div>
     </div>
+    ${perfectoNote}
     <div class="table-wrap"><table><thead><tr>${state.parsed.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
     <tbody>${state.parsed.rows.slice(0, 5).map((row) => `<tr>${state.parsed.headers.map((_, i) => `<td>${escapeHtml(row[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
     <p class="field-help">Aperçu des 5 premières lignes. Le mapping complet se règle à l'étape 3.</p>` : `
@@ -649,6 +679,7 @@ function initExamples() {
   $('#loadExampleSage').addEventListener('click', () => loadExample('exemples/sage100-ecritures.csv', 'sage100', 'sage100-ecritures.csv'));
   $('#loadExampleOdoo').addEventListener('click', () => loadExample('exemples/odoo-grand-livre.csv', 'odoo', 'odoo-grand-livre.csv'));
   $('#loadExampleBalance').addEventListener('click', () => loadExample('exemples/balance-ouverture.csv', 'balance', 'balance-ouverture.csv'));
+  $('#loadExamplePerfecto').addEventListener('click', () => loadExample('exemples/perfecto-journal.txt', 'perfecto', 'perfecto-journal.txt'));
   $('#downloadTemplate').addEventListener('click', () => {
     const regime = $('#regime').value;
     const template = buildGenericTemplate(regime, { delimiter: ';' });

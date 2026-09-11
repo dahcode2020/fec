@@ -34,6 +34,7 @@ sauf l'import Excel `.xlsx` qui tente de charger la librairie SheetJS depuis un 
 | Sage SAARI / Sage 50 / Ciel | Grand livre, brouillard, journal (`.txt`/`.csv`) | `;` ou tab | `JJ/MM/AAAA` | virgule |
 | EBP Comptabilité | Export des écritures (`.csv`) | `;` | `JJ/MM/AAAA` | virgule |
 | Odoo (Comptabilité OHADA) | `account.move.line`, grand livre (`.csv`/`.xlsx`) | `,` ou `;` | `AAAA-MM-JJ` | point |
+| PERFECTO (outil local) | Journal en texte, sections `Journal <XXX> …` (`.txt`) | tab | `JJ/MM/AAAA` | entier/virgule |
 | Générique SYSCOHADA | Modèle fourni dans l'application | `;` | `JJ/MM/AAAA` | virgule |
 | Balance seule | Balance générale (`.csv`/`.txt`) | auto | — | auto |
 
