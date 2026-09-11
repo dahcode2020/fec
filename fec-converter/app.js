@@ -436,10 +436,91 @@ function downloadBytes(bytes, fileName, mime = 'text/plain') {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function fileMime(file) {
+  if (file.kind === 'zip') return 'application/zip';
+  if (String(file.name).endsWith('.csv')) return 'text/csv';
+  return 'text/plain';
+}
+
+/** Ouvre le fichier dans un nouvel onglet (sauvegarde via Ctrl+S). */
+function openInNewTab(file) {
+  try {
+    const blob = new Blob([file.bytes], { type: fileMime(file) });
+    const url = URL.createObjectURL(blob);
+    const opened = window.open(url, '_blank', 'noopener');
+    window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+    if (!opened) toast('Ouverture bloquée : utilisez « Voir & copier » puis enregistrez le contenu.');
+    else toast(`${file.name} ouvert : enregistrez-le via Ctrl+S.`);
+  } catch {
+    toast('Ouverture impossible : utilisez « Voir & copier ».');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fenêtre « Voir & copier » (secours si téléchargements bloqués)
+// ---------------------------------------------------------------------------
+
+let modalFile = null;
+
+function openFileModal(file) {
+  modalFile = file;
+  $('#fileModalTitle').textContent = file.name;
+  $('#fileModalMeta').textContent = `${(file.bytes.length / 1024).toFixed(1)} Ko${file.sha256 ? ` · SHA-256 ${file.sha256.slice(0, 32)}…` : ''}`;
+  $('#fileModalContent').value = file.text || '';
+  $('#fileModalBackdrop').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeFileModal() {
+  $('#fileModalBackdrop').hidden = true;
+  document.body.style.overflow = '';
+  modalFile = null;
+}
+
+async function copyModalContent() {
+  const area = $('#fileModalContent');
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(area.value);
+    } else {
+      area.focus();
+      area.select();
+      if (!document.execCommand('copy')) throw new Error('copy');
+    }
+    toast('Contenu copié. Collez-le dans le Bloc-notes et enregistrez sous le nom indiqué.');
+  } catch {
+    area.focus();
+    area.select();
+    toast('Copie automatique impossible : texte sélectionné, faites Ctrl+C.');
+  }
+}
+
+function initFileModal() {
+  $('#fileModalClose').addEventListener('click', closeFileModal);
+  $('#fileModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'fileModalBackdrop') closeFileModal();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !$('#fileModalBackdrop').hidden) closeFileModal();
+  });
+  $('#fileModalSelect').addEventListener('click', () => {
+    const area = $('#fileModalContent');
+    area.focus();
+    area.select();
+  });
+  $('#fileModalCopy').addEventListener('click', copyModalContent);
+  $('#fileModalDownload').addEventListener('click', () => {
+    if (!modalFile) return;
+    downloadBytes(modalFile.bytes, modalFile.name, fileMime(modalFile));
+    toast(`${modalFile.name} : téléchargement lancé (sinon utilisez Copier).`);
+  });
 }
 
 async function buildOutputs() {
@@ -496,12 +577,19 @@ function renderOutputs() {
     ${diagnostic
       ? '<div class="notice notice-red"><span class="icon">×</span><div><strong>Sortie de diagnostic — NON TRANSMISSIBLE.</strong> Ne remettez pas ces fichiers à la DGI. Corrigez les anomalies et régénérez en mode officiel.</div></div>'
       : '<div class="notice notice-green"><span class="icon">✓</span><div><strong>FEC officiel prêt.</strong> Vérifiez le rapport, conservez le paquet scellé et faites relire la sortie par votre cabinet avant toute remise à la DGI.</div></div>'}
+    <div class="notice notice-blue"><span class="icon">i</span><div><strong>Téléchargement bloqué ?</strong> Certains navigateurs ou aperçus intégrés bloquent les téléchargements automatiques. Utilisez <strong>« 👁 Voir &amp; copier »</strong> sur chaque fichier texte, puis collez dans le Bloc-notes et enregistrez avec le nom exact. Pour le ZIP, essayez <strong>« ↗ Ouvrir »</strong> (puis Ctrl+S) — sinon récupérez les fichiers TXT un par un, le ZIP n'en est que le regroupement.</div></div>
     <div class="file-list">
       ${state.outputs.map((file) => `
         <div class="file-row">
           <div class="meta"><span class="file-icon ${file.kind === 'zip' ? 'zip' : file.kind === 'FEC' ? '' : 'doc'}">${file.kind === 'zip' ? 'ZIP' : file.kind === 'FEC' ? 'FEC' : 'TXT'}</span>
           <div><code>${escapeHtml(file.name)}</code><small>${(file.bytes.length / 1024).toFixed(1)} Ko · SHA-256 <span class="mono">${file.sha256.slice(0, 16)}…</span></small></div></div>
-          <button class="button button-small ${file.kind === 'zip' ? 'button-primary' : ''}" type="button" data-download="${escapeHtml(file.name)}">⬇ Télécharger</button>
+          <div class="actions" style="margin-top:0">
+            ${file.kind === 'zip'
+              ? `<button class="button button-small" type="button" data-opentab="${escapeHtml(file.name)}">↗ Ouvrir</button>`
+              : `<button class="button button-small" type="button" data-view="${escapeHtml(file.name)}">👁 Voir &amp; copier</button>
+                 <button class="button button-small" type="button" data-opentab="${escapeHtml(file.name)}">↗ Ouvrir</button>`}
+            <button class="button button-small ${file.kind === 'zip' ? 'button-primary' : ''}" type="button" data-download="${escapeHtml(file.name)}">⬇ Télécharger</button>
+          </div>
         </div>`).join('')}
     </div>
     <p class="field-help">Empreinte du paquet : <span class="mono">${state.packageHash}</span> — toute modification d'un fichier est détectable en recalculant les empreintes. Champs : ${state.prepared.fields.length} · Écritures : ${state.prepared.entryCount.toLocaleString('fr-FR')} · Lignes : ${state.prepared.lineCount.toLocaleString('fr-FR')}.</p>
@@ -511,8 +599,22 @@ function renderOutputs() {
     button.addEventListener('click', () => {
       const file = state.outputs.find((f) => f.name === button.dataset.download);
       if (!file) return;
-      downloadBytes(file.bytes, file.name, file.kind === 'zip' ? 'application/zip' : 'text/plain');
-      toast(`${file.name} téléchargé.`);
+      downloadBytes(file.bytes, file.name, fileMime(file));
+      toast(file.kind === 'zip'
+        ? `${file.name} : téléchargement lancé. Si rien ne se passe, essayez « Ouvrir » ou récupérez les TXT un par un.`
+        : `${file.name} : téléchargement lancé. Si rien ne se passe, utilisez « Voir & copier ».`);
+    });
+  });
+  $$('#generationResult [data-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const file = state.outputs.find((f) => f.name === button.dataset.view);
+      if (file) openFileModal(file);
+    });
+  });
+  $$('#generationResult [data-opentab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const file = state.outputs.find((f) => f.name === button.dataset.opentab);
+      if (file) openInNewTab(file);
     });
   });
 }
@@ -548,9 +650,15 @@ function initExamples() {
   $('#loadExampleOdoo').addEventListener('click', () => loadExample('exemples/odoo-grand-livre.csv', 'odoo', 'odoo-grand-livre.csv'));
   $('#loadExampleBalance').addEventListener('click', () => loadExample('exemples/balance-ouverture.csv', 'balance', 'balance-ouverture.csv'));
   $('#downloadTemplate').addEventListener('click', () => {
-    const template = buildGenericTemplate($('#regime').value, { delimiter: ';' });
-    downloadBytes(new TextEncoder().encode(template), `modele-fec-generique-${$('#regime').value === 'SMT' ? '21' : '18'}-champs.csv`, 'text/csv');
-    toast('Modèle générique téléchargé.');
+    const regime = $('#regime').value;
+    const template = buildGenericTemplate(regime, { delimiter: ';' });
+    openFileModal({
+      name: `modele-fec-generique-${regime === 'SMT' ? '21' : '18'}-champs.csv`,
+      kind: 'template',
+      text: template,
+      bytes: new TextEncoder().encode(template),
+      sha256: ''
+    });
   });
 }
 
@@ -595,5 +703,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initProfiles();
   initImportEvents();
   initExamples();
+  initFileModal();
   showStep(1);
 });

@@ -113,6 +113,9 @@ Le **mode diagnostic** lève le blocage mais préfixe les fichiers
 - `FEC_IFU_AAAAMMJJ.manifest.txt` : manifeste SHA-256 des fichiers.
 - `FEC_IFU_AAAAMMJJ.zip` : paquet scellé (ZIP `stored`, sans compression).
 - Encodages : ISO-8859-15 (défaut), ASCII, UTF-8 (compatibilité), EBCDIC (Cp037).
+- Récupération : téléchargement direct, ouverture dans un nouvel onglet, ou
+  fenêtre « Voir & copier » (secours si le navigateur ou l'aperçu intégré
+  bloque les téléchargements : copier-coller vers le Bloc-notes).
 
 ## 8. Architecture et tests
 

@@ -242,6 +242,31 @@ tbody tr:nth-child(even) td { background: #fafafa; }
 }
 .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  background: var(--white); border-radius: var(--radius);
+  max-width: 860px; width: 100%; max-height: 92vh; overflow: auto;
+  padding: 20px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.modal-header {
+  display: flex; gap: 12px; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 10px;
+}
+.modal-header h2 { margin: 0 0 2px; font-size: 17px; word-break: break-all; }
+.modal-subtitle { margin: 0; font-size: 12px; color: var(--slate-500); }
+.modal textarea {
+  width: 100%; font-family: Consolas, "Courier New", monospace; font-size: 12px;
+  border: 1px solid var(--slate-200); border-radius: 10px; padding: 10px;
+  white-space: pre; background: var(--slate-50); color: var(--slate-900);
+}
+.modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+
 details.help { margin-top: 10px; font-size: 13px; }
 details.help summary { cursor: pointer; font-weight: 700; color: var(--green-700); }
 details.help div { padding: 8px 0 0 4px; color: var(--slate-700); }

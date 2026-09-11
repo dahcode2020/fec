@@ -52,7 +52,10 @@ source est associée à un champ FEC cible, avec valeurs par défaut
    SYSCOHADA, pièces, règlements SMT…), corrections guidées.
 5. **Génération** — `FEC_IFU_AAAAMMJJ.txt` (+ découpage `_1`, `_2`…),
    descriptif `.notice.txt`, rapport `.rapport.txt`, manifeste `.manifest.txt`
-   et paquet `.zip` scellé avec empreintes SHA-256.
+   et paquet `.zip` scellé avec empreintes SHA-256. Chaque fichier est
+   récupérable de 3 façons : **téléchargement**, **ouverture dans un nouvel
+   onglet** (puis `Ctrl+S`), et **« Voir & copier »** (copier-coller vers le
+   Bloc-notes si le navigateur bloque les téléchargements).
 
 ## Fichiers
 

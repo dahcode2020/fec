@@ -93,7 +93,7 @@
         <button class="button button-small" type="button" id="loadExampleSage">Essayer l'exemple Sage 100</button>
         <button class="button button-small" type="button" id="loadExampleOdoo">Essayer l'exemple Odoo</button>
         <button class="button button-small" type="button" id="loadExampleBalance">Essayer la balance (reports)</button>
-        <button class="button button-small button-secondary" type="button" id="downloadTemplate">⬇ Modèle générique CSV</button>
+        <button class="button button-small button-secondary" type="button" id="downloadTemplate">👁 Modèle générique CSV (voir &amp; copier)</button>
       </div>
       <div class="grid grid-3" style="margin-top:14px">
         <label class="field"><span>Logiciel source <b>*</b></span><select id="profileSelect"></select><small class="field-help" id="profileHint"></small></label>
@@ -186,6 +186,24 @@
 
     <p class="footer-note">Outil d'aide à la conformité — ne constitue ni une attestation de conformité ni une validation juridique ou fiscale. Faites relire vos sorties par un professionnel compétent au Bénin et testez-les avec les procédures de la DGI. Référence : arrêté n° 1085/MEF/CAB/SGM/DGI/DLC/1355SGG20 du 23 avril 2020.</p>
   </main>
+
+  <div class="modal-backdrop" id="fileModalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fileModalTitle">
+      <div class="modal-header">
+        <div><span class="eyebrow">FICHIER GÉNÉRÉ — VOIR &amp; COPIER</span>
+          <h2 id="fileModalTitle">—</h2>
+          <p class="modal-subtitle" id="fileModalMeta">—</p></div>
+        <button class="button button-small" type="button" id="fileModalClose">Fermer ✕</button>
+      </div>
+      <textarea id="fileModalContent" readonly rows="18" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button class="button button-small" type="button" id="fileModalSelect">Tout sélectionner</button>
+        <button class="button button-small button-primary" type="button" id="fileModalCopy">⧉ Copier le contenu</button>
+        <button class="button button-small" type="button" id="fileModalDownload">⬇ Télécharger le fichier</button>
+      </div>
+      <p class="field-help">Si le téléchargement est bloqué : cliquez « Copier le contenu », ouvrez le Bloc-notes, collez (Ctrl+V) puis Enregistrer sous avec le nom exact affiché ci-dessus.</p>
+    </div>
+  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
