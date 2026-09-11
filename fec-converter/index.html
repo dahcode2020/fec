@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convertisseur FEC Bénin — Grand livre / Balance vers FEC (DGI)</title>
+  <meta name="description" content="Convertissez un grand livre, journal ou export Sage, Ciel, EBP, Odoo en Fichier des Écritures Comptables (FEC) conforme à l'arrêté béninois du 23 avril 2020. 100 % local, sans envoi de données.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">FEC</span>
+        <div>
+          <h1>Convertisseur FEC — Bénin (DGI)</h1>
+          <p>Grand livre, journal ou balance issu de Sage, Ciel, EBP, Odoo → Fichier des Écritures Comptables selon l'arrêté du 23 avril 2020.</p>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge">🔒 100 % local — aucun envoi</span>
+        <span class="badge">⚖️ Arrêté FEC béninois</span>
+        <span class="badge">SYSCOHADA révisé</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <nav class="stepper" aria-label="Étapes du convertisseur">
+      <button class="step is-current" type="button" data-step="1"><span class="num">1</span><span><b>Contexte</b><small>Société &amp; exercice</small></span></button>
+      <button class="step" type="button" data-step="2"><span class="num">2</span><span><b>Import</b><small>Fichier source</small></span></button>
+      <button class="step" type="button" data-step="3"><span class="num">3</span><span><b>Mapping</b><small>Colonnes → FEC</small></span></button>
+      <button class="step" type="button" data-step="4"><span class="num">4</span><span><b>Contrôles</b><small>Précontrôle bloquant</small></span></button>
+      <button class="step" type="button" data-step="5"><span class="num">5</span><span><b>Génération</b><small>Fichiers &amp; ZIP</small></span></button>
+    </nav>
+
+    <!-- ÉTAPE 1 : CONTEXTE -->
+    <section class="panel" id="panel-1" data-panel="1">
+      <span class="eyebrow">ÉTAPE 1 — CONTEXTE FISCAL</span>
+      <h2>Société, exercice et régime</h2>
+      <p class="subtitle">Ces informations cadrent le périmètre et le nommage <span class="mono">FEC_IFU_AAAAMMJJ.txt</span>. Le FEC est produit par exercice.</p>
+      <div class="grid grid-2">
+        <label class="field"><span>Raison sociale <b>*</b></span><input id="companyName" type="text" placeholder="Ex. Acacia Conseil" autocomplete="organization"></label>
+        <label class="field"><span>IFU (13 chiffres) <b>*</b></span><input id="companyIfu" type="text" inputmode="numeric" placeholder="Ex. 3201900045612" maxlength="13"><small class="field-help">Utilisé dans le nom du fichier FEC.</small></label>
+        <label class="field"><span>Début d'exercice <b>*</b></span><input id="exerciseStart" type="date" value="2025-01-01"></label>
+        <label class="field"><span>Fin d'exercice (clôture) <b>*</b></span><input id="exerciseEnd" type="date" value="2025-12-31"><small class="field-help">La date de clôture donne <span class="mono">AAAAMMJJ</span> dans le nom du fichier.</small></label>
+        <label class="field"><span>Régime comptable <b>*</b></span>
+          <select id="regime">
+            <option value="NORMAL">Système normal — 18 champs</option>
+            <option value="SMT">SMT / trésorerie — 21 champs (Date + Mode règlement)</option>
+          </select>
+        </label>
+        <label class="field"><span>Mode de génération <b>*</b></span>
+          <select id="mode">
+            <option value="OFFICIAL">FEC officiel — les erreurs bloquent la génération</option>
+            <option value="DIAGNOSTIC">Diagnostic provisoire — sortie non transmissible</option>
+          </select>
+        </label>
+      </div>
+      <div class="notice notice-blue"><span class="icon">i</span><div><strong>Balance ou grand livre ?</strong> Le FEC officiel exige un <strong>grand livre / journal / brouillard détaillé</strong> (une ligne par imputation). Une balance seule ne peut produire que des <strong>reports à nouveau</strong> ou un diagnostic — jamais un FEC officiel complet.</div></div>
+      <div class="grid grid-3">
+        <label class="field"><span>Séparateur de champs</span>
+          <select id="outDelimiter"><option value="TAB">Tabulation (recommandé)</option><option value="SEMICOLON">Point-virgule</option></select>
+        </label>
+        <label class="field"><span>Jeu de caractères</span>
+          <select id="outEncoding"><option value="ISO-8859-15">ISO-8859-15 (recommandé)</option><option value="ASCII">ASCII</option><option value="UTF-8">UTF-8 (compatibilité)</option><option value="EBCDIC">EBCDIC</option></select>
+        </label>
+        <label class="field"><span>Découpage (lignes / fichier)</span><input id="maxLines" type="number" min="0" step="1000" value="0" placeholder="0 = un seul fichier"><small class="field-help">En cas de volume : <span class="mono">…_1.txt</span>, <span class="mono">…_2.txt</span>…</small></label>
+      </div>
+      <div class="grid grid-2" style="margin-top:12px">
+        <label class="checkbox-row"><input id="optAutoSequence" type="checkbox" checked><span><strong>Numérotation FEC automatique</strong><br><small>Ren Sequence continue 1…N après tri chronologique (recommandé par l'arrêté).</small></span></label>
+        <label class="checkbox-row"><input id="optValidFallback" type="checkbox" checked><span><strong>Date de validation = date d'écriture</strong><br><small>Si le logiciel source ne fournit pas de date de validation (à confirmer avec le cabinet).</small></span></label>
+        <label class="checkbox-row"><input id="optExcludeCentral" type="checkbox" checked><span><strong>Exclure les centralisations</strong><br><small>Les écritures de centralisation ne font pas partie du FEC (arrêté).</small></span></label>
+        <label class="checkbox-row"><input id="optGroupSourceNum" type="checkbox" checked><span><strong>Regrouper par N° d'écriture source</strong><br><small>Les lignes partageant le même N° forment une seule écriture FEC.</small></span></label>
+      </div>
+      <div class="actions right">
+        <button class="button button-primary" type="button" data-next="2">Continuer vers l'import →</button>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 2 : IMPORT -->
+    <section class="panel" id="panel-2" data-panel="2" hidden>
+      <span class="eyebrow">ÉTAPE 2 — FICHIER SOURCE</span>
+      <h2>Importer le grand livre, le journal ou la balance</h2>
+      <p class="subtitle">Formats acceptés : <span class="mono">.txt</span>, <span class="mono">.csv</span>, <span class="mono">.xlsx / .xls</span> (via SheetJS si connexion disponible, sinon convertissez en CSV). Taille conseillée &lt; 20 Mo.</p>
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Déposer un fichier comptable">
+        <strong>📂 Glissez-déposez votre export comptable ici</strong>
+        <small>ou cliquez pour parcourir — TXT, CSV, XLSX, XLS</small>
+        <input id="fileInput" type="file" accept=".txt,.csv,.tsv,.xlsx,.xls,.ods">
+        <div><span class="file-chip" id="fileChip" hidden>—</span></div>
+      </div>
+      <div class="actions">
+        <button class="button button-small" type="button" id="loadExampleSage">Essayer l'exemple Sage 100</button>
+        <button class="button button-small" type="button" id="loadExampleOdoo">Essayer l'exemple Odoo</button>
+        <button class="button button-small" type="button" id="loadExampleBalance">Essayer la balance (reports)</button>
+        <button class="button button-small button-secondary" type="button" id="downloadTemplate">⬇ Modèle générique CSV</button>
+      </div>
+      <div class="grid grid-3" style="margin-top:14px">
+        <label class="field"><span>Logiciel source <b>*</b></span><select id="profileSelect"></select><small class="field-help" id="profileHint"></small></label>
+        <label class="field"><span>Encodage du fichier source</span>
+          <select id="srcEncoding"><option value="utf-8">UTF-8 (auto)</option><option value="windows-1252">Windows-1252 / ANSI (Sage, Ciel)</option><option value="iso-8859-1">ISO-8859-1</option></select>
+        </label>
+        <label class="field" id="sheetField" hidden><span>Feuille Excel</span><select id="sheetSelect"></select></label>
+      </div>
+      <div class="grid grid-3" style="margin-top:12px">
+        <label class="field"><span>Séparateur détecté</span>
+          <select id="srcDelimiter"><option value="auto">Détection automatique</option><option value=";">Point-virgule (;)</option><option value="&#9;">Tabulation</option><option value=",">Virgule (,)</option><option value="|">Barre verticale (|)</option></select>
+        </label>
+        <label class="field"><span>Ordre des dates</span>
+          <select id="srcDateOrder"><option value="DMY">JJ/MM/AAAA (Sage, Ciel, EBP)</option><option value="YMD">AAAA-MM-JJ (Odoo)</option><option value="MDY">MM/JJ/AAAA</option></select>
+        </label>
+        <label class="field"><span>Décimales des montants</span>
+          <select id="srcDecimal"><option value="auto">Automatique (virgule ou point)</option><option value=",">Virgule (,)</option><option value=".">Point (.)</option></select>
+        </label>
+      </div>
+      <div class="grid grid-2" style="margin-top:12px">
+        <label class="checkbox-row"><input id="srcHasHeader" type="checkbox" checked><span><strong>Première ligne = en-têtes</strong><br><small>Décocher si le fichier n'a pas de ligne de titres.</small></span></label>
+        <label class="field"><span>Lignes à ignorer en tête</span><input id="srcSkipRows" type="number" min="0" value="0"><small class="field-help">Titres, totaux ou lignes vides avant les données.</small></label>
+      </div>
+      <div class="notice notice-amber" id="balanceNotice" hidden><span class="icon">!</span><div><strong>Profil « Balance seule ».</strong> Le convertisseur générera une écriture de <strong>reports à nouveau</strong> (journal <span class="mono">AN</span>, libellé <span class="mono">REPORT</span>). Ce fichier ne constitue un FEC officiel que s'il ne contient <em>que</em> des reports ; sinon, importez le grand livre détaillé.</div></div>
+      <details class="help">
+        <summary>Comment exporter depuis votre logiciel ?</summary>
+        <div>
+          <ol>
+            <li><strong>Sage 100 :</strong> Fichier &gt; Export &gt; Format paramétrable — colonnes : Code journal, Date, N° pièce, Compte général, Compte tiers, Libellé, Débit, Crédit. Format délimité, dates <span class="mono">JJ/MM/AAAA</span>.</li>
+            <li><strong>Sage 50 / Ciel / SAARI :</strong> États &gt; Grand livre (ou Brouillard) &gt; bouton Fichier &gt; Texte standard (<span class="mono">.txt</span>).</li>
+            <li><strong>EBP :</strong> Exports &gt; Écritures comptables &gt; CSV.</li>
+            <li><strong>Odoo :</strong> Comptabilité &gt; Rapports &gt; Grand livre &gt; Exporter (CSV ou XLSX).</li>
+            <li><strong>Autre logiciel :</strong> exportez le journal ou le grand livre en CSV, puis utilisez le mappage manuel de l'étape 3.</li>
+          </ol>
+        </div>
+      </details>
+      <div id="importStats"></div>
+      <div class="actions space-between">
+        <button class="button" type="button" data-next="1">← Retour</button>
+        <button class="button button-primary" type="button" data-next="3" id="toMapping" disabled>Continuer vers le mapping →</button>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 3 : MAPPING -->
+    <section class="panel" id="panel-3" data-panel="3" hidden>
+      <span class="eyebrow">ÉTAPE 3 — MAPPING DES COLONNES</span>
+      <h2>Associer les colonnes sources aux champs FEC</h2>
+      <p class="subtitle">Le mapping est pré-rempli selon le profil logiciel. Corrigez les associations, puis vérifiez l'aperçu.</p>
+      <div id="mappingStats"></div>
+      <div class="table-wrap">
+        <table class="mapping-table">
+          <thead><tr><th>CHAMP FEC CIBLE</th><th>OBLIG.</th><th>COLONNE SOURCE</th><th>EXEMPLE</th></tr></thead>
+          <tbody id="mappingRows"></tbody>
+        </table>
+      </div>
+      <h3 style="margin-top:18px">Aperçu des lignes interprétées (20 premières)</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>LIGNE</th><th>JOURNAL</th><th>DATE</th><th>COMPTE</th><th>PIÈCE</th><th>LIBELLÉ</th><th class="align-right">DÉBIT</th><th class="align-right">CRÉDIT</th></tr></thead>
+        <tbody id="previewRows"></tbody>
+      </table></div>
+      <div class="actions space-between">
+        <button class="button" type="button" data-next="2">← Retour</button>
+        <button class="button button-primary" type="button" data-next="4" id="toControls">Lancer le précontrôle →</button>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 4 : CONTRÔLES -->
+    <section class="panel" id="panel-4" data-panel="4" hidden>
+      <span class="eyebrow">ÉTAPE 4 — PRÉCONTRÔLE BLOQUANT</span>
+      <h2>Contrôles réglementaires avant génération</h2>
+      <p class="subtitle">Équilibre débit/crédit par écriture, séquence continue, dates <span class="mono">AAAAMMJJ</span>, montants à virgule, comptes SYSCOHADA, pièces, règlements SMT, placement des REPORT.</p>
+      <div id="controlSummary"></div>
+      <div id="controlDetails"></div>
+      <div class="actions space-between">
+        <button class="button" type="button" data-next="3">← Corriger le mapping</button>
+        <button class="button button-primary" type="button" data-next="5" id="toGeneration" disabled>Générer le FEC →</button>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 5 : GÉNÉRATION -->
+    <section class="panel" id="panel-5" data-panel="5" hidden>
+      <span class="eyebrow">ÉTAPE 5 — FICHIERS DE REMISE</span>
+      <h2>Télécharger le FEC et le paquet scellé</h2>
+      <p class="subtitle">Le paquet ZIP contient le(s) fichier(s) FEC, le descriptif technique, le rapport de contrôle et le manifeste SHA-256.</p>
+      <div id="generationResult"></div>
+      <div class="actions">
+        <button class="button" type="button" data-next="1">↺ Nouvelle conversion</button>
+      </div>
+    </section>
+
+    <p class="footer-note">Outil d'aide à la conformité — ne constitue ni une attestation de conformité ni une validation juridique ou fiscale. Faites relire vos sorties par un professionnel compétent au Bénin et testez-les avec les procédures de la DGI. Référence : arrêté n° 1085/MEF/CAB/SGM/DGI/DLC/1355SGG20 du 23 avril 2020.</p>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -60,6 +60,20 @@ npm run preview
 
 Puis ouvrir `http://localhost:4173` dans un navigateur.
 
+## Convertisseur FEC Bénin (nouveau)
+
+L’application web [`fec-converter/`](fec-converter/README.md) transforme un grand
+livre, journal ou export d’écritures issu de Sage 100, Sage SAARI / Sage 50, Ciel,
+EBP ou Odoo en FEC conforme à l’arrêté béninois du 23 avril 2020 — avec mapping
+des colonnes, précontrôle bloquant et paquet ZIP scellé. Elle fonctionne à 100 %
+en local, sans envoi de données. Spécification :
+[`docs/32-convertisseur-fec-import.md`](docs/32-convertisseur-fec-import.md).
+
+```bash
+npm run preview:converter   # http://localhost:4175
+npm run test:converter      # 18 tests du moteur
+```
+
 ## Architecture en ligne validée
 
 Le site public est prévu pour Vercel. L’API ne stocke pas les données dans Vercel : elle est empaquetée dans Docker et utilise PostgreSQL central, avec Neon comme base d’expérimentation. SQLite reste le stockage local du futur shell Windows/Tauri pour le hors ligne.

@@ -1,0 +1,9 @@
+Compte;Libellé;Débit;Crédit
+101000;Capital social;0;2000000
+131000;Résultat net : bénéfice;0;350000
+401100;Fournisseurs;0;59000
+411100;Clients;650000;0
+445200;TVA récupérable sur achats;9000;0
+443100;TVA facturée sur ventes;0;18000
+521100;Banque locale;1350000;0
+571100;Caisse en monnaie nationale;400000;0

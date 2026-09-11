@@ -1,0 +1,14 @@
+Code journal;Date;N° pièce;N° compte général;N° compte tiers;Libellé;Débit;Crédit
+AN;01/01/2025;AN-0001;101000;;Capital social;0;2000000
+AN;01/01/2025;AN-0001;411100;CLI001;Client Awa Concept — report;650000;0
+AN;01/01/2025;AN-0001;521100;;Banque Atlantique — report;1350000;0
+VE;15/01/2025;FAC-2025-001;411100;CLI001;Client Awa Concept — FAC-2025-001;118000;0
+VE;15/01/2025;FAC-2025-001;706100;;Services vendus dans la Région;0;100000
+VE;15/01/2025;FAC-2025-001;443100;;TVA facturée 18 %;0;18000
+AC;18/01/2025;FA-0451;604700;;Fournitures de bureau;50000;0
+AC;18/01/2025;FA-0451;445200;;TVA récupérable 18 %;9000;0
+AC;18/01/2025;FA-0451;401100;FOU001;Fournisseur Cotonou Bureau — FA-0451;0;59000
+BQ;20/01/2025;REG-2025-001;521100;;Virement reçu — Awa Concept;118000;0
+BQ;20/01/2025;REG-2025-001;411100;CLI001;Règlement client — FAC-2025-001;0;118000
+CA;25/01/2025;PC-0012;631800;;Frais bancaires;4800;0
+CA;25/01/2025;PC-0012;571100;;Caisse espèces;0;4800
